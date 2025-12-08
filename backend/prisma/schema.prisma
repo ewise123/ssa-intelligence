@@ -40,6 +40,7 @@ model ResearchJob {
   
   // Metadata
   overallConfidence String?   // 'HIGH' | 'MEDIUM' | 'LOW'
+  overallConfidenceScore Float?
   metadata          Json      @default("{}") // Additional context (user files, etc.)
   
   // Relations

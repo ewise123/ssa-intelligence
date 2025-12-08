@@ -41,6 +41,8 @@ export interface ResearchJob {
   companyName: string;
   geography: string;
   industry?: string;
+  overallConfidence?: string | null;
+  overallConfidenceScore?: number | null;
   createdAt: number;
   status: JobStatus;
   progress: number; // 0-100

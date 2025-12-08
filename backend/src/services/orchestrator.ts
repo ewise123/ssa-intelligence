@@ -480,6 +480,8 @@ export class ResearchOrchestrator {
         sourcesUsed: output.sources_used || []
       }
     });
+
+    await this.updateOverallConfidence(jobId);
   }
 
   /**
@@ -604,5 +606,56 @@ export class ResearchOrchestrator {
       const anyFailed = job.subJobs.some(j => j.status === 'failed');
       await this.updateJobStatus(jobId, anyFailed ? 'failed' : 'completed');
     }
+  }
+
+  /**
+   * Recompute overall confidence score/label from completed sub-jobs
+   */
+  private async updateOverallConfidence(jobId: string) {
+    const subJobs = await this.prisma.researchSubJob.findMany({
+      where: { researchId: jobId, status: 'completed' },
+      select: { confidence: true }
+    });
+
+    const scores = subJobs
+      .map((s) => this.confidenceToScore(s.confidence))
+      .filter((n): n is number => n !== null && !Number.isNaN(n));
+
+    if (!scores.length) {
+      await this.prisma.researchJob.update({
+        where: { id: jobId },
+        data: {
+          overallConfidence: null,
+          overallConfidenceScore: null
+        }
+      });
+      return;
+    }
+
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const label = this.scoreToLabel(avg);
+
+    await this.prisma.researchJob.update({
+      where: { id: jobId },
+      data: {
+        overallConfidence: label,
+        overallConfidenceScore: avg
+      }
+    });
+  }
+
+  private confidenceToScore(confidence?: string | null): number | null {
+    if (!confidence) return null;
+    const upper = confidence.toUpperCase();
+    if (upper === 'HIGH') return 0.9;
+    if (upper === 'MEDIUM') return 0.6;
+    if (upper === 'LOW') return 0.3;
+    return null;
+  }
+
+  private scoreToLabel(score: number): string {
+    if (score >= 0.75) return 'HIGH';
+    if (score >= 0.5) return 'MEDIUM';
+    return 'LOW';
   }
 }

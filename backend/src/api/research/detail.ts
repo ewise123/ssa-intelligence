@@ -111,6 +111,7 @@ export async function getResearchDetail(req: Request, res: Response) {
         geography: job.geography,
         industry: job.industry,
         overallConfidence: job.overallConfidence,
+        overallConfidenceScore: job.overallConfidenceScore,
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,
         completedAt: job.completedAt
@@ -126,6 +127,8 @@ export async function getResearchDetail(req: Request, res: Response) {
         lastError: subJob.lastError,
         completedAt: subJob.completedAt
       })),
+      overallConfidence: job.overallConfidence,
+      overallConfidenceScore: job.overallConfidenceScore,
       // Include full source catalog for frontend
       sourceCatalog: sourceCatalog ? sourceCatalog.getAllSources() : []
     });

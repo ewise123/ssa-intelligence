@@ -17,13 +17,20 @@ type ApiJobStatus = {
   error?: string | null;
   progress?: number | null;
   currentStage?: string | null;
+  overallConfidence?: string | null;
+  overallConfidenceScore?: number | null;
   jobs?: ApiSectionStatus[];
+  companyName?: string;
+  geography?: string;
+  industry?: string;
 };
 
 type ApiResearchDetail = {
   id: string;
   status: string;
   metadata?: Record<string, unknown>;
+  overallConfidence?: string | null;
+  overallConfidenceScore?: number | null;
   sections?: Record<string, unknown>;
   sectionsCompleted?: number[];
   sectionStatuses?: ApiSectionStatus[];
@@ -35,6 +42,8 @@ type ApiListItem = {
   metadata?: Record<string, unknown>;
   companyName?: string;
   geography?: string;
+  overallConfidence?: string | null;
+  overallConfidenceScore?: number | null;
   generatedSections?: number[];
 };
 
@@ -476,6 +485,9 @@ const mapListItem = (item: ApiListItem): ResearchJob => {
     companyName: (metadata.companyName as string) || item.companyName || 'Unknown Company',
     geography: (metadata.geography as string) || item.geography || 'Unknown',
     industry: (metadata.industry as string) || undefined,
+    overallConfidence: (metadata.overallConfidence as string) || item.overallConfidence || null,
+    overallConfidenceScore:
+      (metadata.overallConfidenceScore as number) ?? item.overallConfidenceScore ?? null,
     createdAt: Date.now(),
     status: (item.status as JobStatus) || 'idle',
     progress,
@@ -495,6 +507,8 @@ const mapJobFromStatus = (
     companyName: overrides?.companyName || existing?.companyName || 'Unknown Company',
     geography: overrides?.geography || existing?.geography || 'Unknown',
     industry: overrides?.industry ?? existing?.industry,
+    overallConfidence: status.overallConfidence ?? existing?.overallConfidence ?? null,
+    overallConfidenceScore: status.overallConfidenceScore ?? existing?.overallConfidenceScore ?? null,
     createdAt: existing?.createdAt || Date.now(),
     status: (status.status as JobStatus) || existing?.status || 'running',
     progress: status.progress !== undefined && status.progress !== null ? Math.round(status.progress * 100) : existing?.progress || 0,
@@ -513,6 +527,13 @@ const mergeDetail = (job: ResearchJob, detail: ApiResearchDetail): ResearchJob =
     companyName: (metadata.companyName as string) || job.companyName,
     geography: (metadata.geography as string) || job.geography,
     industry: (metadata.industry as string) || job.industry,
+    overallConfidence:
+      (metadata.overallConfidence as string) || detail.overallConfidence || job.overallConfidence || null,
+    overallConfidenceScore:
+      (metadata.overallConfidenceScore as number) ??
+      detail.overallConfidenceScore ??
+      job.overallConfidenceScore ??
+      null,
     sections,
   };
 };

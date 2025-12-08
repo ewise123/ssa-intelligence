@@ -127,9 +127,21 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, onNavigate
   // Extract ID from URL hash manually since we are using a custom hash router
   const hash = window.location.hash;
   const id = hash.split('/research/')[1];
-
+  
   const job = jobs.find(j => j.id === id);
   const [activeSection, setActiveSection] = useState<SectionId>('exec_summary');
+
+  const overallScore = job?.overallConfidenceScore ?? 0;
+  const overallPercent = Math.round(overallScore * 100);
+  const overallLabel = job?.overallConfidence || 'N/A';
+  const ringColor =
+    overallScore >= 0.75 ? '#10b981' : overallScore >= 0.5 ? '#f59e0b' : '#ef4444';
+  const ringStyle = {
+    background: `conic-gradient(${ringColor} 0deg ${Math.min(
+      Math.max(overallPercent, 0),
+      100
+    )}%, #e2e8f0 ${Math.min(Math.max(overallPercent, 0), 100)}% 100%)`
+  };
 
   // Scroll to top when section changes
   useEffect(() => {
@@ -185,16 +197,29 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, onNavigate
               </span>
             </div>
           </div>
-
+          
           <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
              <div className="text-right">
                 <div className="text-3xl font-bold text-slate-900 leading-none">
-                  92<span className="text-lg text-slate-400 font-normal">%</span>
+                  {overallPercent}<span className="text-lg text-slate-400 font-normal">%</span>
                 </div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mt-1">Confidence Score</div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mt-1">
+                  Confidence Score ({overallLabel})
+                </div>
              </div>
-             <div className="h-10 w-10 rounded-full border-4 border-emerald-500 border-t-emerald-200 flex items-center justify-center bg-emerald-50">
-                <CheckCircle2 size={16} className="text-emerald-600" />
+             <div
+               className="h-12 w-12 rounded-full flex items-center justify-center"
+               style={ringStyle}
+             >
+               <div className="h-9 w-9 rounded-full bg-white flex items-center justify-center border border-slate-100">
+                 {job?.status === 'completed' ? (
+                   <CheckCircle2 size={18} className="text-emerald-600" />
+                 ) : job?.status === 'failed' ? (
+                   <AlertTriangle size={18} className="text-rose-500" />
+                 ) : (
+                   <Loader2 size={18} className="text-brand-500 animate-spin" />
+                 )}
+               </div>
              </div>
           </div>
         </div>

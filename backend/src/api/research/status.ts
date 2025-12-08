@@ -52,6 +52,8 @@ export async function getJobStatus(req: Request, res: Response) {
       currentStage: job.currentStage,
       companyName: job.companyName,
       geography: job.geography,
+      overallConfidence: job.overallConfidence,
+      overallConfidenceScore: job.overallConfidenceScore,
       error: job.status === 'failed' ? 'Job execution failed' : null,
       jobs: job.subJobs,
       summary: {
