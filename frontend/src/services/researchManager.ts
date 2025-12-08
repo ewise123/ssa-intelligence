@@ -107,6 +107,60 @@ const stringifyContent = (value: unknown): string => {
   return '';
 };
 
+// Numeric formatting helpers
+const formatNumber = (value: number): string => {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+};
+
+const formatCurrency = (value: number, currency: string = 'USD'): string => {
+  // Default: USD with grouping, allow other currency codes if provided
+  return value.toLocaleString(undefined, {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: Math.abs(value) >= 1000 ? 0 : 2,
+  });
+};
+
+const formatPercent = (value: number): string => {
+  // Accept raw percent (e.g., 12.3) or ratio (e.g., 0.123); pick sensible format
+  const asRatio = Math.abs(value) <= 1 ? value * 100 : value;
+  return `${asRatio.toFixed(1)}%`;
+};
+
+const formatValue = (raw: any): string => {
+  if (raw === null || raw === undefined) return '';
+  // Already a string, try to detect currency/percent patterns; otherwise return as-is
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    // Handle suffixes like M/B for millions/billions with optional leading $
+    const suffixMatch = trimmed.match(/^\$?(-?\d[\d,]*\.?\d*)([MB])$/i);
+    if (suffixMatch) {
+      const num = Number.parseFloat(suffixMatch[1].replace(/,/g, ''));
+      const suffix = suffixMatch[2].toUpperCase();
+      if (!Number.isNaN(num)) {
+        const val = suffix === 'B' ? num * 1_000_000_000 : num * 1_000_000;
+        const formatted = formatNumber(val);
+        return trimmed.startsWith('$') ? `$${formatted}${suffix}` : `${formatted}${suffix}`;
+      }
+    }
+    if (/^\$?-?\d[\d,]*\.?\d*$/.test(trimmed.replace(/,/g, ''))) {
+      const num = Number.parseFloat(trimmed.replace(/[^0-9.-]/g, ''));
+      if (!Number.isNaN(num)) return formatCurrency(num);
+    }
+    if (/^-?\d+(\.\d+)?%$/.test(trimmed)) {
+      const num = Number.parseFloat(trimmed.replace('%', ''));
+      if (!Number.isNaN(num)) return formatPercent(num);
+    }
+    const numeric = Number(trimmed.replace(/,/g, ''));
+    if (!Number.isNaN(numeric)) return formatNumber(numeric);
+    return trimmed;
+  }
+  if (typeof raw === 'number') {
+    return formatNumber(raw);
+  }
+  return String(raw);
+};
+
 // Simple Markdown table builder
 const mdTable = (headers: string[], rows: (string | number | null | undefined)[][]): string => {
   if (!rows.length) return '';
@@ -143,7 +197,15 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
         parts.push(
           mdTable(
             ['Metric', 'Company', 'Industry Avg', 'Source'],
-            data.kpi_table.metrics.map((m: any) => [m.metric, m.company, m.industry_avg, m.source])
+            data.kpi_table.metrics.map((m: any) => {
+              const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
+              return [
+                metricName,
+                formatValue(m.company),
+                formatValue(m.industry_avg),
+                m.source || '',
+              ];
+            })
           )
         );
       }
@@ -216,7 +278,16 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
             parts.push(
               mdTable(
                 ['Metric', 'Segment', 'Company Avg', 'Industry Avg', 'Source'],
-                seg.financial_snapshot.table.map((m: any) => [m.metric, m.segment, m.company_avg, m.industry_avg, m.source])
+                seg.financial_snapshot.table.map((m: any) => {
+                  const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
+                  return [
+                    metricName,
+                    m.segment,
+                    formatValue(m.company_avg),
+                    formatValue(m.industry_avg),
+                    m.source || '',
+                  ];
+                })
               )
             );
           }
