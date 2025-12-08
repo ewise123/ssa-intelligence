@@ -125,7 +125,6 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
   switch (sectionId) {
     case 'exec_summary': {
       const parts: string[] = [];
-      if (data.confidence?.level) parts.push(`**Confidence:** ${data.confidence.level}`);
       if (Array.isArray(data.bullet_points)) {
         parts.push('\n**Key Takeaways**');
         parts.push(
