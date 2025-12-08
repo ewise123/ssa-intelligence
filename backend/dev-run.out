@@ -1,0 +1,34 @@
+
+> intellectra-backend@1.0.0 dev
+> tsx watch src/index.ts
+
+
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║   Intellectra Research API                                     ║
+║                                                                ║
+║   Status:      Running                                         ║
+║   Environment: development                                    ║
+║   Port:        3000                                            ║
+║   URL:         http://localhost:3000                          ║
+║                                                                ║
+║   API Endpoints:                                               ║
+║   - POST   /api/research/generate                              ║
+║   - GET    /api/research                                       ║
+║   - GET    /api/research/jobs/:id                              ║
+║   - GET    /api/research/:id                                   ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+  
+2025-12-08T21:19:27.187Z - GET /health
+2025-12-08T21:22:46.287Z - GET /health
+2025-12-08T21:22:46.294Z - GET /api/research
+2025-12-08T21:22:46.297Z - GET /health
+2025-12-08T21:22:46.329Z - GET /api/research
+2025-12-08T21:22:46.333Z - GET /api/research/cmixetitj001hl0uwnzgui12j
+2025-12-08T21:22:46.366Z - GET /api/research/cmixetitj001hl0uwnzgui12j
+2025-12-08T21:22:46.370Z - GET /api/research/cmixbqdtp000tl0uwhgrdcj84
+2025-12-08T21:22:46.401Z - GET /api/research/cmixbqdtp000tl0uwhgrdcj84
+2025-12-08T21:22:46.405Z - GET /api/research/cmixboyyd0005l0uwu82t4z0b
+2025-12-08T21:22:46.417Z - GET /api/research/cmixboyyd0005l0uwu82t4z0b
+2025-12-08T21:23:46.291Z - GET /health

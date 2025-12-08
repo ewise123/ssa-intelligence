@@ -163,6 +163,90 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, onNavigate
     );
   }
 
+  // Show progress/error view while running or failed
+  if (job.status !== 'completed') {
+    const isFailed = job.status === 'failed';
+    return (
+      <div className="max-w-5xl mx-auto h-[calc(100vh-140px)] flex flex-col md:flex-row gap-8 mt-6">
+        <div className="w-full md:w-1/3 space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+              {isFailed ? <AlertTriangle className="text-rose-500" size={18} /> : <Loader2 className="animate-spin text-brand-500" size={18} />}
+              {isFailed ? 'Analysis Failed' : 'Researching...'}
+            </h3>
+            <div className="space-y-4">
+              {SECTIONS_CONFIG.map((section) => {
+                const secData = job.sections[section.id];
+                const status = secData?.status || 'pending';
+                let icon = <Circle size={16} className="text-slate-300" />;
+                let textColor = 'text-slate-400';
+                let bgColor = 'bg-transparent';
+                if (status === 'running') {
+                  icon = <Loader2 size={16} className="text-blue-500 animate-spin" />;
+                  textColor = 'text-blue-600 font-medium';
+                  bgColor = 'bg-blue-50';
+                } else if (status === 'completed') {
+                  icon = <CheckCircle2 size={16} className="text-emerald-500" />;
+                  textColor = 'text-slate-700';
+                } else if (status === 'failed') {
+                  icon = <AlertTriangle size={16} className="text-rose-500" />;
+                  textColor = 'text-rose-600';
+                }
+                return (
+                  <div key={section.id} className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${bgColor}`}>
+                    {icon}
+                    <span className={`text-sm ${textColor}`}>{section.title}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => onNavigate('/')}
+              className="mt-6 text-sm text-brand-600 hover:underline"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+
+        <div className="w-full md:w-2/3 flex flex-col">
+          <div className="flex-1 bg-slate-900 rounded-2xl p-6 font-mono text-sm text-slate-300 overflow-hidden relative shadow-2xl">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
+            <div className="flex items-center gap-2 mb-6 text-slate-400 border-b border-slate-800 pb-4">
+              <BarChart3 size={18} />
+              <span>Agent Activity Log</span>
+            </div>
+            <div className="space-y-4 overflow-y-auto h-full pb-20">
+              <div className="text-emerald-400">
+                &gt; Initializing session for: <span className="text-white font-bold">{job.companyName}</span>
+              </div>
+              {job.currentAction && job.status !== 'completed' && (
+                <div className="flex items-start gap-2 text-blue-300 animate-pulse">
+                  <span>&gt;</span>
+                  <span>{job.currentAction}</span>
+                </div>
+              )}
+              {Object.values(job.sections || {}).map((sec: any) => {
+                if (sec.status !== 'completed') return null;
+                return (
+                  <div key={sec.id} className="opacity-70 border-l-2 border-slate-700 pl-4 py-1">
+                    <span className="text-xs uppercase tracking-wider text-slate-500">Completed: {sec.title}</span>
+                    <div className="text-slate-400 truncate">Generated {sec.content?.length || 0} characters of analysis.</div>
+                  </div>
+                );
+              })}
+              {isFailed && (
+                <div className="text-rose-400 font-bold mt-4">
+                  &gt; JOB FAILED. Please retry or start a new analysis.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const currentSectionData = job.sections[activeSection];
 
   const sectionConfidence = currentSectionData?.confidence ?? null;

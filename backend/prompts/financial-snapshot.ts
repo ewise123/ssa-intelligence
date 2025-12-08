@@ -250,10 +250,6 @@ interface Section2Output {
 | Metric | Company | Industry Avg | Source |
 \`\`\`
 
-For **every KPI row**, also include:
-- `unit` (e.g., "USD millions", "%", "bps", "days") so values align to the stated unit.
-- `value_type` ('currency' | 'percent' | 'ratio' | 'number') to clarify formatting.
-- Ensure `company` and `industry_avg` are numeric in the stated unit (e.g., if unit is "USD millions", values should be in millions, not raw dollars).
 
 ---
 
