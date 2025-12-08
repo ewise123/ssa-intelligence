@@ -312,31 +312,6 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, onNavigate
                 </div>
               ) : (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
-                   {/* Special Chart Visualization for Financials */}
-                   {activeSection === 'financial_snapshot' && (
-                     <div className="mb-10 p-6 bg-slate-50 rounded-xl border border-slate-100">
-                        <div className="flex items-center justify-between mb-6">
-                           <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Projected Revenue Growth</h4>
-                           <div className="flex gap-2 text-xs">
-                             <span className="flex items-center gap-1 text-slate-500"><div className="w-2 h-2 bg-brand-400 rounded-full"></div>Est.</span>
-                           </div>
-                        </div>
-                        <div className="h-56 flex items-end justify-between gap-4">
-                           {chartData.map((d, i) => (
-                             <div key={d.name} className="flex flex-col items-center flex-1 group cursor-default">
-                                <div className="relative w-full bg-white border border-slate-200 rounded-t-lg overflow-hidden h-full flex items-end shadow-sm group-hover:shadow-md transition-all">
-                                   <div
-                                      className="w-full bg-brand-500/90 group-hover:bg-brand-600 transition-colors relative"
-                                      style={{ height: `${(d.value / maxChartValue) * 100}%` }}
-                                   ></div>
-                                </div>
-                                <span className="text-xs text-slate-500 mt-3 font-medium">{d.name}</span>
-                             </div>
-                           ))}
-                        </div>
-                     </div>
-                   )}
-
                    <MarkdownText content={currentSectionData?.content || ''} />
                 </div>
               )}
