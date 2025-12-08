@@ -1,0 +1,124 @@
+// Prisma Schema for Intellectra Research Platform
+// Uses PostgreSQL with new section naming convention
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Main research job - tracks complete company intelligence generation
+model ResearchJob {
+  id                String    @id @default(cuid())
+  
+  // Job status
+  status            String    // 'pending' | 'running' | 'completed' | 'failed'
+  currentStage      String?   // Current stage being executed
+  progress          Float     @default(0) // 0.0 to 1.0
+  
+  // Research inputs
+  companyName       String
+  geography         String
+  industry          String?
+  focusAreas        String[]  @default([])
+  
+  // Research outputs (stored as JSON matching TypeScript interfaces)
+  foundation            Json?  // FoundationOutput
+  execSummary           Json?  // Section1Output (renamed for consistency)
+  financialSnapshot     Json?  // Section2Output
+  companyOverview       Json?  // Section3Output
+  segmentAnalysis       Json?  // Section4Output
+  trends                Json?  // Section5Output
+  peerBenchmarking      Json?  // Section6Output
+  skuOpportunities      Json?  // Section7Output
+  recentNews            Json?  // Section8Output
+  conversationStarters  Json?  // Section9Output
+  appendix              Json?  // Section10Output
+  
+  // Metadata
+  overallConfidence String?   // 'HIGH' | 'MEDIUM' | 'LOW'
+  metadata          Json      @default("{}") // Additional context (user files, etc.)
+  
+  // Relations
+  subJobs           ResearchSubJob[]
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+  
+  // Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  completedAt       DateTime?
+  
+  @@index([userId, status])
+  @@index([createdAt])
+  @@index([status])
+}
+
+// Individual section/stage execution tracking
+model ResearchSubJob {
+  id           String      @id @default(cuid())
+  
+  // Parent job
+  researchId   String
+  research     ResearchJob @relation(fields: [researchId], references: [id], onDelete: Cascade)
+  
+  // Stage information (using app naming convention)
+  stage        String      // 'foundation' | 'exec_summary' | 'financial_snapshot' | etc.
+  status       String      // 'pending' | 'running' | 'completed' | 'failed'
+  dependencies String[]    // Array of stage names this depends on
+  
+  // Execution tracking
+  attempts     Int         @default(0)
+  maxAttempts  Int         @default(3)
+  lastError    String?
+  
+  // Output data
+  output       Json?       // Section-specific output
+  confidence   String?     // 'HIGH' | 'MEDIUM' | 'LOW'
+  sourcesUsed  String[]    @default([]) // ["S1", "S2", "S3"]
+  
+  // Timing
+  startedAt    DateTime?
+  completedAt  DateTime?
+  duration     Int?        // Milliseconds
+  
+  // Timestamps
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  
+  @@unique([researchId, stage])
+  @@index([researchId, status])
+  @@index([status])
+}
+
+// User model
+model User {
+  id        String        @id @default(cuid())
+  email     String        @unique
+  name      String?
+  
+  // Relations
+  research  ResearchJob[]
+  
+  // Timestamps
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  
+  @@index([email])
+}
+
+// Optional: API Key management for users
+model ApiKey {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  name      String
+  userId    String
+  lastUsed  DateTime?
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([key])
+}

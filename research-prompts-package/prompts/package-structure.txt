@@ -1,0 +1,350 @@
+Company Intelligence Research Generation System - File Structure
+================================================================
+
+Total Files: 28
+Total Lines: ~15,000+ lines of code and documentation
+
+Root Directory: /prompts/
+├── README.md                          [~500 lines] - System overview, quick start, troubleshooting
+├── CHANGELOG.md                       [~400 lines] - Version history and changes
+├── implementation-guide.md            [~800 lines] - Job orchestration, database, APIs
+├── package-structure.txt              [This file] - Complete file tree
+│
+├── style-guide.md                     [~800 lines] - Single source of truth for formatting
+│   ├── 1. Typography Standards
+│   ├── 2. Tone and Voice
+│   ├── 3. Geography Focus Enforcement
+│   ├── 4. Confidence Scoring Methodology
+│   ├── 5. Source Citation Rules
+│   ├── 6. Analyst Quote Rules (COPYRIGHT)
+│   ├── 7. Bullet Formatting Rules
+│   ├── 8. Table Formatting Standards
+│   ├── 9. Currency Conversion Rules
+│   ├── 10. Data Quality Rules
+│   ├── 11. JSON Output Structure Requirements
+│   ├── 12. Section-Specific Style Notes
+│   ├── 13. Quality Control Checklist
+│   ├── 14. Common Mistakes to Avoid
+│   ├── 15. Document Consistency Requirements
+│   └── 16. Version Control & Updates
+│
+├── shared-types.ts                    [~250 lines] - Common types and enums
+│   ├── ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW'
+│   ├── FxSource = 'A' | 'B' | 'C'
+│   ├── IndustrySource = 'A' | 'B' | 'C'
+│   ├── TrendDirection = 'Positive' | 'Negative' | 'Neutral'
+│   ├── Priority = 'High' | 'Medium' | 'Low'
+│   ├── Magnitude = 'Significant' | 'Moderate' | 'Minor'
+│   ├── NewsCategory (8 categories)
+│   ├── BulletCategory (6 categories)
+│   ├── SourceType (6 types)
+│   ├── interface Confidence
+│   ├── interface SourceReference
+│   ├── interface AnalystQuote
+│   ├── interface Trend
+│   ├── interface Competitor
+│   └── Type guard functions
+│
+├── types.ts                           [~600 lines] - All interface definitions
+│   ├── FoundationOutput
+│   ├── Section1Output / Section1Input (Executive Summary)
+│   ├── Section2Output / Section2Input (Financial Snapshot)
+│   ├── Section3Output / Section3Input (Company Overview)
+│   ├── Section4Output / Section4Input (Segment Analysis)
+│   ├── Section5Output / Section5Input (Trends)
+│   ├── Section6Output / Section6Input (Peer Benchmarking)
+│   ├── Section7Output / Section7Input (SKU Opportunity Mapping)
+│   ├── Section8Output / Section8Input (Recent News & Events)
+│   ├── Section9Output / Section9Input (Conversation Starters)
+│   ├── Section10Output / Section10Input (Appendix)
+│   ├── CompleteResearchOutput
+│   └── 40+ detailed sub-interfaces
+│
+├── validation.ts                      [~650 lines] - Zod schemas for runtime validation
+│   ├── foundationOutputSchema
+│   ├── section1OutputSchema through section10OutputSchema
+│   ├── All shared schemas (confidence, sources, quotes, trends, etc.)
+│   ├── validateSectionOutput<T>()
+│   ├── validateWithFeedback<T>()
+│   └── validateCompleteResearch()
+│
+├── foundation-prompt.md               [~1,000 lines] - Phase 0 comprehensive research
+│   ├── 10 source categories with search strategies
+│   ├── Geography-specific context gathering (75-80% focus)
+│   ├── FX rate hierarchy (A/B/C)
+│   ├── Industry average hierarchy (A/B/C)
+│   ├── Source catalog establishment (S1, S2, S3...)
+│   └── Structured JSON output schema
+│
+├── foundation-prompt.ts               [~350 lines] - TypeScript implementation
+│   ├── export interface FoundationInput
+│   ├── export interface FoundationOutput
+│   ├── export function buildFoundationPrompt()
+│   ├── export function validateFoundationOutput()
+│   └── Helper functions
+│
+└── sections/
+    ├── section-01.md                  [~550 lines] - Executive Summary
+    │   ├── Synthesis of all completed sections
+    │   ├── 5-7 bullet points by category
+    │   ├── MUST lead with geography headline
+    │   ├── REQUIRES: Foundation + Sections 2 & 3 (minimum)
+    │   └── Categories: Geography, Financial, Strategic, Competitive, Risk, Momentum
+    │
+    ├── section-01.ts                  [~200 lines] - TypeScript implementation
+    │   ├── export interface Section1Input
+    │   ├── export interface Section1Output
+    │   ├── export interface ExecutiveBullet
+    │   ├── export function buildSection1Prompt()
+    │   ├── export function validateSection1Output()
+    │   ├── export function formatSection1ForDocument()
+    │   └── Helper functions (getBulletsByCategory, etc.)
+    │
+    ├── section-02.md                  [~600 lines] - Financial Snapshot
+    │   ├── 15 required KPIs
+    │   ├── Company vs Industry Average comparison
+    │   ├── Geography-specific financial performance
+    │   ├── FX source and Industry source tracking
+    │   └── Derived metrics with formulas
+    │
+    ├── section-02.ts                  [~250 lines] - TypeScript implementation
+    │   ├── export interface Section2Input
+    │   ├── export interface Section2Output
+    │   ├── export interface FinancialMetric
+    │   ├── export function buildSection2Prompt()
+    │   ├── export function validateSection2Output()
+    │   ├── export function formatSection2ForDocument()
+    │   └── Helper functions
+    │
+    ├── section-03.md                  [~650 lines] - Company Overview
+    │   ├── 4 subsections (3.1-3.4)
+    │   ├── 3.1 Business Description
+    │   ├── 3.2 Geographic Footprint
+    │   ├── 3.3 Strategic Priorities
+    │   └── 3.4 Key Leadership
+    │
+    ├── section-03.ts                  [~300 lines] - TypeScript implementation
+    │   ├── export interface Section3Input
+    │   ├── export interface Section3Output
+    │   ├── export interface BusinessSegment
+    │   ├── export interface StrategicPriority
+    │   ├── export interface ExecutiveLeader
+    │   ├── export function buildSection3Prompt()
+    │   ├── export function validateSection3Output()
+    │   ├── export function formatSection3ForDocument()
+    │   └── Helper functions
+    │
+    ├── section-04.md                  [~750 lines] - Segment Analysis (COMPLEX)
+    │   ├── Overview (4.1) + Per-segment analysis (4.X)
+    │   ├── Each segment: 3 subsections
+    │   │   ├── 4.X.1 Financial Snapshot
+    │   │   ├── 4.X.2 Performance Analysis
+    │   │   └── 4.X.3 Competitive Landscape
+    │   ├── Fallback strategy for token limits
+    │   ├── Primary source: 10-K/10-Q segment reporting
+    │   └── Segment-specific competitors (NOT company peers)
+    │
+    ├── section-04.ts                  [~450 lines] - TypeScript with fallback
+    │   ├── export interface Section4Input
+    │   ├── export interface Section4Output
+    │   ├── export interface SegmentAnalysis
+    │   ├── export function buildSection4Prompt() - All segments
+    │   ├── export function buildSection4SegmentPrompt() - Fallback
+    │   ├── export function validateSection4Output()
+    │   ├── export function validateSegmentOutput()
+    │   ├── export function formatSection4ForDocument()
+    │   ├── export function combineSegmentOutputs()
+    │   └── Helper functions
+    │
+    ├── section-05.md                  [~700 lines] - Trends
+    │   ├── Aggregate summary
+    │   ├── 5.2 Macro Trends (4-6 trends)
+    │   ├── 5.3 Micro Trends (3-5 trends)
+    │   ├── 5.4 Company-Specific Trends (3-5 trends)
+    │   ├── Impact scoring (1-10 scale)
+    │   ├── Direction (Positive/Negative/Neutral)
+    │   └── Geography relevance for each
+    │
+    ├── section-05.ts                  [~300 lines] - TypeScript implementation
+    │   ├── export interface Section5Input
+    │   ├── export interface Section5Output
+    │   ├── export interface MacroTrend
+    │   ├── export interface MicroTrend
+    │   ├── export interface CompanyTrend
+    │   ├── export function buildSection5Prompt()
+    │   ├── export function validateSection5Output()
+    │   ├── export function formatSection5ForDocument()
+    │   └── Helper functions (filterByDirection, getHighImpactTrends, etc.)
+    │
+    ├── section-06.md                  [~550 lines] - Peer Benchmarking
+    │   ├── REQUIRES Section 2 (financial baseline)
+    │   ├── 6.1 Peer Comparison Table (3-5 peers)
+    │   ├── 6.2 Benchmark Summary
+    │   │   ├── Overall assessment
+    │   │   ├── Key strengths (2-4)
+    │   │   ├── Key gaps (2-4) with magnitude
+    │   │   └── Competitive positioning
+    │   └── All peers must have geography presence
+    │
+    ├── section-06.ts                  [~300 lines] - TypeScript implementation
+    │   ├── export interface Section6Input
+    │   ├── export interface Section6Output
+    │   ├── export interface PeerInfo
+    │   ├── export interface PeerMetric
+    │   ├── export interface KeyStrength
+    │   ├── export interface KeyGap
+    │   ├── export function buildSection6Prompt()
+    │   ├── export function validateSection6Output()
+    │   ├── export function formatSection6ForDocument()
+    │   └── Helper functions (compareMetric, getOutperformingMetrics, etc.)
+    │
+    ├── section-07.md                  [~650 lines] - SKU Opportunity Mapping
+    │   ├── Only genuine problem-to-SKU alignments
+    │   ├── 5 SSA practice areas reference
+    │   ├── 2-5 opportunities (empty acceptable)
+    │   ├── Priority (High/Medium/Low)
+    │   ├── Severity (1-10 scale)
+    │   ├── Specific value levers (2-4 per opportunity)
+    │   └── Geography relevance for each
+    │
+    ├── section-07.ts                  [~250 lines] - TypeScript implementation
+    │   ├── export interface Section7Input
+    │   ├── export interface Section7Output
+    │   ├── export interface Opportunity
+    │   ├── export const SKU_PRACTICE_AREAS
+    │   ├── export function buildSection7Prompt()
+    │   ├── export function validateSection7Output()
+    │   ├── export function formatSection7ForDocument()
+    │   └── Helper functions (filterByPriority, getHighSeverityOpportunities, etc.)
+    │
+    ├── section-08.md                  [~500 lines] - Recent News & Events
+    │   ├── 3-5 geography-relevant news items
+    │   ├── Last 12 months only (Dec 2023 - Dec 2024)
+    │   ├── Tier-1 media priority (WSJ, FT, Bloomberg, Reuters)
+    │   ├── Categories: Investment, M&A, Operations, Product, etc.
+    │   └── 75-80% geography-specific news
+    │
+    ├── section-08.ts                  [~200 lines] - TypeScript implementation
+    │   ├── export interface Section8Input
+    │   ├── export interface Section8Output
+    │   ├── export interface NewsItem
+    │   ├── export type NewsCategory
+    │   ├── export function buildSection8Prompt()
+    │   ├── export function validateSection8Output()
+    │   ├── export function formatSection8ForDocument()
+    │   └── Helper functions (filterByCategory, sortByDate, etc.)
+    │
+    ├── section-09.md                  [~600 lines] - Executive Conversation Starters
+    │   ├── 3-5 actionable discussion topics
+    │   ├── Each links analysis to business value
+    │   ├── References specific findings with data
+    │   ├── Connects to SSA capabilities (if applicable)
+    │   └── Geography relevance for each
+    │
+    ├── section-09.ts                  [~200 lines] - TypeScript implementation
+    │   ├── export interface Section9Input
+    │   ├── export interface Section9Output
+    │   ├── export interface ConversationStarter
+    │   ├── export function buildSection9Prompt()
+    │   ├── export function validateSection9Output()
+    │   ├── export function formatSection9ForDocument()
+    │   └── Helper functions
+    │
+    ├── section-10.md                  [~550 lines] - Appendix (AUTO-GENERATED)
+    │   ├── 10.1 Source References (S1, S2, S3... with section usage)
+    │   ├── 10.2 FX Rates & Industry Averages
+    │   ├── 10.3 Derived Metrics Footnotes
+    │   ├── Auto-generation logic
+    │   ├── Source consolidation and deduplication
+    │   └── Renumbering notes if needed
+    │
+    └── section-10.ts                  [~350 lines] - TypeScript with auto-generation
+        ├── export interface Section10Input
+        ├── export interface Section10Output
+        ├── export interface SourceReferenceDetailed
+        ├── export function buildSection10Prompt()
+        ├── export function generateSection10() - AUTO-GENERATE
+        ├── export function validateSection10Output()
+        ├── export function formatSection10ForDocument()
+        └── Helper functions (consolidateSources, collectFXRates, etc.)
+
+================================================================
+File Size Breakdown
+================================================================
+
+Documentation (3 files):                ~1,700 lines
+- README.md:                            ~500 lines
+- CHANGELOG.md:                         ~400 lines  
+- implementation-guide.md:              ~800 lines
+
+Core System Files (4 files):            ~2,300 lines
+- style-guide.md:                       ~800 lines
+- shared-types.ts:                      ~250 lines
+- types.ts:                             ~600 lines
+- validation.ts:                        ~650 lines
+
+Foundation (2 files):                   ~1,350 lines
+- foundation-prompt.md:                 ~1,000 lines
+- foundation-prompt.ts:                 ~350 lines
+
+Section Files (20 files):               ~9,650 lines
+- section-01.md/.ts:                    ~750 lines
+- section-02.md/.ts:                    ~850 lines
+- section-03.md/.ts:                    ~950 lines
+- section-04.md/.ts:                    ~1,200 lines (complex)
+- section-05.md/.ts:                    ~1,000 lines
+- section-06.md/.ts:                    ~850 lines
+- section-07.md/.ts:                    ~900 lines
+- section-08.md/.ts:                    ~700 lines
+- section-09.md/.ts:                    ~800 lines
+- section-10.md/.ts:                    ~900 lines
+
+================================================================
+TOTAL: 28 files, ~15,000+ lines
+================================================================
+
+Key Files for Codex (Read First):
+1. README.md - System overview
+2. style-guide.md - Formatting standards
+3. shared-types.ts - Common types
+4. types.ts - Interface definitions
+5. validation.ts - Runtime validation
+6. implementation-guide.md - Job orchestration
+7. foundation-prompt.md - Phase 0 research
+8. section-02.md - Example core section
+9. section-04.md - Example complex section
+
+Recommended Implementation Order:
+1. Database schema (Prisma)
+2. Foundation execution
+3. Core sections (2, 3, 8)
+4. Job orchestration
+5. Dependency resolution
+6. Streaming progress
+7. Complex section (4)
+8. Dependent sections (5, 6, 7)
+9. Synthesis (1, 9, 10)
+10. Error handling
+
+================================================================
+System Capabilities
+================================================================
+
+✅ Modular architecture (10 sections + foundation)
+✅ TypeScript type safety (complete interfaces)
+✅ Runtime validation (Zod schemas)
+✅ Job orchestration (parent/child hierarchy)
+✅ Database persistence (Prisma models)
+✅ API design (RESTful with streaming)
+✅ Error handling (retry logic, partial saves)
+✅ Source management (catalog tracking)
+✅ Dependency resolution (automatic progression)
+✅ Parallel execution (where possible)
+✅ Progress tracking (real-time updates)
+✅ Fallback strategies (token limits)
+✅ Copyright compliance (15-word quotes, 1 per source)
+✅ Geography focus (75-80% throughout)
+
+================================================================
+Version: 1.0.0 (December 2, 2024)
+================================================================

@@ -1,0 +1,38 @@
+
+> intellectra-backend@1.0.0 dev
+> tsx watch src/index.ts
+
+
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║   Intellectra Research API                                     ║
+║                                                                ║
+║   Status:      Running                                         ║
+║   Environment: development                                    ║
+║   Port:        3000                                            ║
+║   URL:         http://localhost:3000                          ║
+║                                                                ║
+║   API Endpoints:                                               ║
+║   - POST   /api/research/generate                              ║
+║   - GET    /api/research                                       ║
+║   - GET    /api/research/jobs/:id                              ║
+║   - GET    /api/research/:id                                   ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+  
+2025-12-08T15:35:44.113Z - POST /api/research/generate
+2025-12-08T15:36:31.763Z - GET /api/research
+2025-12-08T15:36:31.811Z - GET /api/research
+2025-12-08T15:37:05.724Z - POST /api/research/generate
+2025-12-08T15:37:05.742Z - GET /api/research/jobs/cmixbeg1q000pl0k012sencp1
+2025-12-08T15:37:07.772Z - GET /api/research/jobs/cmixbeg1q000pl0k012sencp1
+2025-12-08T15:37:09.792Z - GET /api/research/jobs/cmixbeg1q000pl0k012sencp1
+2025-12-08T15:37:11.809Z - GET /api/research/jobs/cmixbeg1q000pl0k012sencp1
+2025-12-08T15:37:13.826Z - GET /api/research/jobs/cmixbeg1q000pl0k012sencp1
+2025-12-08T15:37:15.836Z - GET /api/research/jobs/cmixbeg1q000pl0k012sencp1
+2025-12-08T15:37:17.860Z - GET /api/research/jobs/cmixbeg1q000pl0k012sencp1
+2025-12-08T15:37:19.873Z - GET /api/research/jobs/cmixbeg1q000pl0k012sencp1
+2025-12-08T15:37:21.886Z - GET /api/research/jobs/cmixbeg1q000pl0k012sencp1
+12:49:19 PM [tsx] change in ./src\services\claude-client.ts Rerunning...
+c12:49:30 PM [tsx] change in ./src\services\claude-client.ts Rerunning...
+c
