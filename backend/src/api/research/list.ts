@@ -62,6 +62,7 @@ export async function listResearch(req: Request, res: Response) {
           updatedAt: true,
           completedAt: true,
           queuedAt: true,
+          // include cancelled sub-jobs only to compute generated sections count? keep completed only
           subJobs: {
             where: { status: 'completed' },
             select: { stage: true }
