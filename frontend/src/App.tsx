@@ -7,6 +7,7 @@ import { useResearchManager } from './services/researchManager';
 
 export default function App() {
   const [currentPath, setCurrentPath] = useState(window.location.hash.slice(1) || '/');
+  const [navResetKey, setNavResetKey] = useState(0);
   const { jobs, createJob, runJob, cancelJob } = useResearchManager();
 
   // Simple Hash Router Implementation
@@ -21,6 +22,10 @@ export default function App() {
   }, []);
 
   const navigate = (path: string) => {
+    setCurrentPath(path);
+    if (path === '/new') {
+      setNavResetKey((k) => k + 1);
+    }
     window.location.hash = path;
   };
 
@@ -29,7 +34,15 @@ export default function App() {
       return <Home jobs={jobs} onNavigate={navigate} onCancel={cancelJob} />;
     }
     if (currentPath === '/new') {
-      return <NewResearch createJob={createJob} runJob={runJob} jobs={jobs} onNavigate={navigate} />;
+      return (
+        <NewResearch
+          key={navResetKey}
+          createJob={createJob}
+          runJob={runJob}
+          jobs={jobs}
+          onNavigate={navigate}
+        />
+      );
     }
     if (currentPath.startsWith('/research/')) {
       return <ResearchDetail jobs={jobs} onNavigate={navigate} />;

@@ -10,7 +10,9 @@ interface HomeProps {
 }
 
 export const Home: React.FC<HomeProps> = ({ jobs, onNavigate, onCancel }) => {
-  const completedJobs = jobs.filter(j => j.status === 'completed');
+  const completedJobs = [...jobs.filter(j => j.status === 'completed')].sort(
+    (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
+  );
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const API_BASE = ((import.meta as any).env?.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
@@ -166,49 +168,51 @@ export const Home: React.FC<HomeProps> = ({ jobs, onNavigate, onCancel }) => {
                       </div>
                     </td>
                     <td className="px-6 py-4">{job.industry || 'N/A'}</td>
-                    <td className="px-6 py-4">{new Date(job.createdAt).toLocaleDateString()}</td>
+                    <td className="px-6 py-4">{new Date(job.createdAt).toLocaleDateString('en-US')}</td>
                     <td className="px-6 py-4">
                       <StatusPill status={job.status} size="sm" />
                     </td>
                     <td className="px-6 py-4 text-right relative">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuId(openMenuId === job.id ? null : job.id);
-                        }}
-                        className="text-slate-500 hover:text-slate-700 p-1 rounded hover:bg-slate-100 transition-colors opacity-0 group-hover:opacity-100"
-                        aria-label="Actions"
-                      >
-                        <MoreHorizontal size={18} />
-                      </button>
-                      {openMenuId === job.id && (
-                        <div className="absolute right-4 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
-                          <button
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              onNavigate(`/research/${job.id}`);
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between"
-                          >
-                            View Report <ArrowRight size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleExport(job)}
-                            disabled={exportingId === job.id}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 disabled:opacity-60"
-                          >
-                            {exportingId === job.id ? <Loader2 size={14} className="animate-spin text-slate-400" /> : null}
-                            Export to PDF
-                          </button>
-                          <button
-                            disabled
-                            className="w-full text-left px-3 py-2 text-sm text-slate-400 cursor-not-allowed flex items-center justify-between"
-                            title="Coming soon"
-                          >
-                            Rerun Job
-                          </button>
-                        </div>
-                      )}
+                      <div className="inline-block relative">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(openMenuId === job.id ? null : job.id);
+                          }}
+                          className="text-slate-500 hover:text-slate-700 p-1 rounded hover:bg-slate-100 transition-colors"
+                          aria-label="Actions"
+                        >
+                          <MoreHorizontal size={18} />
+                        </button>
+                        {openMenuId === job.id && (
+                          <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+                            <button
+                              onClick={() => {
+                                setOpenMenuId(null);
+                                onNavigate(`/research/${job.id}`);
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between"
+                            >
+                              View Report <ArrowRight size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleExport(job)}
+                              disabled={exportingId === job.id}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 disabled:opacity-60"
+                            >
+                              {exportingId === job.id ? <Loader2 size={14} className="animate-spin text-slate-400" /> : null}
+                              Export to PDF
+                            </button>
+                            <button
+                              disabled
+                              className="w-full text-left px-3 py-2 text-sm text-slate-400 cursor-not-allowed flex items-center justify-between"
+                              title="Coming soon"
+                            >
+                              Rerun Job
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

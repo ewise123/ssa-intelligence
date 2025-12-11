@@ -52,7 +52,8 @@ export const NewResearch: React.FC<NewResearchProps> = ({ createJob, runJob, job
     setStep('processing');
     
     // Start the process, passing the company name explicitly to avoid stale state issues
-    await runJob(id, normalized.company);
+    runJob(id, normalized.company).catch(console.error);
+    onNavigate(`/research/${id}`);
   };
 
   // Redirect when done
