@@ -284,6 +284,18 @@ export class ResearchOrchestrator {
           }
           lockHeld = true;
 
+          // If a job is already running, back off and retry later
+          const runningCount = await this.prisma.researchJob.count({
+            where: { status: 'running' }
+          });
+          if (runningCount > 0) {
+            console.log('[queue] Detected running job, delaying promotion');
+            await this.releaseLock();
+            lockHeld = false;
+            await this.delay(750);
+            continue;
+          }
+
           const jobToRun = await this.prisma.researchJob.findFirst({
             where: { status: 'queued' },
             orderBy: { queuedAt: 'asc' },
@@ -297,6 +309,7 @@ export class ResearchOrchestrator {
             break;
           }
 
+          console.log('[queue] Promoting job to running:', jobToRun.id);
           await this.prisma.researchJob.update({
             where: { id: jobToRun.id },
             data: {
@@ -311,6 +324,9 @@ export class ResearchOrchestrator {
             await this.releaseLock();
           }
         }
+
+        // Small gap before next iteration to avoid tight loop
+        await this.delay(200);
       }
     } catch (error) {
       console.error('Queue processor error:', error);
@@ -337,8 +353,18 @@ export class ResearchOrchestrator {
       // Execute stages in dependency order
       await this.executeNextPhase(jobId);
 
-      // Mark as completed
-      await this.updateJobStatus(jobId, 'completed');
+      // Finalize status based on sub-job results
+      const subJobs = await this.prisma.researchSubJob.findMany({
+        where: { researchId: jobId },
+        select: { status: true }
+      });
+      const anyFailed = subJobs.some(s => s.status === 'failed');
+      const allTerminal = subJobs.every(s => ['completed', 'failed', 'cancelled'].includes(s.status));
+      if (anyFailed) {
+        await this.updateJobStatus(jobId, 'failed');
+      } else if (allTerminal) {
+        await this.updateJobStatus(jobId, 'completed');
+      }
     } catch (error) {
       console.error(`Job ${jobId} failed:`, error);
       await this.updateJobStatus(jobId, 'failed');
@@ -478,6 +504,16 @@ export class ResearchOrchestrator {
       console.error(`Stage ${stageId} failed:`, error);
       const rawContent = response?.content;
       await this.handleStageFailure(jobId, stageId, error, rawContent);
+
+       // If this stage is now marked failed (exceeded retries), fail the whole job
+       const sub = await this.prisma.researchSubJob.findFirst({
+         where: { researchId: jobId, stage: stageId },
+         select: { status: true }
+       });
+       if (sub?.status === 'failed') {
+         await this.updateJobStatus(jobId, 'failed');
+         throw error;
+       }
     }
   }
 
@@ -618,6 +654,10 @@ export class ResearchOrchestrator {
     const attempts = subJob.attempts + 1;
 
     if (attempts < subJob.maxAttempts) {
+      // Back off briefly on rate limit errors
+      if (this.isRateLimitError(errorMessage)) {
+        await this.delay(2000);
+      }
       // Retry
       await this.prisma.researchSubJob.update({
         where: { id: subJob.id },
@@ -935,6 +975,10 @@ export class ResearchOrchestrator {
     return job?.status === 'cancelled';
   }
 
+  private isRateLimitError(message: string): boolean {
+    return message.toLowerCase().includes('rate limit') || message.includes('429');
+  }
+
   /**
    * Periodic watchdog to kick the queue if it ever stalls
    */
@@ -966,5 +1010,3 @@ export function getResearchOrchestrator(prisma: PrismaClient): ResearchOrchestra
   }
   return orchestratorSingleton;
 }
-
-
