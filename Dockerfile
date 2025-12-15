@@ -1,7 +1,7 @@
 # Multi-stage build for full app (backend + frontend)
 # This does not change local dev; existing backend Dockerfile/docker-compose remain untouched.
 
-FROM node:20-alpine AS backend-build
+FROM mcr.microsoft.com/playwright:v1.47.2-jammy AS backend-build
 WORKDIR /app/backend
 
 COPY backend/package*.json ./
@@ -21,14 +21,11 @@ RUN npm ci
 COPY frontend ./
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM mcr.microsoft.com/playwright:v1.47.2-jammy AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV NODE_PATH=/app/backend/dist/src
-
-# Install bash for environments that invoke bash explicitly
-RUN apk add --no-cache bash
 
 # Backend artifacts
 COPY --from=backend-build /app/backend/dist ./backend/dist
