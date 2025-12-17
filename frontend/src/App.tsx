@@ -8,7 +8,7 @@ import { useResearchManager } from './services/researchManager';
 export default function App() {
   const [currentPath, setCurrentPath] = useState(window.location.hash.slice(1) || '/');
   const [navResetKey, setNavResetKey] = useState(0);
-  const { jobs, createJob, runJob, cancelJob } = useResearchManager();
+  const { jobs, createJob, runJob, cancelJob, deleteJob } = useResearchManager();
 
   // Simple Hash Router Implementation
   useEffect(() => {
@@ -31,7 +31,7 @@ export default function App() {
 
   const renderContent = () => {
     if (currentPath === '/') {
-      return <Home jobs={jobs} onNavigate={navigate} onCancel={cancelJob} />;
+      return <Home jobs={jobs} onNavigate={navigate} onCancel={cancelJob} onDelete={deleteJob} />;
     }
     if (currentPath === '/new') {
       return (
@@ -47,7 +47,7 @@ export default function App() {
     if (currentPath.startsWith('/research/')) {
       return <ResearchDetail jobs={jobs} onNavigate={navigate} />;
     }
-    return <Home jobs={jobs} onNavigate={navigate} />;
+    return <Home jobs={jobs} onNavigate={navigate} onDelete={deleteJob} />;
   };
 
   return (

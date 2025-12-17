@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { getClaudeClient } from './claude-client.ts';
+import { getClaudeClient } from './claude-client.js';
 
 const normalizeDomain = (value: string | undefined | null): string => {
   if (!value) return '';

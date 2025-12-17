@@ -8,14 +8,16 @@ interface HomeProps {
   jobs: ResearchJob[];
   onNavigate: (path: string) => void;
   onCancel?: (id: string) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
 }
 
-export const Home: React.FC<HomeProps> = ({ jobs, onNavigate, onCancel }) => {
+export const Home: React.FC<HomeProps> = ({ jobs, onNavigate, onCancel, onDelete }) => {
   const completedJobs = [...jobs.filter(j => j.status === 'completed' || j.status === 'cancelled')].sort(
     (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
   );
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const API_BASE = ((import.meta as any).env?.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
@@ -317,17 +319,71 @@ export const Home: React.FC<HomeProps> = ({ jobs, onNavigate, onCancel }) => {
               <div className="p-6 overflow-y-auto">
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {group.jobs.map((job) => (
-                    <div key={job.id} className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm hover:shadow-md transition-all">
-                      <div className="relative overflow-hidden rounded-lg bg-slate-100 aspect-[3/4]">
-                        {job.thumbnailUrl ? (
-                          <img
-                            src={job.thumbnailUrl}
-                            alt={`${job.companyName} thumbnail`}
-                            className="w-full h-full object-cover transition-transform duration-200 hover:scale-[1.02]"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-slate-200" />
-                        )}
+                    <div key={job.id} className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm hover:shadow-md transition-all relative">
+                      <div className="relative mb-3">
+                        <div className="absolute top-1 right-1 z-20">
+                          <div className="relative">
+                            <button
+                              onClick={() => setOpenMenuId(openMenuId === job.id ? null : job.id)}
+                              className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200"
+                            >
+                              ⋮
+                            </button>
+                            {openMenuId === job.id && (
+                              <>
+                                <div
+                                  className="fixed inset-0"
+                                  onClick={() => setOpenMenuId(null)}
+                                ></div>
+                                <div className="absolute right-0 mt-2 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-30">
+                                  <button
+                                    onClick={() => handleExport(job)}
+                                    disabled={exportingId === job.id}
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 disabled:opacity-60"
+                                  >
+                                    {exportingId === job.id ? <Loader2 size={14} className="animate-spin text-slate-500" /> : null}
+                                    Export PDF
+                                  </button>
+                                  <button
+                                    disabled
+                                    className="w-full text-left px-3 py-2 text-sm text-slate-400 cursor-not-allowed flex items-center"
+                                    title="Coming soon"
+                                  >
+                                    Rerun
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (!onDelete) return;
+                                      if (job.status === 'running' || job.status === 'queued') return;
+                                      const confirmed = window.confirm('Delete this report? This cannot be undone.');
+                                      if (!confirmed) return;
+                                      setDeletingId(job.id);
+                                      setOpenMenuId(null);
+                                      onDelete(job.id)
+                                        .catch(() => {})
+                                        .finally(() => setDeletingId(null));
+                                    }}
+                                    disabled={!onDelete || job.status === 'running' || job.status === 'queued' || deletingId === job.id}
+                                    className="w-full text-left px-3 py-2 text-sm text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                                  >
+                                    {deletingId === job.id ? 'Deleting...' : 'Delete'}
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="relative overflow-hidden rounded-lg bg-slate-100 aspect-[3/4]">
+                          {job.thumbnailUrl ? (
+                            <img
+                              src={job.thumbnailUrl}
+                              alt={`${job.companyName} thumbnail`}
+                              className="w-full h-full object-cover transition-transform duration-200 hover:scale-[1.02]"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-slate-200" />
+                          )}
+                        </div>
                       </div>
                       <div className="mt-3 space-y-1">
                         <div className="flex items-center justify-between text-xs text-slate-500">
@@ -341,23 +397,9 @@ export const Home: React.FC<HomeProps> = ({ jobs, onNavigate, onCancel }) => {
                       <div className="mt-3 flex items-center gap-2">
                         <button
                           onClick={() => onNavigate(`/research/${job.id}`)}
-                          className="flex-1 text-xs bg-brand-50 text-brand-700 font-semibold px-2 py-2 rounded-lg hover:bg-brand-100 transition-colors"
+                          className="w-full text-xs bg-brand-50 text-brand-700 font-semibold px-2 py-2 rounded-lg hover:bg-brand-100 transition-colors"
                         >
-                          View
-                        </button>
-                        <button
-                          onClick={() => handleExport(job)}
-                          disabled={exportingId === job.id}
-                          className="flex-1 text-xs bg-slate-100 text-slate-700 font-semibold px-2 py-2 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-60"
-                        >
-                          {exportingId === job.id ? <Loader2 size={14} className="animate-spin inline text-slate-500" /> : 'PDF'}
-                        </button>
-                        <button
-                          disabled
-                          className="flex-1 text-xs bg-slate-50 text-slate-400 font-semibold px-2 py-2 rounded-lg cursor-not-allowed"
-                          title="Coming soon"
-                        >
-                          Rerun
+                          View Report
                         </button>
                       </div>
                     </div>

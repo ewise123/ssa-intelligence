@@ -567,6 +567,12 @@ const cancelJobApi = async (id: string) => {
   }) as Promise<{ success: boolean; status: string }>;
 };
 
+const deleteJobApi = async (id: string) => {
+  return fetchJson(`/research/${id}`, {
+    method: 'DELETE'
+  }) as Promise<{ success: boolean; jobId: string }>;
+};
+
 const mapSections = (
   statuses?: ApiSectionStatus[],
   sectionData?: Record<string, unknown>,
@@ -834,5 +840,10 @@ export const useResearchManager = () => {
     }
   }, []);
 
-  return { jobs, createJob, runJob, cancelJob };
+  const deleteJob = useCallback(async (jobId: string) => {
+    await deleteJobApi(jobId);
+    setJobs((prev) => prev.filter((j) => j.id !== jobId));
+  }, []);
+
+  return { jobs, createJob, runJob, cancelJob, deleteJob };
 };
