@@ -1,4 +1,4 @@
-# Intellectra Storage & Persistence Overview
+# SSA Intelligence Storage & Persistence Overview
 
 This summarizes how research data is stored, updated, and inspected.
 
@@ -40,8 +40,8 @@ This summarizes how research data is stored, updated, and inspected.
 - Used for job state/caching; not relied on for persistent research outputs (those are in Postgres).
 
 ## Local connection details (from `backend/.env`)
-- `DATABASE_URL="postgresql://intellectra:intellectra_dev_password@localhost:5434/intellectra_research"`
-- Redis: `redis://:intellectra_redis_password@localhost:6379`
+- `DATABASE_URL="postgresql://ssa_intelligence:ssa_intelligence_dev_password@localhost:5434/ssa_intelligence_research"`
+- Redis: `redis://:ssa_intelligence_redis_password@localhost:6379`
 - CORS: `http://localhost:5176`
 - Port: backend 3000 (default).
 
@@ -54,7 +54,7 @@ This summarizes how research data is stored, updated, and inspected.
   Opens http://localhost:5555 (default); tables: ResearchJob, ResearchSubJob, User, ApiKey.
 - SQL (psql):
   ```
-  psql "postgresql://intellectra:intellectra_dev_password@localhost:5434/intellectra_research"
+  psql "postgresql://ssa_intelligence:ssa_intelligence_dev_password@localhost:5434/ssa_intelligence_research"
   SELECT id, status, companyName, progress FROM "ResearchJob" ORDER BY "createdAt" DESC LIMIT 10;
   ```
 

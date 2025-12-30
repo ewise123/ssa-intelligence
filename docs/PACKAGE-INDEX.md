@@ -1,15 +1,15 @@
-# Intellectra Complete Package - Contents Index
+# SSA Intelligence Complete Package - Contents Index
 
-## 📦 Package: intellectra-complete-package.zip (231 KB)
+## 📦 Package: ssa-intelligence-complete-package.zip (231 KB)
 
-**Everything you need to integrate the Claude-powered research system with your Intellectra React app.**
+**Everything you need to integrate the Claude-powered research system with your SSA Intelligence React app.**
 
 ---
 
 ## 📂 Folder Structure
 
 ```
-intellectra-complete-package/
+ssa-intelligence-complete-package/
 │
 ├── START-HERE.md                      ← BEGIN HERE! Quick start guide
 ├── README.md                          ← Overview and architecture
@@ -154,8 +154,8 @@ intellectra-complete-package/
 
 1. **Unzip the package**
    ```bash
-   unzip intellectra-complete-package.zip
-   cd intellectra-complete-package
+   unzip ssa-intelligence-complete-package.zip
+   cd ssa-intelligence-complete-package
    ```
 
 2. **Read START-HERE.md**

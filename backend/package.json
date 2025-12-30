@@ -1,7 +1,7 @@
 {
-  "name": "intellectra-backend",
+  "name": "ssa-intelligence-backend",
   "version": "1.0.0",
-  "description": "Backend API for Intellectra Research Platform",
+  "description": "Backend API for SSA Intelligence Research Platform",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {

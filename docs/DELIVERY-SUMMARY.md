@@ -2,7 +2,7 @@
 
 ## ✅ Implementation Complete!
 
-I've created a **complete, production-ready backend** that integrates the modular research prompt system with your Intellectra React app.
+I've created a **complete, production-ready backend** that integrates the modular research prompt system with your SSA Intelligence React app.
 
 ---
 
@@ -201,7 +201,7 @@ Do this for all 10 sections! See mapping table in SETUP.md.
 ```bash
 # backend/.env
 ANTHROPIC_API_KEY="sk-ant-api03-your-key"
-DATABASE_URL="postgresql://intellectra:pass@localhost:5432/intellectra_research"
+DATABASE_URL="postgresql://ssa_intelligence:pass@localhost:5432/ssa_intelligence_research"
 CORS_ORIGIN="http://localhost:5174"
 
 # frontend/.env or vite.config.ts

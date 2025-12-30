@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide integrates the modular Claude research prompt system with the Intellectra React frontend, using renamed sections for consistency and maintaining the foundation phase for research context.
+This guide integrates the modular Claude research prompt system with the SSA Intelligence React frontend, using renamed sections for consistency and maintaining the foundation phase for research context.
 
 ---
 

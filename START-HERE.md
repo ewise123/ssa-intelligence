@@ -1,17 +1,17 @@
 ﻿> Layout update: backend in backend/, frontend in frontend/, prompts in research-prompts-package/, guides in research-guides/.
 
-# ðŸš€ START HERE - Intellectra Complete Integration Package
+# ðŸš€ START HERE - SSA Intelligence Complete Integration Package
 
 ## Welcome!
 
-This package contains **everything you need** to integrate the Claude-powered research system with your Intellectra React app.
+This package contains **everything you need** to integrate the Claude-powered research system with your SSA Intelligence React app.
 
 ---
 
 ## ðŸ“¦ What's in This Package?
 
 ```
-intellectra-complete-package/
+ssa-intelligence-complete-package/
 â”œâ”€â”€ START-HERE.md                      â† You are here!
 â”œâ”€â”€ README.md                          â† Read this next (overview)
 â”œâ”€â”€ DELIVERY-SUMMARY.md                â† What was built and why
@@ -116,7 +116,7 @@ npm run dev
 You should see:
 ```
 â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘   Intellectra Research API                                     â•‘
+â•‘   SSA Intelligence Research API                                     â•‘
 â•‘   Status:      Running                                         â•‘
 â•‘   Port:        3000                                            â•‘
 â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -215,7 +215,7 @@ export function buildExecSummaryPrompt() { ... }
 ```bash
 # backend/.env
 ANTHROPIC_API_KEY="sk-ant-api03-your-key"
-DATABASE_URL="postgresql://intellectra:intellectra_dev_password@localhost:5432/intellectra_research"
+DATABASE_URL="postgresql://ssa_intelligence:ssa_intelligence_dev_password@localhost:5432/ssa_intelligence_research"
 CORS_ORIGIN="http://localhost:5174"
 
 # frontend/.env or vite.config.ts

@@ -1,6 +1,6 @@
-# Integration Summary: Research Prompts → Intellectra App
+# Integration Summary: Research Prompts → SSA Intelligence App
 
-Complete guide showing how the modular research prompt system integrates with your Intellectra UI/UX app.
+Complete guide showing how the modular research prompt system integrates with your SSA Intelligence UI/UX app.
 
 ---
 
@@ -524,4 +524,4 @@ You know everything is working when:
 
 ---
 
-**Congratulations!** You now have a complete, production-ready research generation system integrated with your Intellectra UI. 🎉
+**Congratulations!** You now have a complete, production-ready research generation system integrated with your SSA Intelligence UI. 🎉

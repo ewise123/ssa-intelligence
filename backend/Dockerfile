@@ -1,4 +1,4 @@
-# Playwright-ready Dockerfile for Intellectra Backend
+# Playwright-ready Dockerfile for SSA Intelligence Backend
 
 # Stage 1: Dependencies (Playwright base image includes Chromium and deps)
 FROM mcr.microsoft.com/playwright:v1.47.2-jammy AS deps

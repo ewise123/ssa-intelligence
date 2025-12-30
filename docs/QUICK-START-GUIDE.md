@@ -137,7 +137,7 @@ npx prisma db push
 
 **Create `.env`:**
 ```bash
-DATABASE_URL="postgresql://user:password@localhost:5432/intellectra"
+DATABASE_URL="postgresql://user:password@localhost:5432/ssa_intelligence"
 ANTHROPIC_API_KEY="your-api-key-here"
 PORT=3000
 ```

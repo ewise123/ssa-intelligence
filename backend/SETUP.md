@@ -1,4 +1,4 @@
-# Intellectra Backend Setup Guide
+# SSA Intelligence Backend Setup Guide
 
 Complete guide for setting up the backend API server with Claude integration.
 
@@ -101,7 +101,7 @@ Edit `.env` and add your API key:
 ANTHROPIC_API_KEY="sk-ant-api03-your-key-here"
 
 # Database (will be created by Docker)
-DATABASE_URL="postgresql://intellectra:intellectra_dev_password@localhost:5432/intellectra_research"
+DATABASE_URL="postgresql://ssa_intelligence:ssa_intelligence_dev_password@localhost:5432/ssa_intelligence_research"
 
 # Server
 PORT="3000"
@@ -149,7 +149,7 @@ You should see:
 ```
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
-║   Intellectra Research API                                     ║
+║   SSA Intelligence Research API                                     ║
 ║                                                                ║
 ║   Status:      Running                                         ║
 ║   Environment: development                                     ║

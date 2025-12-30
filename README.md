@@ -1,4 +1,4 @@
-# Intellectra Research System - Complete Integration Package
+# SSA Intelligence Research System - Complete Integration Package
 
 ## Current Repository Layout (monorepo)
 - `backend/` — API, orchestration, Prisma, env lives in `backend/.env`.
@@ -15,7 +15,7 @@
 
 ## 📦 What's Included
 
-This package contains everything you need to run the modular research generation system with your Intellectra UI:
+This package contains everything you need to run the modular research generation system with your SSA Intelligence UI:
 
 ### Backend Implementation
 - ✅ Express API server with TypeScript
@@ -134,7 +134,7 @@ curl -X POST http://localhost:3000/api/research/generate \
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      React Frontend                         │
-│  (Your Intellectra UI - Already Built!)                     │
+│  (Your SSA Intelligence UI - Already Built!)                     │
 │                                                             │
 │  Components:                                                │
 │  - Home.tsx (Dashboard)                                     │

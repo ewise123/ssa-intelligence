@@ -240,7 +240,7 @@ Individual section tracking:
 
 ```bash
 ANTHROPIC_API_KEY="sk-ant-api03-your-key"
-DATABASE_URL="postgresql://intellectra:intellectra_dev_password@localhost:5432/intellectra_research"
+DATABASE_URL="postgresql://ssa_intelligence:ssa_intelligence_dev_password@localhost:5432/ssa_intelligence_research"
 PORT="3000"
 CORS_ORIGIN="http://localhost:5174"
 ```
@@ -289,7 +289,7 @@ grep VITE_API_BASE_URL frontend/.env
 docker-compose restart postgres
 
 # Check connection
-docker-compose exec postgres psql -U intellectra -d intellectra_research -c "SELECT 1;"
+docker-compose exec postgres psql -U ssa_intelligence -d ssa_intelligence_research -c "SELECT 1;"
 ```
 
 ### Validation failed

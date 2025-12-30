@@ -1,4 +1,4 @@
-// Prisma Schema for Intellectra Research Platform
+// Prisma Schema for SSA Intelligence Research Platform
 // Uses PostgreSQL with new section naming convention
 
 generator client {

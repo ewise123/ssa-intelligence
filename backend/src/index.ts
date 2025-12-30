@@ -1,6 +1,6 @@
 /**
  * Express Server
- * Main entry point for Intellectra Research API
+ * Main entry point for SSA Intelligence Research API
  */
 
 import express from 'express';
@@ -172,7 +172,7 @@ app.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
-║   Intellectra Research API                                     ║
+║   SSA Intelligence Research API                                     ║
 ║                                                                ║
 ║   Status:      Running                                         ║
 ║   Environment: ${process.env.NODE_ENV || 'development'}                                    ║

@@ -1,12 +1,12 @@
-# Intellectra Frontend
+# SSA Intelligence Frontend
 
-Beautiful React + TypeScript frontend for the Intellectra research platform.
+Beautiful React + TypeScript frontend for the SSA Intelligence research platform.
 
 ---
 
 ## 🎨 What's This?
 
-This is the **complete frontend** for your Intellectra app - the UI you designed with:
+This is the **complete frontend** for your SSA Intelligence app - the UI you designed with:
 - Dashboard with active/completed research
 - New research form with real-time progress
 - Research detail view with section navigation
@@ -42,7 +42,7 @@ Open http://localhost:5174
 ## 📁 Project Structure
 
 ```
-intellectra-frontend/
+ssa-intelligence-frontend/
 ├── src/
 │   ├── components/
 │   │   ├── Layout.tsx           # Main layout with sidebar
