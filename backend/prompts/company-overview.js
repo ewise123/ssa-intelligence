@@ -271,7 +271,7 @@ interface Section3Output {
 
 **Every subsection must emphasize ${geography}:**
 
-✅ **CORRECT patterns:**
+**CORRECT patterns:**
 
 **3.1 Business Description:**
 - "**${geography}** operations focus on hydraulics and aerospace, serving industrial OEMs and Airbus supply chain..."
@@ -288,7 +288,7 @@ interface Section3Output {
 **3.4 Key Leadership:**
 - "Regional President Klaus Schmidt (8 years tenure) leads ${geography} operations with P&L responsibility for €1.2B revenue (S4)..."
 
-❌ **WRONG patterns:**
+**WRONG patterns:**
 - "Company operates 85 facilities globally..." [No regional context]
 - "Strategic priorities include digital transformation and sustainability..." [No geography mention]
 - "CEO has 25 years experience..." [Not geography-relevant unless regional role]

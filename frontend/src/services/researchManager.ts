@@ -656,6 +656,11 @@ const mapJobFromStatus = (
   const derivedStatus = (status.status as JobStatus) || existing?.status || 'running';
   let currentAction = existing?.currentAction || '';
 
+  // If the job is already cancelled locally, don't overwrite it with non-cancelled updates
+  if (existing?.status === 'cancelled' && derivedStatus !== 'cancelled') {
+    return existing;
+  }
+
   if (derivedStatus === 'queued') {
     currentAction = queuePosition && queuePosition > 1
       ? `Queued behind ${queuePosition - 1} job(s)`
@@ -781,7 +786,7 @@ export const useResearchManager = () => {
             return [next, ...prev.filter((j) => j.id !== jobId)];
           });
 
-          if (status.status === 'completed' || status.status === 'failed') {
+          if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
             break;
           }
 
@@ -843,6 +848,7 @@ export const useResearchManager = () => {
   const deleteJob = useCallback(async (jobId: string) => {
     await deleteJobApi(jobId);
     setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    activeJobsRef.current.delete(jobId);
   }, []);
 
   return { jobs, createJob, runJob, cancelJob, deleteJob };
