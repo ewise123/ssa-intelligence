@@ -53,35 +53,7 @@ your-project/
 └── frontend/         # ← Your existing React app
 ```
 
-### 2. Copy Research Prompts
-
-**CRITICAL STEP:** Copy the prompts from `research-prompts-package.zip` and **rename** them:
-
-```bash
-cd backend/prompts/
-
-# Copy and rename (MUST DO THIS!)
-cp /path/to/prompts/foundation-prompt.ts ./foundation-prompt.ts
-cp /path/to/prompts/sections/section-01.ts ./exec-summary.ts
-cp /path/to/prompts/sections/section-02.ts ./financial-snapshot.ts
-cp /path/to/prompts/sections/section-03.ts ./company-overview.ts
-cp /path/to/prompts/sections/section-04.ts ./segment-analysis.ts
-cp /path/to/prompts/sections/section-05.ts ./trends.ts
-cp /path/to/prompts/sections/section-06.ts ./peer-benchmarking.ts
-cp /path/to/prompts/sections/section-07.ts ./sku-opportunities.ts
-cp /path/to/prompts/sections/section-08.ts ./recent-news.ts
-cp /path/to/prompts/sections/section-09.ts ./conversation-starters.ts
-cp /path/to/prompts/sections/section-10.ts ./appendix.ts
-
-# Also copy supporting files
-cp /path/to/prompts/validation.ts ./validation.ts
-cp /path/to/prompts/types.ts ./types.ts
-cp /path/to/prompts/shared-types.ts ./shared-types.ts
-```
-
-**Then update function names in each renamed file!** See `SETUP.md` for details.
-
-### 3. Install & Configure
+### 2. Install & Configure
 
 ```bash
 cd backend
@@ -90,7 +62,7 @@ cp .env.example .env
 # Edit .env and add your ANTHROPIC_API_KEY
 ```
 
-### 4. Start Services
+### 3. Start Services
 
 ```bash
 docker-compose up -d postgres redis
@@ -99,7 +71,7 @@ npm run db:push
 npm run dev
 ```
 
-### 5. Test It!
+### 4. Test It!
 
 ```bash
 # Health check
@@ -125,7 +97,7 @@ curl -X POST http://localhost:3000/api/research/generate \
 1. **SETUP.md** - Complete step-by-step setup instructions
 2. **INTEGRATION-SUMMARY.md** - How everything connects
 3. **QUICK-REFERENCE.md** - Cheat sheet for daily use
-4. **CHANGES-v1.1.md** - What changed from original prompts (in research-prompts-package)
+4. **CHANGES-v1.1.md** - What changed from original prompts
 
 ---
 
@@ -182,7 +154,6 @@ curl -X POST http://localhost:3000/api/research/generate \
 - **Node.js** v20+ and npm v10+
 - **Docker** and Docker Compose
 - **Anthropic API Key** - Get from https://console.anthropic.com/
-- **Research Prompts Package** - The prompts ZIP file with all sections
 
 ### Optional
 
@@ -322,28 +293,6 @@ Total time: ~15-20 minutes
 
 ## 🚨 Critical Steps
 
-### ⚠️ MUST DO: Rename Section Files
-
-The prompt files **MUST** be renamed to match your app's naming:
-
-```
-❌ section-01.ts  →  ✅ exec-summary.ts
-❌ section-02.ts  →  ✅ financial-snapshot.ts
-... etc.
-```
-
-**AND update function names inside each file:**
-
-```typescript
-// ❌ OLD
-export function buildSection1Prompt() { ... }
-
-// ✅ NEW
-export function buildExecSummaryPrompt() { ... }
-```
-
-**If you don't do this, the backend won't be able to import the prompts!**
-
 ### ⚠️ MUST DO: Set API Key
 
 ```bash
@@ -382,10 +331,10 @@ backend/
 │   │   └── prompts.ts           # TypeScript types
 │   └── index.ts                 # Express server
 │
-├── prompts/                     # ← Copy & rename here!
+├── prompts/                     # Prompt files live here
 │   ├── foundation-prompt.ts
-│   ├── exec-summary.ts          # Renamed from section-01.ts
-│   ├── financial-snapshot.ts    # Renamed from section-02.ts
+│   ├── exec-summary.ts         
+│   ├── financial-snapshot.ts   
 │   └── ... (all 10 sections)
 │
 ├── prisma/
@@ -444,10 +393,8 @@ npm run dev
 3. INTEGRATION-SUMMARY.md (how it all connects)
 4. QUICK-REFERENCE.md (daily use)
 
-**Want to understand the prompts?** See `research-prompts-package.zip`:
-- README.md - Prompt system overview
-- implementation-guide.md - Orchestration details
-- Each section-XX.md file - Individual prompt specifications
+**Want to understand the prompts?** See the prompt files in `backend/prompts/`.
+
 
 ---
 
@@ -456,17 +403,13 @@ npm run dev
 1. **Use Prisma Studio** to watch jobs in real-time: `npm run db:studio`
 2. **Check logs** when debugging: `docker-compose logs -f backend`
 3. **Test with curl** before testing in UI
-4. **Always rename prompt files** before running backend
-5. **Use dev mode** for hot reload: `npm run dev`
+4. **Use dev mode** for hot reload: `npm run dev`
 
 ---
 
 ## 🆘 Getting Help
 
 ### Common Issues
-
-**"Module not found: prompts/exec-summary"**
-→ You didn't rename the section files (see Critical Steps)
 
 **"ANTHROPIC_API_KEY is required"**
 → Add your API key to `.env` file
@@ -527,10 +470,9 @@ MIT License - See LICENSE file for details
 ## 🎉 Ready to Start?
 
 1. Extract the `backend/` folder
-2. Copy and rename prompts (see Critical Steps)
-3. Follow `SETUP.md`
-4. Run `npm run dev`
-5. Create your first research report!
+2. Follow `SETUP.md`
+3. Run `npm run dev`
+4. Create your first research report!
 
 **Questions?** Check INTEGRATION-SUMMARY.md or QUICK-REFERENCE.md
 

@@ -157,7 +157,6 @@ runJob(jobId)
 Uses **Tailwind CSS** via CDN (in index.html):
 
 ```html
-<script src="https://cdn.tailwindcss.com"></script>
 ```
 
 **Custom Theme:**
@@ -351,7 +350,6 @@ curl http://localhost:3000/health
 
 Check `index.html` has Tailwind CDN:
 ```html
-<script src="https://cdn.tailwindcss.com"></script>
 ```
 
 ### TypeScript errors

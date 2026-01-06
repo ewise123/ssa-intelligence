@@ -21,74 +21,17 @@ Extract the backend folder to your project:
 ```bash
 your-project/
 ├── backend/          # ← All backend files
-└── frontend/         # ← Your existing React app
+└── frontend/         # ← Existing React app
 ```
 
-### 2. Copy Prompts Package
-
-Copy the prompts from `research-prompts-package.zip` into backend:
-
-```bash
-cd backend
-mkdir prompts
-cd prompts
-
-# Copy and rename section files (IMPORTANT!)
-cp /path/to/prompts/foundation-prompt.ts ./foundation-prompt.ts
-cp /path/to/prompts/sections/section-01.ts ./exec-summary.ts
-cp /path/to/prompts/sections/section-02.ts ./financial-snapshot.ts
-cp /path/to/prompts/sections/section-03.ts ./company-overview.ts
-cp /path/to/prompts/sections/section-04.ts ./segment-analysis.ts
-cp /path/to/prompts/sections/section-05.ts ./trends.ts
-cp /path/to/prompts/sections/section-06.ts ./peer-benchmarking.ts
-cp /path/to/prompts/sections/section-07.ts ./sku-opportunities.ts
-cp /path/to/prompts/sections/section-08.ts ./recent-news.ts
-cp /path/to/prompts/sections/section-09.ts ./conversation-starters.ts
-cp /path/to/prompts/sections/section-10.ts ./appendix.ts
-
-# Also copy validation and types
-cp /path/to/prompts/validation.ts ./validation.ts
-cp /path/to/prompts/types.ts ./types.ts
-cp /path/to/prompts/shared-types.ts ./shared-types.ts
-```
-
-**CRITICAL:** The section files MUST be renamed to match the app's naming convention!
-
-### 3. Update Prompt Files
-
-In each renamed prompt file, update the function names:
-
-```typescript
-// OLD (in section-01.ts):
-export function buildSection1Prompt(input: Section1Input): string { ... }
-
-// NEW (in exec-summary.ts):
-export function buildExecSummaryPrompt(input: Section1Input): string { ... }
-```
-
-**Do this for all 10 section files!** Here's the mapping:
-
-| Old File | New File | Function Name Change |
-|----------|----------|---------------------|
-| section-01.ts | exec-summary.ts | buildSection1Prompt → buildExecSummaryPrompt |
-| section-02.ts | financial-snapshot.ts | buildSection2Prompt → buildFinancialSnapshotPrompt |
-| section-03.ts | company-overview.ts | buildSection3Prompt → buildCompanyOverviewPrompt |
-| section-04.ts | segment-analysis.ts | buildSection4Prompt → buildSegmentAnalysisPrompt |
-| section-05.ts | trends.ts | buildSection5Prompt → buildTrendsPrompt |
-| section-06.ts | peer-benchmarking.ts | buildSection6Prompt → buildPeerBenchmarkingPrompt |
-| section-07.ts | sku-opportunities.ts | buildSection7Prompt → buildSkuOpportunitiesPrompt |
-| section-08.ts | recent-news.ts | buildSection8Prompt → buildRecentNewsPrompt |
-| section-09.ts | conversation-starters.ts | buildSection9Prompt → buildConversationStartersPrompt |
-| section-10.ts | appendix.ts | generateSection10 → generateAppendix |
-
-### 4. Install Dependencies
+### 2. Install Dependencies
 
 ```bash
 cd backend
 npm install
 ```
 
-### 5. Configure Environment
+### 3. Configure Environment
 
 ```bash
 cp .env.example .env
@@ -108,7 +51,7 @@ PORT="3000"
 CORS_ORIGIN="http://localhost:5174"
 ```
 
-### 6. Start Database
+### 4. Start Database
 
 ```bash
 docker-compose up -d postgres redis
@@ -121,7 +64,7 @@ docker-compose ps
 # Should show postgres and redis as "Up (healthy)"
 ```
 
-### 7. Setup Database
+### 5. Setup Database
 
 ```bash
 # Generate Prisma Client
@@ -131,7 +74,7 @@ npm run db:generate
 npm run db:push
 ```
 
-### 8. Start Backend
+### 6. Start Backend
 
 **Development mode (with hot reload):**
 ```bash
@@ -159,7 +102,7 @@ You should see:
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
-### 9. Test the API
+### 7. Test the API
 
 ```bash
 # Health check
@@ -176,7 +119,7 @@ curl -X POST http://localhost:3000/api/research/generate \
 # Returns: { "jobId": "...", "status": "pending" }
 ```
 
-### 10. Update Frontend
+### 8. Update Frontend
 
 Your existing `researchManager.ts` should work! Just make sure the API base URL is correct:
 
@@ -206,10 +149,10 @@ backend/
 │   │   └── prompts.ts           # TypeScript types
 │   └── index.ts                 # Express server
 │
-├── prompts/                     # Copied from research-prompts-package
+├── prompts/                     # Prompt files live here
 │   ├── foundation-prompt.ts
-│   ├── exec-summary.ts          # Renamed from section-01.ts
-│   ├── financial-snapshot.ts    # Renamed from section-02.ts
+│   ├── exec-summary.ts
+│   ├── financial-snapshot.ts
 │   ├── ... (all 10 sections)
 │   ├── validation.ts
 │   └── types.ts
@@ -298,10 +241,6 @@ cat .env | grep ANTHROPIC_API_KEY
 docker-compose ps
 docker-compose up -d postgres redis
 ```
-
-### Issue: "Module not found: prompts/exec-summary"
-
-**Solution:** You forgot to rename the section files! See step 2-3 above.
 
 ### Issue: Frontend can't connect to backend
 
