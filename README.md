@@ -7,7 +7,7 @@
 - `research-guides/` — section guide .docx/.js examples.
 - `docs/` — additional implementation/integration summaries.
 - `artifacts/` — saved run logs/json from earlier debugging.
-- Root docs: `START-HERE.md`, `QUICK-REFERENCE.md`, `README.md`.
+- Root docs: `README.md`.
 
 **A production-ready backend that connects your React frontend to Claude-powered company intelligence research generation.**
 
@@ -96,8 +96,7 @@ curl -X POST http://localhost:3000/api/research/generate \
 
 1. **SETUP.md** - Complete step-by-step setup instructions
 2. **INTEGRATION-SUMMARY.md** - How everything connects
-3. **QUICK-REFERENCE.md** - Cheat sheet for daily use
-4. **CHANGES-v1.1.md** - What changed from original prompts
+3. **CHANGES-v1.1.md** - What changed from original prompts
 
 ---
 
@@ -348,7 +347,6 @@ backend/
 │
 ├── SETUP.md                     # Setup instructions
 ├── INTEGRATION-SUMMARY.md       # Integration guide
-├── QUICK-REFERENCE.md           # Cheat sheet
 └── README.md                    # This file
 ```
 
@@ -391,7 +389,6 @@ npm run dev
 1. This README (overview)
 2. SETUP.md (detailed setup)
 3. INTEGRATION-SUMMARY.md (how it all connects)
-4. QUICK-REFERENCE.md (daily use)
 
 **Want to understand the prompts?** See the prompt files in `backend/prompts/`.
 
@@ -419,8 +416,6 @@ npm run dev
 
 **Frontend can't connect**
 → Check CORS_ORIGIN and VITE_API_BASE_URL
-
-**See QUICK-REFERENCE.md for more troubleshooting!**
 
 ---
 
@@ -474,7 +469,7 @@ MIT License - See LICENSE file for details
 3. Run `npm run dev`
 4. Create your first research report!
 
-**Questions?** Check INTEGRATION-SUMMARY.md or QUICK-REFERENCE.md
+**Questions?** Check INTEGRATION-SUMMARY.md
 
 ---
 

@@ -11,13 +11,11 @@
 ```
 ssa-intelligence-complete-package/
 │
-├── START-HERE.md                      ← BEGIN HERE! Quick start guide
 ├── README.md                          ← Overview and architecture
 ├── DELIVERY-SUMMARY.md                ← What was built and final stats
 │
 ├── Documentation (8 guides)
 │   ├── SETUP.md                       ← Step-by-step setup (in backend/)
-│   ├── QUICK-REFERENCE.md             ← Commands cheat sheet
 │   ├── INTEGRATION-SUMMARY.md         ← How everything connects
 │   ├── INTEGRATION-GUIDE.md           ← Integration strategies
 │   ├── QUICK-START-GUIDE.md           ← Fast setup alternative
@@ -62,12 +60,10 @@ ssa-intelligence-complete-package/
 ## 📄 File Inventory
 
 ### Root Documentation (9 files)
-- START-HERE.md - Your entry point
 - README.md - Package overview
 - DELIVERY-SUMMARY.md - What was delivered
 - INTEGRATION-SUMMARY.md - Integration guide
 - INTEGRATION-GUIDE.md - Integration strategies
-- QUICK-REFERENCE.md - Commands cheat sheet
 - QUICK-START-GUIDE.md - Fast setup
 - FINAL-IMPLEMENTATION-SUMMARY.md - Technical details
 - IMPLEMENTATION-SUMMARY-v1.1.md - v1.1 changes
@@ -158,7 +154,6 @@ ssa-intelligence-complete-package/
    cd ssa-intelligence-complete-package
    ```
 
-2. **Read START-HERE.md**
    - 5-minute overview
    - Critical steps highlighted
    - Quick start instructions
@@ -218,14 +213,11 @@ You'll know everything is working when:
 
 **If you encounter issues:**
 
-1. Read START-HERE.md
-2. Check QUICK-REFERENCE.md troubleshooting section
 3. Review backend/SETUP.md step-by-step
 4. Check logs: `docker-compose logs -f backend`
 5. Verify prompt files are renamed correctly
 6. Confirm API key is set in .env
 
-**Common issues and solutions are documented in QUICK-REFERENCE.md**
 
 ---
 
@@ -233,11 +225,9 @@ You'll know everything is working when:
 
 **Read in this order:**
 
-1. **START-HERE.md** (5 min) - Quick start
 2. **README.md** (10 min) - Overview
 3. **backend/SETUP.md** (20 min) - Detailed setup
 4. **INTEGRATION-SUMMARY.md** (15 min) - How it connects
-5. **QUICK-REFERENCE.md** (keep open) - Daily use
 
 **Then start building!**
 
@@ -247,7 +237,6 @@ You'll know everything is working when:
 
 Everything is packaged, documented, and ready to deploy.
 
-**Just unzip and follow START-HERE.md!**
 
 ---
 

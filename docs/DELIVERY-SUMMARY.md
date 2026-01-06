@@ -25,7 +25,6 @@ I've created a **complete, production-ready backend** that integrates the modula
 - README.md - Complete overview
 - SETUP.md - Step-by-step setup (15 pages)
 - INTEGRATION-SUMMARY.md - How everything connects (20 pages)
-- QUICK-REFERENCE.md - Daily-use cheat sheet
 - IMPLEMENTATION-SUMMARY-v1.1.md - Original changes doc
 
 ---
@@ -313,7 +312,6 @@ curl http://localhost:3000/api/research/jobs/clx...
 1. **README.md** (overview) - 10 min read
 2. **SETUP.md** (detailed setup) - 20 min read, includes all commands
 3. **INTEGRATION-SUMMARY.md** (how everything connects) - 15 min read
-4. **QUICK-REFERENCE.md** (cheat sheet) - Keep open while developing
 
 **Also included:**
 - IMPLEMENTATION-SUMMARY-v1.1.md - Changes from original skill
@@ -363,7 +361,6 @@ You'll know it's working when:
 2. Use Prisma Studio to watch database in real-time
 3. Test API with curl before testing in UI
 4. The section renaming step is critical - don't skip it!
-5. Keep QUICK-REFERENCE.md open for commands
 
 ---
 
@@ -374,7 +371,6 @@ You'll know it's working when:
 2. Follow SETUP.md (step-by-step)
 3. Create your first test research
 4. Read INTEGRATION-SUMMARY.md (understand the pieces)
-5. Use QUICK-REFERENCE.md (daily development)
 
 **Want to customize?**
 1. Understand the prompt files (research-prompts-package)
@@ -404,7 +400,6 @@ Everything is built, tested, and documented. You have:
 
 If you encounter issues:
 
-1. Check **QUICK-REFERENCE.md** troubleshooting section
 2. Review **SETUP.md** step-by-step instructions
 3. Check backend logs: `docker-compose logs -f backend`
 4. Verify prompts are renamed correctly
