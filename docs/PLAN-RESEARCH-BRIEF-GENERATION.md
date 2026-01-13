@@ -18,7 +18,7 @@ Expand research brief generation with new preset workflows (Private Equity, Fina
 [x] Thread userAddedPrompt into prompt builders so custom context influences generation.
 [x] Update validation/types to support per-preset schemas and variable section sets, ensuring each section's content reflects the preset's analysis framework.
 [x] Update API responses to include reportType/preset/visibility metadata and update the frontend flow for preset selection, optional section toggles, user-added prompt, and visibility controls (hide group options if user has no groups).
-[ ] Add an admin-only UI (page or modal) to list users and manage group memberships.
+[x] Add an admin-only UI (page or modal) to list users and manage group memberships.
 [ ] Add guardrails for invalid selections, missing required inputs, and visibility enforcement, and document defaults and error states.
 [ ] Verify with API/UI smoke checks for each preset and visibility mode, confirming progress, rendering, grouping by company, and access rules.
 

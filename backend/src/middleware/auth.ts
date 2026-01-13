@@ -143,6 +143,16 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
   }
 };
 
+export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (!req.auth.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  return next();
+};
+
 export const buildVisibilityWhere = (auth: AuthContext) => {
   if (auth.isAdmin) return {};
 

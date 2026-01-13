@@ -3,6 +3,7 @@ import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 import { NewResearch } from './pages/NewResearch';
 import { ResearchDetail } from './pages/ResearchDetail';
+import { AdminUsers } from './pages/AdminUsers';
 import { useResearchManager, useUserContext } from './services/researchManager';
 
 export default function App() {
@@ -46,6 +47,9 @@ export default function App() {
         />
       );
     }
+    if (currentPath === '/admin') {
+      return <AdminUsers isAdmin={userContext.user?.isAdmin} />;
+    }
     if (currentPath.startsWith('/research/')) {
       return <ResearchDetail jobs={jobs} onNavigate={navigate} />;
     }
@@ -53,7 +57,7 @@ export default function App() {
   };
 
   return (
-    <Layout onNavigate={navigate} activePath={currentPath}>
+    <Layout onNavigate={navigate} activePath={currentPath} isAdmin={userContext.user?.isAdmin}>
       {renderContent()}
     </Layout>
   );

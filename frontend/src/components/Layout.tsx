@@ -6,9 +6,10 @@ interface LayoutProps {
   children: React.ReactNode;
   onNavigate: (path: string) => void;
   activePath: string;
+  isAdmin?: boolean;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, activePath }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, activePath, isAdmin }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [healthStatus, setHealthStatus] = useState<'checking' | 'ok' | 'degraded' | 'down'>('checking');
   const [healthModel, setHealthModel] = useState<string>('Sonnet 4.5');
@@ -118,6 +119,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, activePath
             <Plus size={18} className="flex-shrink-0" />
             {!isCollapsed && <span className="whitespace-nowrap">New Research</span>}
           </button>
+          {isAdmin && (
+            <button 
+              onClick={() => onNavigate('/admin')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activePath === '/admin' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${isCollapsed ? 'justify-center px-2' : ''}`}
+              title={isCollapsed ? "Admin" : undefined}
+            >
+              <FileText size={18} className="flex-shrink-0" />
+              {!isCollapsed && <span className="whitespace-nowrap">Admin</span>}
+            </button>
+          )}
         </nav>
 
         <div className="px-4 pb-4">
@@ -154,6 +165,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, activePath
               {activePath === '/' && 'Research Dashboard'}
               {activePath === '/new' && 'Initiate New Analysis'}
               {activePath.startsWith('/research') && 'Research Report'}
+              {activePath === '/admin' && 'User & Group Management'}
             </h1>
             <div className="flex items-center gap-4">
                <button className="text-slate-400 hover:text-slate-600 relative">
