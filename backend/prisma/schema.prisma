@@ -31,6 +31,10 @@ model ResearchJob {
   domain            String?
   normalizedDomain  String?
   focusAreas        String[]  @default([])
+  reportType        ReportType @default(GENERIC)
+  selectedSections  String[]  @default([])
+  userAddedPrompt   String?
+  visibilityScope   VisibilityScope @default(PRIVATE)
   
   // Research outputs (stored as JSON matching TypeScript interfaces)
   foundation            Json?  // FoundationOutput
@@ -52,6 +56,7 @@ model ResearchJob {
   
   // Relations
   subJobs           ResearchSubJob[]
+  jobGroups         ResearchJobGroup[]
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId            String
   
@@ -71,7 +76,9 @@ model ResearchJob {
   @@index([status])
   @@index([status, queuedAt])
   @@index([normalizedDomain])
-  @@unique([userId, normalizedCompany, normalizedGeography, normalizedIndustry])
+  @@index([reportType])
+  @@index([visibilityScope])
+  @@unique([userId, normalizedCompany, normalizedGeography, normalizedIndustry, reportType])
 }
 
 // Individual section/stage execution tracking
@@ -119,15 +126,76 @@ model User {
   id        String        @id @default(cuid())
   email     String        @unique
   name      String?
+  role      UserRole      @default(MEMBER)
   
   // Relations
   research  ResearchJob[]
+  memberships GroupMembership[]
   
   // Timestamps
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   
   @@index([email])
+}
+
+model Group {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships GroupMembership[]
+  jobGroups   ResearchJobGroup[]
+
+  @@index([name])
+}
+
+model GroupMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  groupId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+model ResearchJobGroup {
+  id        String   @id @default(cuid())
+  jobId     String
+  groupId   String
+  createdAt DateTime @default(now())
+
+  job   ResearchJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  group Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, groupId])
+  @@index([groupId])
+  @@index([jobId])
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+enum VisibilityScope {
+  PRIVATE
+  GROUP
+  GENERAL
+}
+
+enum ReportType {
+  GENERIC
+  INDUSTRIALS
+  PE
+  FS
 }
 
 // Optional: API Key management for users
