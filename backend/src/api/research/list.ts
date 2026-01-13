@@ -5,6 +5,7 @@
 
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { buildVisibilityWhere } from '../../middleware/auth.js';
 
 const prisma = new PrismaClient();
 
@@ -20,9 +21,9 @@ export async function listResearch(req: Request, res: Response) {
   try {
     const query = req.query as ListQueryParams;
 
-    // For demo purposes, use a default user
-    // In production, get this from auth middleware
-    const userId = req.headers['x-user-id'] as string || 'demo-user';
+    if (!req.auth) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
 
     // Parse pagination
     const limit = Math.min(parseInt(query.limit || '50'), 100);
@@ -33,10 +34,10 @@ export async function listResearch(req: Request, res: Response) {
     const sortOrder = query.sortOrder || 'desc';
 
     // Build where clause
-    const where: any = { userId };
-    if (query.status) {
-      where.status = query.status;
-    }
+    const visibilityWhere = buildVisibilityWhere(req.auth);
+    const where: any = query.status
+      ? { AND: [visibilityWhere, { status: query.status }] }
+      : visibilityWhere;
 
     // Fetch jobs
     const [jobs, total] = await Promise.all([

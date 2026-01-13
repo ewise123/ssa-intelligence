@@ -6,6 +6,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getResearchOrchestrator } from '../../services/orchestrator.js';
+import { buildVisibilityWhere } from '../../middleware/auth.js';
 
 const prisma = new PrismaClient();
 
@@ -13,8 +14,13 @@ export async function getJobStatus(req: Request, res: Response) {
   try {
     const { id } = req.params;
 
-    const job = await prisma.researchJob.findUnique({
-      where: { id },
+    if (!req.auth) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const visibilityWhere = buildVisibilityWhere(req.auth);
+    const job = await prisma.researchJob.findFirst({
+      where: { AND: [{ id }, visibilityWhere] },
       include: {
         subJobs: {
           select: {

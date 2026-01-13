@@ -75,20 +75,10 @@ export async function generateResearch(req: Request, res: Response) {
     const normalizedIndustryKey = industry ? normalizeForKey(industry) : null;
     const normalizedDomainKey = domain ? normalizeDomain(domain) : null;
 
-    // For demo purposes, use a default user and ensure it exists to satisfy FK
-    // In production, get this from auth middleware
-    const userId = (req.headers['x-user-id'] as string) || 'demo-user';
-    const userEmail = `${userId}@demo.local`;
-
-    await prisma.user.upsert({
-      where: { id: userId },
-      update: {},
-      create: {
-        id: userId,
-        email: userEmail,
-        name: 'Demo User'
-      }
-    });
+    if (!req.auth) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = req.auth.userId;
 
     // Check for existing job with same normalized company+geo+industry and running/queued/completed
     const existing = await prisma.researchJob.findFirst({
