@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { JobStatus, ResearchJob, ResearchSection, ResearchSource, SectionId, SectionStatus, SECTIONS_CONFIG } from '../types';
+import { JobStatus, ResearchJob, ResearchSection, ResearchSource, ReportType, SectionId, SectionStatus, SECTIONS_CONFIG, VisibilityScope } from '../types';
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || '/api';
 
@@ -28,6 +28,9 @@ type ApiJobStatus = {
   createdAt?: string;
   updatedAt?: string;
   domain?: string | null;
+  reportType?: ReportType;
+  visibilityScope?: VisibilityScope;
+  selectedSections?: string[];
   jobs?: ApiSectionStatus[];
   companyName?: string;
   geography?: string;
@@ -48,6 +51,7 @@ type ApiResearchDetail = {
   sectionsCompleted?: number[];
   sectionStatuses?: ApiSectionStatus[];
   domain?: string | null;
+  groups?: Array<{ id: string; name: string; slug: string }>;
 };
 
 type ApiListItem = {
@@ -59,6 +63,11 @@ type ApiListItem = {
   companyName?: string;
   geography?: string;
   domain?: string | null;
+  reportType?: ReportType;
+  visibilityScope?: VisibilityScope;
+  selectedSections?: string[];
+  progress?: number | null;
+  currentStage?: string | null;
   overallConfidence?: string | null;
   overallConfidenceScore?: number | null;
   promptTokens?: number | null;
@@ -66,6 +75,21 @@ type ApiListItem = {
   costUsd?: number | null;
   thumbnailUrl?: string | null;
   generatedSections?: number[];
+};
+
+type ApiMe = {
+  id: string;
+  email: string;
+  name?: string | null;
+  role: 'ADMIN' | 'MEMBER';
+  isAdmin: boolean;
+  groups: Array<{ id: string; name: string; slug: string }>;
+};
+
+type ApiGroup = {
+  id: string;
+  name: string;
+  slug: string;
 };
 
 const STAGE_TO_SECTION_ID: Record<string, SectionId> = {
@@ -509,13 +533,28 @@ const fetchJson = async (path: string, options?: RequestInit) => {
   return res.json();
 };
 
-const createJobApi = async (companyName: string, geography: string, industry?: string, force?: boolean) => {
-  const payload = {
-    companyName,
-    geography,
-    focusAreas: industry ? [industry] : undefined,
+const createJobApi = async (payload: {
+  companyName: string;
+  geography: string;
+  industry?: string;
+  force?: boolean;
+  reportType?: ReportType;
+  selectedSections?: SectionId[];
+  userAddedPrompt?: string;
+  visibilityScope?: VisibilityScope;
+  groupIds?: string[];
+}) => {
+  const body = {
+    companyName: payload.companyName,
+    geography: payload.geography,
+    focusAreas: payload.industry ? [payload.industry] : undefined,
     requestedBy: 'web-user',
-    force: !!force,
+    force: !!payload.force,
+    reportType: payload.reportType,
+    selectedSections: payload.selectedSections,
+    userAddedPrompt: payload.userAddedPrompt,
+    visibilityScope: payload.visibilityScope,
+    groupIds: payload.groupIds
   };
 
   const res = await fetch(
@@ -523,7 +562,7 @@ const createJobApi = async (companyName: string, geography: string, industry?: s
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(body)
     }
   );
 
@@ -573,6 +612,15 @@ const deleteJobApi = async (id: string) => {
   }) as Promise<{ success: boolean; jobId: string }>;
 };
 
+const getMeApi = async () => {
+  return (await fetchJson('/me')) as ApiMe;
+};
+
+const listGroupsApi = async () => {
+  const data = (await fetchJson('/groups')) as { results?: ApiGroup[] };
+  return data.results || [];
+};
+
 const mapSections = (
   statuses?: ApiSectionStatus[],
   sectionData?: Record<string, unknown>,
@@ -620,7 +668,9 @@ const mapSections = (
   const mapListItem = (item: ApiListItem): ResearchJob => {
     const metadata = (item.metadata as Record<string, unknown>) || {};
     const generated = item.generatedSections || [];
-    const progress = generated.length ? Math.round((generated.length / 10) * 100) : 0;
+    const progress = item.progress !== null && item.progress !== undefined
+      ? Math.round(item.progress * 100)
+      : (generated.length ? Math.round((generated.length / 10) * 100) : 0);
     const status = (item.status as JobStatus) || 'idle';
   const currentAction = status === 'queued' ? 'Queued...' : '';
 
@@ -630,6 +680,9 @@ const mapSections = (
     geography: (metadata.geography as string) || item.geography || 'Unknown',
     industry: (metadata.industry as string) || undefined,
     domain: (metadata.domain as string) || item.domain || null,
+    reportType: (metadata.reportType as ReportType) || item.reportType || undefined,
+    visibilityScope: (metadata.visibilityScope as VisibilityScope) || item.visibilityScope || undefined,
+    selectedSections: (metadata.selectedSections as SectionId[]) || (item.selectedSections as SectionId[]) || undefined,
     queuePosition: null,
     overallConfidence: (metadata.overallConfidence as string) || item.overallConfidence || null,
     overallConfidenceScore:
@@ -677,6 +730,9 @@ const mapJobFromStatus = (
     geography: overrides?.geography || existing?.geography || 'Unknown',
     industry: overrides?.industry ?? existing?.industry,
     domain: status.domain ?? existing?.domain ?? null,
+    reportType: status.reportType ?? existing?.reportType,
+    visibilityScope: status.visibilityScope ?? existing?.visibilityScope,
+    selectedSections: (status.selectedSections as SectionId[]) ?? existing?.selectedSections,
     queuePosition,
     overallConfidence: status.overallConfidence ?? existing?.overallConfidence ?? null,
     overallConfidenceScore: status.overallConfidenceScore ?? existing?.overallConfidenceScore ?? null,
@@ -703,6 +759,9 @@ const mergeDetail = (job: ResearchJob, detail: ApiResearchDetail): ResearchJob =
     geography: (metadata.geography as string) || job.geography,
     industry: (metadata.industry as string) || job.industry,
     domain: (metadata.domain as string) || job.domain,
+    reportType: (metadata.reportType as ReportType) || job.reportType,
+    visibilityScope: (metadata.visibilityScope as VisibilityScope) || job.visibilityScope,
+    selectedSections: (metadata.selectedSections as SectionId[]) || job.selectedSections,
     overallConfidence:
       (metadata.overallConfidence as string) || detail.overallConfidence || job.overallConfidence || null,
     overallConfidenceScore:
@@ -743,13 +802,39 @@ export const useResearchManager = () => {
       .catch((err) => console.error(err));
   }, []);
 
-  const createJob = useCallback(async (companyName: string, geography: string, industry: string, force?: boolean) => {
-    const res = await createJobApi(companyName, geography || 'Global', industry, force);
+  const createJob = useCallback(async (
+    companyName: string,
+    geography: string,
+    industry: string,
+    options?: {
+      force?: boolean;
+      reportType?: ReportType;
+      selectedSections?: SectionId[];
+      visibilityScope?: VisibilityScope;
+      groupIds?: string[];
+      userAddedPrompt?: string;
+    }
+  ) => {
+    const res = await createJobApi({
+      companyName,
+      geography: geography || 'Global',
+      industry,
+      force: options?.force,
+      reportType: options?.reportType,
+      selectedSections: options?.selectedSections,
+      visibilityScope: options?.visibilityScope,
+      groupIds: options?.groupIds,
+      userAddedPrompt: options?.userAddedPrompt
+    });
     const job: ResearchJob = {
       id: res.jobId,
       companyName,
       geography: geography || 'Global',
       industry,
+      reportType: options?.reportType,
+      visibilityScope: options?.visibilityScope,
+      selectedSections: options?.selectedSections,
+      groupIds: options?.groupIds,
       queuePosition: res.queuePosition ?? 1,
       promptTokens: 0,
       completionTokens: 0,
@@ -852,4 +937,31 @@ export const useResearchManager = () => {
   }, []);
 
   return { jobs, createJob, runJob, cancelJob, deleteJob };
+};
+
+export const useUserContext = () => {
+  const [user, setUser] = useState<ApiMe | null>(null);
+  const [groups, setGroups] = useState<ApiGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([getMeApi(), listGroupsApi()])
+      .then(([me, availableGroups]) => {
+        if (!mounted) return;
+        setUser(me);
+        setGroups(availableGroups);
+      })
+      .catch((err) => console.error(err))
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return { user, groups, loading };
 };

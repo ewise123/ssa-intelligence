@@ -1,5 +1,9 @@
 export type JobStatus = 'idle' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
+export type ReportType = 'GENERIC' | 'INDUSTRIALS' | 'PE' | 'FS';
+
+export type VisibilityScope = 'PRIVATE' | 'GROUP' | 'GENERAL';
+
 export type SectionId = 
   | 'exec_summary'
   | 'financial_snapshot'
@@ -42,6 +46,10 @@ export interface ResearchJob {
   geography: string;
   industry?: string;
   domain?: string | null;
+  reportType?: ReportType;
+  visibilityScope?: VisibilityScope;
+  selectedSections?: SectionId[];
+  groupIds?: string[];
   queuePosition?: number | null;
   overallConfidence?: string | null;
   overallConfidenceScore?: number | null;

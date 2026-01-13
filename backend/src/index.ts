@@ -27,6 +27,8 @@ import { submitFeedback } from './api/feedback.js';
 import { exportResearchPdf } from './api/research/export-pdf.js';
 import { getResearchOrchestrator } from './services/orchestrator.js';
 import { authMiddleware } from './middleware/auth.js';
+import { getMe } from './api/me.js';
+import { listGroups } from './api/groups/list.js';
 
 // ============================================================================
 // SERVER SETUP
@@ -157,6 +159,8 @@ app.post('/api/research/:id/cancel', ...applyLimiter(writeLimiter), authMiddlewa
 app.delete('/api/research/:id', ...applyLimiter(writeLimiter), authMiddleware, deleteResearchJob);
 app.get('/api/research/:id/export/pdf', ...applyLimiter(exportLimiter), authMiddleware, exportResearchPdf);
 app.post('/api/feedback', ...applyLimiter(writeLimiter), submitFeedback);
+app.get('/api/me', authMiddleware, getMe);
+app.get('/api/groups', authMiddleware, listGroups);
 
 // Regenerate specific sections (optional - for future implementation)
 app.post('/api/research/:id/regenerate', async (req, res) => {

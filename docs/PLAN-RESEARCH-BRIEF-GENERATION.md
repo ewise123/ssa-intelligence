@@ -16,7 +16,7 @@ Expand research brief generation with new preset workflows (Private Equity, Fina
 [x] Implement auth/RBAC middleware that reads user identity and groups from headers, uses `ADMIN_EMAILS` overrides for admin, upserts users, and enforces visibility rules on research routes.
 [x] Update job creation and orchestration to accept preset/visibility/selection (multi-group), enforce dependencies, compute progress for selected stages, and generate appendix from available sources only.
 [x] Update validation/types to support per-preset schemas and variable section sets, ensuring each section's content reflects the preset's analysis framework.
-[ ] Update API responses to include reportType/preset/visibility metadata and update the frontend flow for preset selection, optional section toggles, user-added prompt, and visibility controls (hide group options if user has no groups).
+[x] Update API responses to include reportType/preset/visibility metadata and update the frontend flow for preset selection, optional section toggles, user-added prompt, and visibility controls (hide group options if user has no groups).
 [ ] Add an admin-only UI (page or modal) to list users and manage group memberships.
 [ ] Add guardrails for invalid selections, missing required inputs, and visibility enforcement, and document defaults and error states.
 [ ] Verify with API/UI smoke checks for each preset and visibility mode, confirming progress, rendering, grouping by company, and access rules.

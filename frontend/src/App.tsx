@@ -3,12 +3,13 @@ import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 import { NewResearch } from './pages/NewResearch';
 import { ResearchDetail } from './pages/ResearchDetail';
-import { useResearchManager } from './services/researchManager';
+import { useResearchManager, useUserContext } from './services/researchManager';
 
 export default function App() {
   const [currentPath, setCurrentPath] = useState(window.location.hash.slice(1) || '/');
   const [navResetKey, setNavResetKey] = useState(0);
   const { jobs, createJob, runJob, cancelJob, deleteJob } = useResearchManager();
+  const userContext = useUserContext();
 
   // Simple Hash Router Implementation
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function App() {
           createJob={createJob}
           runJob={runJob}
           jobs={jobs}
+          userContext={userContext}
           onNavigate={navigate}
         />
       );

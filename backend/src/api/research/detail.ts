@@ -50,6 +50,12 @@ export async function getResearchDetail(req: Request, res: Response) {
             costUsd: true,
             output: true
           }
+        },
+        jobGroups: {
+          select: {
+            groupId: true,
+            group: { select: { id: true, name: true, slug: true } }
+          }
         }
       }
     });
@@ -118,6 +124,9 @@ export async function getResearchDetail(req: Request, res: Response) {
         geography: job.geography,
         industry: job.industry,
         domain: (job as any).domain || null,
+        reportType: (job as any).reportType || null,
+        visibilityScope: (job as any).visibilityScope || null,
+        selectedSections: (job as any).selectedSections || [],
         overallConfidence: job.overallConfidence,
         overallConfidenceScore: job.overallConfidenceScore,
         promptTokens: job.promptTokens,
@@ -128,6 +137,7 @@ export async function getResearchDetail(req: Request, res: Response) {
         completedAt: job.completedAt
       },
       thumbnailUrl: (job as any).thumbnailUrl || null,
+      groups: job.jobGroups.map((entry) => entry.group),
       foundation: job.foundation,
       sections,
       sectionsCompleted: completedSections,
