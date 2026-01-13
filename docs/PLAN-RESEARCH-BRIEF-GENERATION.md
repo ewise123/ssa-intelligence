@@ -14,7 +14,7 @@ Expand research brief generation with new preset workflows (Private Equity, Fina
 [x] Extend Prisma schema for reportType/preset, selectedSections, userAddedPrompt, visibility settings (Private/Group/General), RBAC entities, group memberships, and a reportType-aware uniqueness key.
 [x] Audit current user model usage and ensure job creator attribution is stored from auth headers (email/domain, userId), with room for future comments/mentions.
 [x] Implement auth/RBAC middleware that reads user identity and groups from headers, uses `ADMIN_EMAILS` overrides for admin, upserts users, and enforces visibility rules on research routes.
-[ ] Update job creation and orchestration to accept preset/visibility/selection (multi-group), enforce dependencies, compute progress for selected stages, and generate appendix from available sources only.
+[x] Update job creation and orchestration to accept preset/visibility/selection (multi-group), enforce dependencies, compute progress for selected stages, and generate appendix from available sources only.
 [ ] Update validation/types to support per-preset schemas and variable section sets, ensuring each section's content reflects the preset's analysis framework.
 [ ] Update API responses to include reportType/preset/visibility metadata and update the frontend flow for preset selection, optional section toggles, user-added prompt, and visibility controls (hide group options if user has no groups).
 [ ] Add an admin-only UI (page or modal) to list users and manage group memberships.

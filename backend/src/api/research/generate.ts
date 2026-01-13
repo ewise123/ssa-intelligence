@@ -4,7 +4,7 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, ReportType, VisibilityScope } from '@prisma/client';
 import { getResearchOrchestrator } from '../../services/orchestrator.js';
 import { ensureDomainForJob } from '../../services/domain-infer.js';
 
@@ -18,6 +18,11 @@ interface GenerateRequestBody {
   requestedBy?: string;
   force?: boolean;
   domain?: string;
+  reportType?: string;
+  selectedSections?: string[];
+  userAddedPrompt?: string;
+  visibilityScope?: string;
+  groupIds?: string[];
 }
 
 // Normalize and validate user-provided text inputs to avoid empty/garbage jobs
@@ -80,10 +85,79 @@ export async function generateResearch(req: Request, res: Response) {
     }
     const userId = req.auth.userId;
 
+    const reportType = (body.reportType || 'GENERIC').toUpperCase() as ReportType;
+    const allowedReportTypes = new Set<ReportType>(['GENERIC', 'INDUSTRIALS', 'PE', 'FS']);
+    if (!allowedReportTypes.has(reportType)) {
+      return res.status(400).json({ error: 'Invalid reportType' });
+    }
+
+    const allowedSections = new Set([
+      'exec_summary',
+      'financial_snapshot',
+      'company_overview',
+      'segment_analysis',
+      'trends',
+      'peer_benchmarking',
+      'sku_opportunities',
+      'recent_news',
+      'conversation_starters',
+      'appendix'
+    ]);
+    const rawSelected = Array.isArray(body.selectedSections) ? body.selectedSections : [];
+    const selectedSections = Array.from(
+      new Set(
+        rawSelected
+          .map((s) => (typeof s === 'string' ? s.trim() : ''))
+          .filter(Boolean)
+      )
+    );
+    const invalidSections = selectedSections.filter((section) => !allowedSections.has(section));
+    if (invalidSections.length) {
+      return res.status(400).json({ error: `Invalid selectedSections: ${invalidSections.join(', ')}` });
+    }
+
+    const visibilityScope = (body.visibilityScope || 'PRIVATE').toUpperCase() as VisibilityScope;
+    const allowedScopes = new Set<VisibilityScope>(['PRIVATE', 'GROUP', 'GENERAL']);
+    if (!allowedScopes.has(visibilityScope)) {
+      return res.status(400).json({ error: 'Invalid visibilityScope' });
+    }
+
+    const groupIds = Array.isArray(body.groupIds)
+      ? Array.from(
+          new Set(
+            body.groupIds
+              .map((g) => (typeof g === 'string' ? g.trim() : ''))
+              .filter(Boolean)
+          )
+        )
+      : [];
+
+    if (visibilityScope === 'GROUP') {
+      if (!groupIds.length) {
+        return res.status(400).json({ error: 'groupIds required for GROUP visibility' });
+      }
+      if (!req.auth.isAdmin) {
+        const allowedGroupIds = new Set(req.auth.groupIds);
+        const unauthorized = groupIds.filter((id) => !allowedGroupIds.has(id));
+        if (unauthorized.length) {
+          return res.status(403).json({ error: 'Not authorized for selected groups' });
+        }
+      } else {
+        const groups = await prisma.group.findMany({
+          where: { id: { in: groupIds } },
+          select: { id: true }
+        });
+        if (groups.length !== groupIds.length) {
+          return res.status(400).json({ error: 'One or more groupIds are invalid' });
+        }
+      }
+    }
+
     // Check for existing job with same normalized company+geo+industry and running/queued/completed
     const existing = await prisma.researchJob.findFirst({
       where: {
         userId,
+        reportType,
         // normalize safeguard: fall back to raw match if columns not present yet
         OR: [
           {
@@ -144,7 +218,12 @@ export async function generateResearch(req: Request, res: Response) {
       normalizedGeography: normalizedGeoKey,
       normalizedIndustry: normalizedIndustryKey,
       domain,
-      normalizedDomain: normalizedDomainKey || null
+      normalizedDomain: normalizedDomainKey || null,
+      reportType,
+      selectedSections,
+      userAddedPrompt: typeof body.userAddedPrompt === 'string' ? body.userAddedPrompt.trim() : undefined,
+      visibilityScope,
+      groupIds
     });
 
     const queuePosition = await orchestrator.getQueuePosition(job.id);
