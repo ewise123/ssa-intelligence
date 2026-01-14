@@ -7,6 +7,8 @@
 // INPUT TYPES
 // ============================================================================
 
+import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
+
 export interface FoundationOutput {
   company_basics: {
     legal_name: string;
@@ -49,6 +51,7 @@ export interface Section2Input {
   foundation: FoundationOutput;
   companyName: string;
   geography: string;
+  reportType?: ReportTypeId;
 }
 
 // ============================================================================
@@ -97,7 +100,7 @@ export function buildFinancialSnapshotPrompt(input: Section2Input): string {
   // Serialize foundation context for injection
   const foundationJson = JSON.stringify(foundation, null, 2);
   
-  return `# Section 2: Financial Snapshot - Research Prompt
+  const basePrompt = `# Section 2: Financial Snapshot - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -482,6 +485,7 @@ Industry average source: {A/B/C}
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+  return appendReportTypeAddendum('financial_snapshot', input.reportType, basePrompt);
 }
 
 // ============================================================================

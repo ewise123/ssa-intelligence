@@ -1,9 +1,10 @@
+import { appendReportTypeAddendum } from './report-type-addendums.js';
 export function buildTrendsPrompt(input) {
     const { foundation, companyName, geography, section3Context, section4Context } = input;
     const foundationJson = JSON.stringify(foundation, null, 2);
     const section3Json = section3Context ? JSON.stringify(section3Context, null, 2) : 'Not provided';
     const section4Json = section4Context ? JSON.stringify(section4Context, null, 2) : 'Not provided';
-    return `# Section 5: Trends - Research Prompt
+    const basePrompt = `# Section 5: Trends - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -328,6 +329,7 @@ interface Section5Output {
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+    return appendReportTypeAddendum('trends', input.reportType, basePrompt);
 }
 export function validateSection5Output(output) {
     if (!output || typeof output !== 'object')

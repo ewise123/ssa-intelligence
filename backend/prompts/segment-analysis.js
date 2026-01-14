@@ -1,10 +1,11 @@
+import { appendReportTypeAddendum } from './report-type-addendums.js';
 export function buildSegmentAnalysisPrompt(input) {
     const { foundation, companyName, geography, section2Context } = input;
     const segmentCount = foundation.segment_structure.length;
     const segmentNames = foundation.segment_structure.map(s => s.name).join(', ');
     const foundationJson = JSON.stringify(foundation, null, 2);
     const section2Json = section2Context ? JSON.stringify(section2Context, null, 2) : 'Not provided';
-    return `# Section 4: Segment Analysis - Research Prompt
+    const basePrompt = `# Section 4: Segment Analysis - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -228,6 +229,7 @@ interface Section4Output {
 
 **OUTPUT ONLY VALID JSON. ATTEMPT ALL SEGMENTS. START NOW.**
 `;
+    return appendReportTypeAddendum('segment_analysis', input.reportType, basePrompt);
 }
 export function buildSection4SegmentPrompt(input, segmentName) {
     const { foundation, companyName, geography, section2Context } = input;

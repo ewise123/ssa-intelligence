@@ -11,11 +11,14 @@
  *   });
  */
 
+import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
+
 interface FoundationPromptInputs {
   companyName: string;
   geography: string;
   focusAreas?: string[];
   userFiles?: Array<{name: string; type: string}>;
+  reportType?: ReportTypeId;
 }
 
 export function buildFoundationPrompt(inputs: FoundationPromptInputs): string {
@@ -37,7 +40,7 @@ export function buildFoundationPrompt(inputs: FoundationPromptInputs): string {
     : "None provided";
   
   // Build the complete prompt
-  return `# Phase 0: Foundation Research - Company Intelligence System
+  const basePrompt = `# Phase 0: Foundation Research - Company Intelligence System
 
 ## CRITICAL EXECUTION REQUIREMENTS
 
@@ -457,6 +460,7 @@ Before returning JSON, verify:
 
 **START COMPREHENSIVE RESEARCH NOW. DO NOT STOP UNTIL ALL SECTIONS ARE COMPLETE.**
 `;
+  return appendReportTypeAddendum('foundation', inputs.reportType, basePrompt);
 }
 
 // Returns the markdown prompt with variables injected

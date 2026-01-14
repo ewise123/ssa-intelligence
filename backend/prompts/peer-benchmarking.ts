@@ -7,6 +7,8 @@
 // INPUT TYPES
 // ============================================================================
 
+import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
+
 export interface FoundationOutput {
   company_basics: {
     legal_name: string;
@@ -60,6 +62,7 @@ export interface Section6Input {
   companyName: string;
   geography: string;
   section2Context: Section2Context; // REQUIRED
+  reportType?: ReportTypeId;
 }
 
 // ============================================================================
@@ -129,7 +132,7 @@ export function buildPeerBenchmarkingPrompt(input: Section6Input): string {
   const foundationJson = JSON.stringify(foundation, null, 2);
   const section2Json = JSON.stringify(section2Context, null, 2);
   
-  return `# Section 6: Peer Benchmarking - Research Prompt
+  const basePrompt = `# Section 6: Peer Benchmarking - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -346,6 +349,7 @@ Focus on ${geography}-specific competitive standing
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+  return appendReportTypeAddendum('peer_benchmarking', input.reportType, basePrompt);
 }
 
 // ============================================================================

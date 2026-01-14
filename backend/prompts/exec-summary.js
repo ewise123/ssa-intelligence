@@ -1,3 +1,4 @@
+import { appendReportTypeAddendum } from './report-type-addendums.js';
 export function buildExecSummaryPrompt(input) {
     const { foundation, companyName, geography, section2, section3, section4, section5, section6, section7, section8 } = input;
     const foundationJson = JSON.stringify(foundation, null, 2);
@@ -18,7 +19,7 @@ export function buildExecSummaryPrompt(input) {
         section7 && 'Section 7 (SKU Opportunities)',
         section8 && 'Section 8 (Recent News)'
     ].filter(Boolean).join(', ');
-    return `# Section 1: Executive Summary - Synthesis Prompt
+    const basePrompt = `# Section 1: Executive Summary - Synthesis Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -204,6 +205,7 @@ Final. **Momentum Assessment** (Category: Momentum) - Recommended
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. SYNTHESIZE KEY FINDINGS NOW.**
 `;
+    return appendReportTypeAddendum('exec_summary', input.reportType, basePrompt);
 }
 export function validateSection1Output(output) {
     if (!output || typeof output !== 'object')

@@ -7,6 +7,8 @@
 // INPUT TYPES
 // ============================================================================
 
+import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
+
 export interface FoundationOutput {
   company_basics: {
     legal_name: string;
@@ -67,6 +69,7 @@ export interface Section7Input {
   geography: string;
   section5Context?: Section5Context;
   section6Context?: Section6Context;
+  reportType?: ReportTypeId;
 }
 
 // ============================================================================
@@ -142,7 +145,7 @@ export function buildSkuOpportunitiesPrompt(input: Section7Input): string {
   const section5Json = section5Context ? JSON.stringify(section5Context, null, 2) : 'Not provided';
   const section6Json = section6Context ? JSON.stringify(section6Context, null, 2) : 'Not provided';
   
-  return `# Section 7: SKU-Relevant Opportunity Mapping - Research Prompt
+  const basePrompt = `# Section 7: SKU-Relevant Opportunity Mapping - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -375,6 +378,7 @@ interface Section7Output {
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+  return appendReportTypeAddendum('sku_opportunities', input.reportType, basePrompt);
 }
 
 // ============================================================================

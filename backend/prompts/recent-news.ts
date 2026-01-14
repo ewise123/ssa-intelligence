@@ -7,6 +7,8 @@
 // INPUT TYPES (reuse from previous sections)
 // ============================================================================
 
+import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
+
 export interface FoundationOutput {
   company_basics: {
     legal_name: string;
@@ -41,6 +43,7 @@ export interface Section8Input {
   foundation: FoundationOutput;
   companyName: string;
   geography: string;
+  reportType?: ReportTypeId;
 }
 
 // ============================================================================
@@ -86,7 +89,7 @@ export function buildRecentNewsPrompt(input: Section8Input): string {
   
   const foundationJson = JSON.stringify(foundation, null, 2);
   
-  return `# Section 8: Recent News & Events - Research Prompt
+  const basePrompt = `# Section 8: Recent News & Events - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -383,6 +386,7 @@ interface Section8Output {
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+  return appendReportTypeAddendum('recent_news', input.reportType, basePrompt);
 }
 
 // ============================================================================

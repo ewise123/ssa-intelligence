@@ -7,6 +7,8 @@
 // INPUT TYPES
 // ============================================================================
 
+import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
+
 export interface FoundationOutput {
   company_basics: {
     legal_name: string;
@@ -59,6 +61,7 @@ export interface Section4Input {
   companyName: string;
   geography: string;
   section2Context?: Section2Context;
+  reportType?: ReportTypeId;
 }
 
 // ============================================================================
@@ -135,7 +138,7 @@ export function buildSegmentAnalysisPrompt(input: Section4Input): string {
   const foundationJson = JSON.stringify(foundation, null, 2);
   const section2Json = section2Context ? JSON.stringify(section2Context, null, 2) : 'Not provided';
   
-  return `# Section 4: Segment Analysis - Research Prompt
+  const basePrompt = `# Section 4: Segment Analysis - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -359,6 +362,7 @@ interface Section4Output {
 
 **OUTPUT ONLY VALID JSON. ATTEMPT ALL SEGMENTS. START NOW.**
 `;
+  return appendReportTypeAddendum('segment_analysis', input.reportType, basePrompt);
 }
 
 /**

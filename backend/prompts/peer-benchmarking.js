@@ -1,8 +1,9 @@
+import { appendReportTypeAddendum } from './report-type-addendums.js';
 export function buildPeerBenchmarkingPrompt(input) {
     const { foundation, companyName, geography, section2Context } = input;
     const foundationJson = JSON.stringify(foundation, null, 2);
     const section2Json = JSON.stringify(section2Context, null, 2);
-    return `# Section 6: Peer Benchmarking - Research Prompt
+    const basePrompt = `# Section 6: Peer Benchmarking - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -219,6 +220,7 @@ Focus on ${geography}-specific competitive standing
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+    return appendReportTypeAddendum('peer_benchmarking', input.reportType, basePrompt);
 }
 export function validateSection6Output(output) {
     if (!output || typeof output !== 'object')

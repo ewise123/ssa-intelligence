@@ -1,7 +1,8 @@
+import { appendReportTypeAddendum } from './report-type-addendums.js';
 export function buildRecentNewsPrompt(input) {
     const { foundation, companyName, geography } = input;
     const foundationJson = JSON.stringify(foundation, null, 2);
-    return `# Section 8: Recent News & Events - Research Prompt
+    const basePrompt = `# Section 8: Recent News & Events - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -298,6 +299,7 @@ interface Section8Output {
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+    return appendReportTypeAddendum('recent_news', input.reportType, basePrompt);
 }
 export function validateSection8Output(output) {
     if (!output || typeof output !== 'object')

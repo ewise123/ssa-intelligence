@@ -1,3 +1,4 @@
+import { appendReportTypeAddendum } from './report-type-addendums.js';
 export function buildConversationStartersPrompt(input) {
     const { foundation, companyName, geography, section5, section6, section7, section2, section4 } = input;
     const foundationJson = JSON.stringify(foundation, null, 2);
@@ -14,7 +15,7 @@ export function buildConversationStartersPrompt(input) {
         section6 && 'Section 6 (Peer Benchmarking)',
         section7 && 'Section 7 (SKU Opportunities)'
     ].filter(Boolean).join(', ');
-    return `# Section 9: Executive Conversation Starters - Synthesis Prompt
+    const basePrompt = `# Section 9: Executive Conversation Starters - Synthesis Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -171,6 +172,7 @@ See prompt documentation for detailed templates:
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. CREATE CONVERSATION STARTERS NOW.**
 `;
+    return appendReportTypeAddendum('conversation_starters', input.reportType, basePrompt);
 }
 export function validateSection9Output(output) {
     if (!output || typeof output !== 'object')

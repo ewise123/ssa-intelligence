@@ -7,6 +7,8 @@
 // INPUT TYPES
 // ============================================================================
 
+import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
+
 export interface FoundationOutput {
   company_basics: {
     legal_name: string;
@@ -79,6 +81,7 @@ export interface Section9Input {
   // Optional additional context
   section2?: any;
   section4?: any;
+  reportType?: ReportTypeId;
 }
 
 // ============================================================================
@@ -138,7 +141,7 @@ export function buildConversationStartersPrompt(input: Section9Input): string {
     section7 && 'Section 7 (SKU Opportunities)'
   ].filter(Boolean).join(', ');
   
-  return `# Section 9: Executive Conversation Starters - Synthesis Prompt
+  const basePrompt = `# Section 9: Executive Conversation Starters - Synthesis Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -295,6 +298,7 @@ See prompt documentation for detailed templates:
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. CREATE CONVERSATION STARTERS NOW.**
 `;
+  return appendReportTypeAddendum('conversation_starters', input.reportType, basePrompt);
 }
 
 // ============================================================================

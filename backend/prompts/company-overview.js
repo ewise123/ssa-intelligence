@@ -1,7 +1,8 @@
+import { appendReportTypeAddendum } from './report-type-addendums.js';
 export function buildCompanyOverviewPrompt(input) {
     const { foundation, companyName, geography } = input;
     const foundationJson = JSON.stringify(foundation, null, 2);
-    return `# Section 3: Company Overview - Research Prompt
+    const basePrompt = `# Section 3: Company Overview - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -371,6 +372,7 @@ interface Section3Output {
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+    return appendReportTypeAddendum('company_overview', input.reportType, basePrompt);
 }
 export function validateSection3Output(output) {
     if (!output || typeof output !== 'object')

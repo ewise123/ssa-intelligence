@@ -25,12 +25,13 @@ export const SKU_SUB_OFFERINGS = {
     DIGITAL_OPS: 'Digital Operations',
     ENTERPRISE_ENABLE: 'Enterprise Enablement'
 };
+import { appendReportTypeAddendum } from './report-type-addendums.js';
 export function buildSkuOpportunitiesPrompt(input) {
     const { foundation, companyName, geography, section5Context, section6Context } = input;
     const foundationJson = JSON.stringify(foundation, null, 2);
     const section5Json = section5Context ? JSON.stringify(section5Context, null, 2) : 'Not provided';
     const section6Json = section6Context ? JSON.stringify(section6Context, null, 2) : 'Not provided';
-    return `# Section 7: SKU-Relevant Opportunity Mapping - Research Prompt
+    const basePrompt = `# Section 7: SKU-Relevant Opportunity Mapping - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -263,6 +264,7 @@ interface Section7Output {
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+    return appendReportTypeAddendum('sku_opportunities', input.reportType, basePrompt);
 }
 export function validateSection7Output(output) {
     if (!output || typeof output !== 'object')

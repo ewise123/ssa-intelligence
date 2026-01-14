@@ -7,6 +7,8 @@
 // INPUT TYPES (reuse from section-02)
 // ============================================================================
 
+import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
+
 export interface FoundationOutput {
   company_basics: {
     legal_name: string;
@@ -46,6 +48,7 @@ export interface Section3Input {
   foundation: FoundationOutput;
   companyName: string;
   geography: string;
+  reportType?: ReportTypeId;
 }
 
 // ============================================================================
@@ -127,7 +130,7 @@ export function buildCompanyOverviewPrompt(input: Section3Input): string {
   
   const foundationJson = JSON.stringify(foundation, null, 2);
   
-  return `# Section 3: Company Overview - Research Prompt
+  const basePrompt = `# Section 3: Company Overview - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -497,6 +500,7 @@ interface Section3Output {
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+  return appendReportTypeAddendum('company_overview', input.reportType, basePrompt);
 }
 
 // ============================================================================

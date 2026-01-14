@@ -150,3 +150,10 @@ export const REPORT_TYPE_ADDENDUMS = {
 - Include only sources referenced in sections.`
   }
 };
+
+export function appendReportTypeAddendum(sectionId, reportType, basePrompt) {
+  if (!reportType) return basePrompt;
+  const addendum = REPORT_TYPE_ADDENDUMS[sectionId]?.[reportType];
+  if (!addendum) return basePrompt;
+  return `${basePrompt}\n\n---\n\n${addendum}\n`;
+}

@@ -167,3 +167,14 @@ export const REPORT_TYPE_ADDENDUMS: AddendumMap = {
 - Include only sources referenced in sections.`
   }
 };
+
+export function appendReportTypeAddendum(
+  sectionId: SectionId,
+  reportType: ReportTypeId | undefined,
+  basePrompt: string
+): string {
+  if (!reportType) return basePrompt;
+  const addendum = REPORT_TYPE_ADDENDUMS[sectionId]?.[reportType];
+  if (!addendum) return basePrompt;
+  return `${basePrompt}\n\n---\n\n${addendum}\n`;
+}

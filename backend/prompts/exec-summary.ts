@@ -7,6 +7,8 @@
 // INPUT TYPES
 // ============================================================================
 
+import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
+
 export interface FoundationOutput {
   company_basics: {
     legal_name: string;
@@ -110,6 +112,7 @@ export interface Section1Input {
   section6?: Section6Output;
   section7?: Section7Output;
   section8?: Section8Output;
+  reportType?: ReportTypeId;
 }
 
 // ============================================================================
@@ -179,7 +182,7 @@ export function buildExecSummaryPrompt(input: Section1Input): string {
     section8 && 'Section 8 (Recent News)'
   ].filter(Boolean).join(', ');
   
-  return `# Section 1: Executive Summary - Synthesis Prompt
+  const basePrompt = `# Section 1: Executive Summary - Synthesis Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -365,6 +368,7 @@ Final. **Momentum Assessment** (Category: Momentum) - Recommended
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. SYNTHESIZE KEY FINDINGS NOW.**
 `;
+  return appendReportTypeAddendum('exec_summary', input.reportType, basePrompt);
 }
 
 // ============================================================================

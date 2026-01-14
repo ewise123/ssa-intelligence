@@ -1,7 +1,8 @@
+import { appendReportTypeAddendum } from './report-type-addendums.js';
 export function buildFinancialSnapshotPrompt(input) {
     const { foundation, companyName, geography } = input;
     const foundationJson = JSON.stringify(foundation, null, 2);
-    return `# Section 2: Financial Snapshot - Research Prompt
+    const basePrompt = `# Section 2: Financial Snapshot - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -386,6 +387,7 @@ Industry average source: {A/B/C}
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+    return appendReportTypeAddendum('financial_snapshot', input.reportType, basePrompt);
 }
 export function validateSection2Output(output) {
     if (!output || typeof output !== 'object')

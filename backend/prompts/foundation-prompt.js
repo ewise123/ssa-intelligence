@@ -1,3 +1,4 @@
+import { appendReportTypeAddendum } from './report-type-addendums.js';
 export function buildFoundationPrompt(inputs) {
     const { companyName, geography, focusAreas = [], userFiles = [] } = inputs;
     const focusAreasText = focusAreas.length > 0
@@ -6,7 +7,7 @@ export function buildFoundationPrompt(inputs) {
     const userFilesText = userFiles.length > 0
         ? userFiles.map(f => `${f.name} (${f.type})`).join(", ")
         : "None provided";
-    return `# Phase 0: Foundation Research - Company Intelligence System
+    const basePrompt = `# Phase 0: Foundation Research - Company Intelligence System
 
 ## CRITICAL EXECUTION REQUIREMENTS
 
@@ -426,5 +427,6 @@ Before returning JSON, verify:
 
 **START COMPREHENSIVE RESEARCH NOW. DO NOT STOP UNTIL ALL SECTIONS ARE COMPLETE.**
 `;
+    return appendReportTypeAddendum('foundation', inputs.reportType, basePrompt);
 }
 //# sourceMappingURL=foundation-prompt.js.map

@@ -7,6 +7,8 @@
 // INPUT TYPES
 // ============================================================================
 
+import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
+
 export interface FoundationOutput {
   company_basics: {
     legal_name: string;
@@ -79,6 +81,7 @@ export interface Section5Input {
   geography: string;
   section3Context?: Section3Context;
   section4Context?: Section4Context;
+  reportType?: ReportTypeId;
 }
 
 // ============================================================================
@@ -149,7 +152,7 @@ export function buildTrendsPrompt(input: Section5Input): string {
   const section3Json = section3Context ? JSON.stringify(section3Context, null, 2) : 'Not provided';
   const section4Json = section4Context ? JSON.stringify(section4Context, null, 2) : 'Not provided';
   
-  return `# Section 5: Trends - Research Prompt
+  const basePrompt = `# Section 5: Trends - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -474,6 +477,7 @@ interface Section5Output {
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
+  return appendReportTypeAddendum('trends', input.reportType, basePrompt);
 }
 
 // ============================================================================
