@@ -89,7 +89,7 @@ export const Home: React.FC<HomeProps> = ({ jobs, onNavigate, onCancel, onDelete
 
   const reportTypeLabel = (type?: string | null) => {
     if (!type) return 'Generic';
-    if (type === 'INDUSTRIALS') return 'Industrials Brief';
+    if (type === 'INDUSTRIALS') return 'Industrials';
     if (type === 'PE') return 'Private Equity';
     if (type === 'FS') return 'Financial Services';
     return 'Generic';

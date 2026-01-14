@@ -269,10 +269,10 @@ export const NewResearch: React.FC<NewResearchProps> = ({ createJob, runJob, job
                   onChange={(e) => setReportType(e.target.value as ReportType)}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all"
                 >
-                  <option value="GENERIC">Company Brief (Generic)</option>
-                  <option value="INDUSTRIALS">Industrials Brief</option>
-                  <option value="PE">Private Equity Brief</option>
-                  <option value="FS">Financial Services Brief</option>
+                  <option value="GENERIC">Generic</option>
+                  <option value="INDUSTRIALS">Industrials</option>
+                  <option value="PE">Private Equity</option>
+                  <option value="FS">Financial Services</option>
                 </select>
               </div>
               <div>
