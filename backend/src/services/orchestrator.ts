@@ -612,7 +612,8 @@ export class ResearchOrchestrator {
     const input: any = {
       companyName: job.companyName,
       geography: job.geography,
-      foundation: job.foundation
+      foundation: job.foundation,
+      reportType: (job.reportType as ReportTypeId) || 'GENERIC'
     };
 
     // Add optional context based on dependencies
