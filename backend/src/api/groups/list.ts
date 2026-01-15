@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../../lib/prisma.js';
 
 export async function listGroups(req: Request, res: Response) {
   if (!req.auth) {
@@ -16,11 +14,16 @@ export async function listGroups(req: Request, res: Response) {
         }
       };
 
-  const groups = await prisma.group.findMany({
-    where,
-    orderBy: { name: 'asc' },
-    select: { id: true, name: true, slug: true }
-  });
+  try {
+    const groups = await prisma.group.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, slug: true }
+    });
 
-  return res.json({ results: groups });
+    return res.json({ results: groups });
+  } catch (error) {
+    console.error('Failed to list groups:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
 }

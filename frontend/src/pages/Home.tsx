@@ -322,6 +322,7 @@ export const Home: React.FC<HomeProps> = ({ jobs, onNavigate, onCancel, onDelete
                     <span className="text-xs text-slate-500">
                       {group.lastActive ? `Updated ${new Date(group.lastActive).toLocaleDateString('en-US')}` : ''}
                     </span>
+                  </div>
                   <div className="absolute bottom-3 right-3 flex items-center gap-2">
                     <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center font-semibold overflow-hidden">
                       {logoUrl ? (
@@ -340,7 +341,6 @@ export const Home: React.FC<HomeProps> = ({ jobs, onNavigate, onCancel, onDelete
                         initials
                       )}
                     </div>
-                  </div>
                   </div>
                   <div
                     className="absolute left-0 right-0 bottom-0 h-1 opacity-100"

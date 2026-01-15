@@ -113,7 +113,7 @@ export async function generateThumbnailForJob(prisma: PrismaClient, jobId: strin
     if (!job || job.status !== 'completed') return;
     if (job.thumbnailUrl) return;
 
-    const markdown = formatSectionContent('exec_summary', (job as any).execSummary);
+    const markdown = formatSectionContent('exec_summary', job.execSummary);
     if (!markdown || !markdown.trim()) return;
 
     const html = renderExecSummaryHtml(job.companyName, job.geography, job.industry || null, markdown);

@@ -4,11 +4,10 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient, ReportType, VisibilityScope } from '@prisma/client';
+import { ReportType, VisibilityScope } from '@prisma/client';
+import { prisma } from '../../lib/prisma.js';
 import { getResearchOrchestrator } from '../../services/orchestrator.js';
 import { ensureDomainForJob } from '../../services/domain-infer.js';
-
-const prisma = new PrismaClient();
 
 interface GenerateRequestBody {
   companyName: string;

@@ -4,11 +4,9 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma.js';
 import { getResearchOrchestrator } from '../../services/orchestrator.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
-
-const prisma = new PrismaClient();
 
 export async function cancelResearchJob(req: Request, res: Response) {
   try {

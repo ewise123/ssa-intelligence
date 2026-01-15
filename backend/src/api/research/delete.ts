@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
-
-const prisma = new PrismaClient();
 
 export async function deleteResearchJob(req: Request, res: Response) {
   try {

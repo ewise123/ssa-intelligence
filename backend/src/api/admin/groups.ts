@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../../lib/prisma.js';
 
 const slugify = (value: string) =>
   value
@@ -15,24 +13,29 @@ export async function listAdminGroups(req: Request, res: Response) {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
-  const groups = await prisma.group.findMany({
-    orderBy: { name: 'asc' },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      memberships: { select: { userId: true } }
-    }
-  });
+  try {
+    const groups = await prisma.group.findMany({
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        memberships: { select: { userId: true } }
+      }
+    });
 
-  return res.json({
-    results: groups.map((group) => ({
-      id: group.id,
-      name: group.name,
-      slug: group.slug,
-      memberCount: group.memberships.length
-    }))
-  });
+    return res.json({
+      results: groups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        slug: group.slug,
+        memberCount: group.memberships.length
+      }))
+    });
+  } catch (error) {
+    console.error('Failed to list admin groups:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 }
 
 export async function createGroup(req: Request, res: Response) {
@@ -72,6 +75,15 @@ export async function addGroupMember(req: Request, res: Response) {
     return res.status(400).json({ error: 'groupId and userId/email required' });
   }
 
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { id: true }
+  });
+
+  if (!group) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
   const user = userId
     ? await prisma.user.findUnique({ where: { id: userId } })
     : await prisma.user.findUnique({ where: { email } });
@@ -80,13 +92,18 @@ export async function addGroupMember(req: Request, res: Response) {
     return res.status(404).json({ error: 'User not found' });
   }
 
-  await prisma.groupMembership.upsert({
-    where: { userId_groupId: { userId: user.id, groupId } },
-    update: {},
-    create: { userId: user.id, groupId }
-  });
+  try {
+    await prisma.groupMembership.upsert({
+      where: { userId_groupId: { userId: user.id, groupId } },
+      update: {},
+      create: { userId: user.id, groupId }
+    });
 
-  return res.json({ success: true, userId: user.id, groupId });
+    return res.json({ success: true, userId: user.id, groupId });
+  } catch (error) {
+    console.error('Failed to add group member:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 }
 
 export async function removeGroupMember(req: Request, res: Response) {
@@ -99,9 +116,14 @@ export async function removeGroupMember(req: Request, res: Response) {
     return res.status(400).json({ error: 'groupId and userId required' });
   }
 
-  await prisma.groupMembership.deleteMany({
-    where: { groupId, userId }
-  });
+  try {
+    await prisma.groupMembership.deleteMany({
+      where: { groupId, userId }
+    });
 
-  return res.json({ success: true, userId, groupId });
+    return res.json({ success: true, userId, groupId });
+  } catch (error) {
+    console.error('Failed to remove group member:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 }

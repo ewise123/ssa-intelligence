@@ -4,10 +4,8 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
-
-const prisma = new PrismaClient();
 
 interface ListQueryParams {
   limit?: string;
@@ -91,7 +89,7 @@ export async function listResearch(req: Request, res: Response) {
       companyName: job.companyName,
       geography: job.geography,
       industry: job.industry,
-      domain: (job as any).domain || null,
+      domain: job.domain || null,
       reportType: job.reportType,
       visibilityScope: job.visibilityScope,
       selectedSections: job.selectedSections,
@@ -107,7 +105,7 @@ export async function listResearch(req: Request, res: Response) {
       queuedAt: job.queuedAt,
       updatedAt: job.updatedAt,
       completedAt: job.completedAt,
-      thumbnailUrl: (job as any).thumbnailUrl || null,
+      thumbnailUrl: job.thumbnailUrl || null,
       metadata: {
         companyName: job.companyName,
         geography: job.geography,

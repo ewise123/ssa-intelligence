@@ -8,7 +8,7 @@ import type { RequestHandler } from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './lib/prisma.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -38,7 +38,6 @@ import { addGroupMember, createGroup, listAdminGroups, removeGroupMember } from 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const prisma = new PrismaClient();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 

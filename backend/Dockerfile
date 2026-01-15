@@ -1,6 +1,7 @@
 # Playwright-ready Dockerfile for SSA Intelligence Backend
 
 # Stage 1: Dependencies (Playwright base image includes Chromium and deps)
+# Playwright 1.57.0 validated via `npm run test:playwright` (browser launch smoke check).
 FROM mcr.microsoft.com/playwright:v1.57.0-jammy AS deps
 WORKDIR /app
 

@@ -1,8 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 import type { AuthContext } from '../types/auth.js';
-
-const prisma = new PrismaClient();
 
 const HEADER_CANDIDATES = {
   email: [

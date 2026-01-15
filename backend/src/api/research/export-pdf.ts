@@ -1,11 +1,9 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma.js';
 import { chromium } from 'playwright';
 import { marked } from 'marked';
 import { formatSectionContent, sectionOrder } from '../../services/section-formatter.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
-
-const prisma = new PrismaClient();
 
 const htmlTemplate = (params: { title: string; meta: string[]; body: string }) => `
 <!DOCTYPE html>
@@ -72,7 +70,7 @@ export async function exportResearchPdf(req: Request, res: Response) {
     const chunks: string[] = [];
 
     sectionOrder.forEach(({ id: sectionId, title, field }) => {
-      const data = (job as any)[field];
+      const data = job[field as keyof typeof job];
       const status = job.subJobs.find((s) => s.stage === sectionId)?.status || 'unknown';
       chunks.push(`## ${title}`);
       chunks.push(`_Status: ${status}_`);

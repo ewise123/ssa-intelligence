@@ -4,11 +4,9 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma.js';
 import { getResearchOrchestrator } from '../../services/orchestrator.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
-
-const prisma = new PrismaClient();
 
 export async function getJobStatus(req: Request, res: Response) {
   try {
@@ -74,17 +72,17 @@ export async function getJobStatus(req: Request, res: Response) {
       currentStage: job.currentStage,
       companyName: job.companyName,
       geography: job.geography,
-      domain: (job as any).domain || null,
-      thumbnailUrl: (job as any).thumbnailUrl || null,
-      reportType: (job as any).reportType,
-      visibilityScope: (job as any).visibilityScope,
-      selectedSections: (job as any).selectedSections,
-      userAddedPrompt: (job as any).userAddedPrompt,
+      domain: job.domain || null,
+      thumbnailUrl: job.thumbnailUrl || null,
+      reportType: job.reportType,
+      visibilityScope: job.visibilityScope,
+      selectedSections: job.selectedSections,
+      userAddedPrompt: job.userAddedPrompt,
       overallConfidence: job.overallConfidence,
       overallConfidenceScore: job.overallConfidenceScore,
-      promptTokens: (job as any).promptTokens,
-      completionTokens: (job as any).completionTokens,
-      costUsd: (job as any).costUsd,
+      promptTokens: job.promptTokens,
+      completionTokens: job.completionTokens,
+      costUsd: job.costUsd,
       error: job.status === 'failed' ? 'Job execution failed' : null,
       jobs: job.subJobs,
       summary: {
