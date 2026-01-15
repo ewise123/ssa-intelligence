@@ -103,7 +103,6 @@ const buildDependencyMap = (sections?: BlueprintSection[]) => {
 
 const ensureDependencies = (sections: SectionId[], dependencies: Record<SectionId, SectionId[]>) => {
   const set = new Set<SectionId>(sections);
-  set.add('appendix');
   let updated = true;
   while (updated) {
     updated = false;
@@ -204,6 +203,18 @@ export const NewResearch: React.FC<NewResearchProps> = ({
     return 'Company Brief (Generic)';
   };
 
+  const dependencyBlocks = useMemo(() => {
+    const blocks = new Map<SectionId, SectionId[]>();
+    selectedSections.forEach((sectionId) => {
+      const deps = dependencyMap[sectionId] || [];
+      deps.forEach((dep) => {
+        const current = blocks.get(dep) || [];
+        blocks.set(dep, Array.from(new Set([...current, sectionId])));
+      });
+    });
+    return blocks;
+  }, [dependencyMap, selectedSections]);
+
   const renderReportInput = (input: BlueprintInput) => {
     const value = reportInputs[input.id] || '';
     const helper = input.helperText ? <p className="text-xs text-slate-400 mt-1">{input.helperText}</p> : null;
@@ -301,7 +312,8 @@ export const NewResearch: React.FC<NewResearchProps> = ({
   };
 
   const toggleSection = (sectionId: SectionId) => {
-    if (sectionId === 'appendix') return;
+    const blockers = dependencyBlocks.get(sectionId);
+    if (blockers && blockers.length) return;
     const next = new Set(selectedSections);
     if (next.has(sectionId)) {
       next.delete(sectionId);
@@ -337,8 +349,7 @@ export const NewResearch: React.FC<NewResearchProps> = ({
       return `Please provide ${missingRequired.label}.`;
     }
 
-    const nonAppendix = selectedSections.filter((section) => section !== 'appendix');
-    if (!nonAppendix.length) {
+    if (!selectedSections.length) {
       return 'Select at least one section to generate.';
     }
 
@@ -537,9 +548,13 @@ export const NewResearch: React.FC<NewResearchProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {availableSections.map((section) => {
                     const checked = selectedSections.includes(section.id);
-                    const disabled = section.id === 'appendix';
+                    const blockers = dependencyBlocks.get(section.id) || [];
+                    const disabled = blockers.length > 0;
+                    const tooltip = disabled
+                      ? `Required because ${blockers.map(getSectionTitle).join(', ')} depends on it.`
+                      : undefined;
                     return (
-                      <label key={section.id} className="flex items-center gap-2 text-sm text-slate-600">
+                      <label key={section.id} className="flex items-center gap-2 text-sm text-slate-600" title={tooltip}>
                         <input
                           type="checkbox"
                           checked={checked}
