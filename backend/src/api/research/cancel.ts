@@ -34,28 +34,15 @@ export async function cancelResearchJob(req: Request, res: Response) {
       return res.status(400).json({ error: 'Job already completed', status: job.status });
     }
 
-    await prisma.$transaction([
-      prisma.researchJob.update({
-        where: { id },
-        data: {
-          status: 'cancelled',
-          currentStage: null
-        }
-      }),
-      prisma.researchSubJob.updateMany({
-        where: { researchId: id, status: { in: ['pending', 'running'] } },
-        data: {
-          status: 'cancelled',
-          completedAt: new Date()
-        }
-      })
-    ]);
+    await prisma.researchJob.delete({
+      where: { id }
+    });
 
     // Nudge the queue to pick the next job if this one was running/queued
     const orchestrator = getResearchOrchestrator(prisma);
     orchestrator.processQueue(true).catch(console.error);
 
-    return res.json({ success: true, jobId: id, status: 'cancelled' });
+    return res.json({ success: true, jobId: id, status: 'deleted' });
   } catch (error) {
     console.error('Error cancelling research job:', error);
     return res.status(500).json({

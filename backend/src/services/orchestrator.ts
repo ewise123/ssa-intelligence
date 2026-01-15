@@ -458,11 +458,17 @@ export class ResearchOrchestrator {
           lockHeld = true;
 
           // If a job is already running, back off and retry later
-          const runningCount = await this.prisma.researchJob.count({
-            where: { status: 'running' }
+          const staleCount = await this.cleanupStaleRunningJobs();
+          if (staleCount > 0) {
+            console.log(`[queue] Cleaned ${staleCount} stale running job(s)`);
+          }
+
+          const runningJobs = await this.prisma.researchJob.findMany({
+            where: { status: 'running' },
+            select: { id: true, currentStage: true }
           });
-          if (runningCount > 0) {
-            console.log('[queue] Detected running job, delaying promotion');
+          if (runningJobs.length > 0) {
+            console.log('[queue] Detected running job, delaying promotion', runningJobs);
             await this.releaseLock();
             lockHeld = false;
             await this.delay(750);
@@ -681,6 +687,14 @@ export class ResearchOrchestrator {
 
       await this.recordTokenUsage(jobId, stageId, response!);
 
+      const stillActive = await this.prisma.researchJob.findUnique({
+        where: { id: jobId },
+        select: { status: true }
+      });
+      if (!stillActive || stillActive.status === 'cancelled') {
+        return;
+      }
+
       // Save output
       await this.saveStageOutput(jobId, stageId, output);
 
@@ -804,19 +818,13 @@ export class ResearchOrchestrator {
 
     const field = fieldMap[stageId];
     if (field) {
-      await this.prisma.researchJob.update({
-        where: { id: jobId },
-        data: {
-          [field]: output,
-          overallConfidence: output.confidence?.level || 'MEDIUM'
-        }
+      await this.tryUpdateJob(jobId, {
+        [field]: output,
+        overallConfidence: output.confidence?.level || 'MEDIUM'
       });
     } else {
-      await this.prisma.researchJob.update({
-        where: { id: jobId },
-        data: {
-          overallConfidence: output.confidence?.level || 'MEDIUM'
-        }
+      await this.tryUpdateJob(jobId, {
+        overallConfidence: output.confidence?.level || 'MEDIUM'
       });
     }
 
@@ -909,10 +917,7 @@ export class ResearchOrchestrator {
     }
 
     if (current.status !== status) {
-      await this.prisma.researchJob.update({
-        where: { id: jobId },
-        data: { status }
-      });
+      await this.tryUpdateJob(jobId, { status });
     }
 
     if (status === 'cancelled') {
@@ -928,10 +933,7 @@ export class ResearchOrchestrator {
    * Update current stage
    */
   private async updateJobCurrentStage(jobId: string, stage: StageId) {
-    await this.prisma.researchJob.update({
-      where: { id: jobId },
-      data: { currentStage: stage }
-    });
+    await this.tryUpdateJob(jobId, { currentStage: stage });
   }
 
   /**
@@ -959,10 +961,7 @@ export class ResearchOrchestrator {
     const completed = job.subJobs.filter(j => j.status === 'completed').length;
     const progress = completed / total;
 
-    await this.prisma.researchJob.update({
-      where: { id: jobId },
-      data: { progress }
-    });
+    await this.tryUpdateJob(jobId, { progress });
   }
 
   /**
@@ -1013,12 +1012,9 @@ export class ResearchOrchestrator {
       .filter((n): n is number => n !== null && !Number.isNaN(n));
 
     if (!scores.length) {
-      await this.prisma.researchJob.update({
-        where: { id: jobId },
-        data: {
-          overallConfidence: null,
-          overallConfidenceScore: null
-        }
+      await this.tryUpdateJob(jobId, {
+        overallConfidence: null,
+        overallConfidenceScore: null
       });
       return;
     }
@@ -1026,12 +1022,9 @@ export class ResearchOrchestrator {
     const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
     const label = this.scoreToLabel(avg);
 
-    await this.prisma.researchJob.update({
-      where: { id: jobId },
-      data: {
-        overallConfidence: label,
-        overallConfidenceScore: avg
-      }
+    await this.tryUpdateJob(jobId, {
+      overallConfidence: label,
+      overallConfidenceScore: avg
     });
   }
 
@@ -1152,24 +1145,31 @@ export class ResearchOrchestrator {
     const pricing = this.modelPricing[model] || this.modelPricing.default;
     const costUsd = ((inputTokens * pricing.prompt) + (outputTokens * pricing.completion)) / 1_000_000;
 
-    await this.prisma.$transaction([
-      this.prisma.researchSubJob.updateMany({
-        where: { researchId: jobId, stage: stageId },
-        data: {
-          promptTokens: { increment: inputTokens },
-          completionTokens: { increment: outputTokens },
-          costUsd: { increment: costUsd }
-        }
-      }),
-      this.prisma.researchJob.update({
-        where: { id: jobId },
-        data: {
-          promptTokens: { increment: inputTokens },
-          completionTokens: { increment: outputTokens },
-          costUsd: { increment: costUsd }
-        }
-      })
-    ]);
+    try {
+      await this.prisma.$transaction([
+        this.prisma.researchSubJob.updateMany({
+          where: { researchId: jobId, stage: stageId },
+          data: {
+            promptTokens: { increment: inputTokens },
+            completionTokens: { increment: outputTokens },
+            costUsd: { increment: costUsd }
+          }
+        }),
+        this.prisma.researchJob.update({
+          where: { id: jobId },
+          data: {
+            promptTokens: { increment: inputTokens },
+            completionTokens: { increment: outputTokens },
+            costUsd: { increment: costUsd }
+          }
+        })
+      ]);
+    } catch (error) {
+      if (this.isRecordNotFound(error)) {
+        return;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -1227,6 +1227,60 @@ export class ResearchOrchestrator {
       select: { status: true }
     });
     return job?.status === 'cancelled';
+  }
+
+  private async tryUpdateJob(jobId: string, data: Record<string, unknown>) {
+    try {
+      await this.prisma.researchJob.update({
+        where: { id: jobId },
+        data
+      });
+    } catch (error) {
+      if (this.isRecordNotFound(error)) {
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private isRecordNotFound(error: unknown): boolean {
+    return Boolean(
+      error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error as { code?: string }).code === 'P2025'
+    );
+  }
+
+  private async cleanupStaleRunningJobs(): Promise<number> {
+    const runningJobs = await this.prisma.researchJob.findMany({
+      where: { status: 'running' },
+      include: { subJobs: true }
+    });
+
+    let cleaned = 0;
+
+    for (const job of runningJobs) {
+      const statuses = job.subJobs.map((subJob) => subJob.status);
+      const hasRunning = statuses.includes('running');
+      const hasPending = statuses.includes('pending');
+      if (hasRunning || hasPending) {
+        continue;
+      }
+
+      const anyCancelled = statuses.includes('cancelled');
+      const anyFailed = statuses.includes('failed');
+      const nextStatus = anyCancelled ? 'cancelled' : anyFailed ? 'failed' : 'completed';
+
+      await this.tryUpdateJob(job.id, {
+        status: nextStatus,
+        currentStage: null,
+        completedAt: nextStatus === 'completed' ? new Date() : job.completedAt
+      });
+      cleaned += 1;
+    }
+
+    return cleaned;
   }
 
   /**

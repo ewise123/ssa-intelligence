@@ -9,10 +9,10 @@ Ensure cancelled jobs never block the queue. Cancel should hard-delete jobs and 
 
 ## Steps
 [ ] Reproduce the stall and capture DB state (job status, subjob statuses).
-[ ] Update cancel endpoint to hard-delete job and related records.
-[ ] Add queue guard to ignore stale running jobs (no running subjobs).
-[ ] Add queue cleanup pass to reconcile job status after cancel/delete.
-[ ] Add logging around queue promotion and stalled-running detection.
+[x] Update cancel endpoint to hard-delete job and related records.
+[x] Add queue guard to ignore stale running jobs (no running subjobs).
+[x] Add queue cleanup pass to reconcile job status after cancel/delete.
+[x] Add logging around queue promotion and stalled-running detection.
 [ ] Verify cancel -> new job flow: queued job should start immediately.
 
 ## Notes

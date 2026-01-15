@@ -938,6 +938,10 @@ export const useResearchManager = () => {
         });
       } catch (error) {
         console.error(error);
+        if (error instanceof Error && error.message.includes('Job not found')) {
+          setJobs((prev) => prev.filter((j) => j.id !== jobId));
+          return;
+        }
         setJobs((prev) => {
           const existing = prev.find((j) => j.id === jobId);
           const fallback: ResearchJob =
