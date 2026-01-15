@@ -133,8 +133,8 @@ export const NewResearch: React.FC<NewResearchProps> = ({
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<{ jobId?: string; status?: string; message?: string } | null>(null);
-  const [reportType, setReportType] = useState<ReportType>('GENERIC');
-  const [selectedSections, setSelectedSections] = useState<SectionId[]>(DEFAULT_SECTIONS_BY_REPORT.GENERIC);
+  const [reportType, setReportType] = useState<ReportType | null>(null);
+  const [selectedSections, setSelectedSections] = useState<SectionId[]>([]);
   const [reportInputs, setReportInputs] = useState<Record<string, string>>({});
   const [wizardStep, setWizardStep] = useState<'reportType' | 'details' | 'context' | 'review'>('reportType');
   const [showIncluded, setShowIncluded] = useState(false);
@@ -147,7 +147,7 @@ export const NewResearch: React.FC<NewResearchProps> = ({
   const availableGroups = userContext?.groups || [];
   const canShareToGroups = availableGroups.length > 0;
   const reportBlueprint = useMemo(
-    () => reportBlueprints.find((bp) => bp.reportType === reportType),
+    () => (reportType ? reportBlueprints.find((bp) => bp.reportType === reportType) : undefined),
     [reportBlueprints, reportType]
   );
   const companyLabel = reportBlueprint?.inputs.find((input) => input.id === 'companyName')?.label || 'Company Name';
@@ -197,7 +197,8 @@ export const NewResearch: React.FC<NewResearchProps> = ({
     return availableSections.find((section) => section.id === sectionId)?.title || sectionId;
   };
 
-  const reportTypeLabel = (type: ReportType) => {
+  const reportTypeLabel = (type: ReportType | null) => {
+    if (!type) return 'Select a report type';
     if (type === 'INDUSTRIALS') return 'Industrials';
     if (type === 'PE') return 'Private Equity';
     if (type === 'FS') return 'Financial Services';
@@ -277,6 +278,11 @@ export const NewResearch: React.FC<NewResearchProps> = ({
   };
 
   useEffect(() => {
+    if (!reportType) {
+      setSelectedSections([]);
+      return;
+    }
+
     const defaults = reportBlueprint?.sections
       ? reportBlueprint.sections.filter((section) => section.defaultSelected).map((section) => section.id)
       : DEFAULT_SECTIONS_BY_REPORT[reportType];
@@ -337,6 +343,10 @@ export const NewResearch: React.FC<NewResearchProps> = ({
   };
 
   const validateDetailsStep = () => {
+    if (!reportType) {
+      return 'Select a report type to continue.';
+    }
+
     const company = normalizeInput(formData.company);
     if (!company || company.length < 2 || !hasMeaningfulChars(company)) {
       return 'Please enter a valid company name (letters or numbers required).';
@@ -387,7 +397,7 @@ export const NewResearch: React.FC<NewResearchProps> = ({
     try {
       const id = await createJob(normalized.company, normalized.geo, normalized.industry, {
         force,
-        reportType,
+        reportType: reportType ?? undefined,
         selectedSections,
         visibilityScope,
         groupIds: visibilityScope === 'GROUP' ? selectedGroupIds : [],
@@ -455,7 +465,8 @@ export const NewResearch: React.FC<NewResearchProps> = ({
               <button
                 type="button"
                 onClick={() => setWizardStep('details')}
-                className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+                className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={!reportType}
               >
                 Continue
               </button>

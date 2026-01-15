@@ -6,6 +6,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
+import { deriveJobStatus } from './status-utils.js';
 
 interface ListQueryParams {
   limit?: string;
@@ -67,10 +68,9 @@ export async function listResearch(req: Request, res: Response) {
           completedAt: true,
           queuedAt: true,
           thumbnailUrl: true,
-          // include cancelled sub-jobs only to compute generated sections count? keep completed only
+          // include sub-job status for effective status + generated sections
           subJobs: {
-            where: { status: 'completed' },
-            select: { stage: true }
+            select: { stage: true, status: true }
           },
           jobGroups: {
             select: {
@@ -85,7 +85,7 @@ export async function listResearch(req: Request, res: Response) {
     // Map to response format
     const results = jobs.map(job => ({
       id: job.id,
-      status: job.status,
+      status: deriveJobStatus({ status: job.status, subJobs: job.subJobs }),
       companyName: job.companyName,
       geography: job.geography,
       industry: job.industry,
@@ -112,7 +112,7 @@ export async function listResearch(req: Request, res: Response) {
         industry: job.industry
       },
       generatedSections: job.subJobs
-        .filter(subJob => subJob.stage !== 'foundation')
+        .filter(subJob => subJob.status === 'completed' && subJob.stage !== 'foundation')
         .map(subJob => {
           // Map stage to section number
           const sectionMap: Record<string, number> = {

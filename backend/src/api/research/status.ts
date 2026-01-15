@@ -7,6 +7,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { getResearchOrchestrator } from '../../services/orchestrator.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
+import { deriveJobStatus } from './status-utils.js';
 
 export async function getJobStatus(req: Request, res: Response) {
   try {
@@ -49,23 +50,24 @@ export async function getJobStatus(req: Request, res: Response) {
     const completedJobs = job.subJobs.filter(j => j.status === 'completed');
     const runningJobs = job.subJobs.filter(j => j.status === 'running');
     const pendingJobs = job.subJobs.filter(j => j.status === 'pending');
+    const effectiveStatus = deriveJobStatus({ status: job.status, subJobs: job.subJobs });
 
     const avgTimePerSection = 45; // seconds (estimate)
     const estimatedTimeRemaining = pendingJobs.length * avgTimePerSection;
 
     const orchestrator = getResearchOrchestrator(prisma);
-    const queuePosition = job.status === 'queued'
+    const queuePosition = effectiveStatus === 'queued'
       ? await orchestrator.getQueuePosition(job.id)
       : 0;
-    const blockedByRunning = job.status === 'queued' && queuePosition > 1;
-    if (job.status === 'queued') {
+    const blockedByRunning = effectiveStatus === 'queued' && queuePosition > 1;
+    if (effectiveStatus === 'queued') {
       // Nudge queue in case it stalled
       orchestrator.processQueue(true).catch(console.error);
     }
 
     return res.json({
       id: job.id,
-      status: job.status,
+      status: effectiveStatus,
       queuePosition,
       blockedByRunning,
       progress: job.progress,
@@ -83,7 +85,7 @@ export async function getJobStatus(req: Request, res: Response) {
       promptTokens: job.promptTokens,
       completionTokens: job.completionTokens,
       costUsd: job.costUsd,
-      error: job.status === 'failed' ? 'Job execution failed' : null,
+      error: effectiveStatus === 'failed' ? 'Job execution failed' : null,
       jobs: job.subJobs,
       summary: {
         total: job.subJobs.length,
@@ -92,7 +94,7 @@ export async function getJobStatus(req: Request, res: Response) {
         pending: pendingJobs.length,
         failed: job.subJobs.filter(j => j.status === 'failed').length
       },
-      estimatedTimeRemaining: job.status === 'running' ? estimatedTimeRemaining : 0,
+      estimatedTimeRemaining: effectiveStatus === 'running' ? estimatedTimeRemaining : 0,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt
     });
