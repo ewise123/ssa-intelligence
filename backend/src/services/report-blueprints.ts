@@ -24,8 +24,8 @@ const textareaInput = (input: Omit<BlueprintInput, 'type'>): BlueprintInput => (
 
 const baseInputs = (nameLabel: string): BlueprintInput[] => [
   textInput({ id: 'companyName', label: nameLabel, required: true }),
-  textInput({ id: 'timeHorizon', label: 'Time horizon', required: true, helperText: 'For example: last 12 months.' }),
-  textareaInput({ id: 'meetingContext', label: 'Meeting context', required: true })
+  textInput({ id: 'timeHorizon', label: 'Time horizon', required: false, helperText: 'For example: last 12 months.' }),
+  textareaInput({ id: 'meetingContext', label: 'Meeting context', required: false })
 ];
 
 const appendixFocus = 'Sources used across sections.';
