@@ -15,7 +15,7 @@ WHERE "reportType" IS NULL;
 DROP INDEX IF EXISTS "ResearchJob_userId_normalizedCompany_normalizedGeography_normalizedIndustry_key";
 
 ALTER TABLE "ResearchJob"
-  ADD CONSTRAINT "ResearchJob_userId_normalizedCompany_normalizedGeography_normalizedIndustry_reportType_key"
+  ADD CONSTRAINT "ResearchJob_uId_norm_comp_geog_ind_rpt_key"
   UNIQUE ("userId", "normalizedCompany", "normalizedGeography", "normalizedIndustry", "reportType");
 
 CREATE INDEX IF NOT EXISTS "ResearchJob_reportType_idx" ON "ResearchJob"("reportType");
