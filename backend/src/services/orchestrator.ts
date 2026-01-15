@@ -1259,12 +1259,34 @@ export class ResearchOrchestrator {
     });
 
     let cleaned = 0;
+    const now = Date.now();
+    const staleThresholdMs = 2 * 60 * 1000;
 
     for (const job of runningJobs) {
       const statuses = job.subJobs.map((subJob) => subJob.status);
       const hasRunning = statuses.includes('running');
       const hasPending = statuses.includes('pending');
       if (hasRunning || hasPending) {
+        if (hasRunning) {
+          continue;
+        }
+
+        const lastSubJobUpdate = job.subJobs.reduce((latest, subJob) => {
+          const updated = subJob.updatedAt?.getTime?.() ?? latest;
+          return Math.max(latest, updated);
+        }, 0);
+        const lastJobUpdate = job.updatedAt?.getTime?.() ?? 0;
+        const lastActivity = Math.max(lastSubJobUpdate, lastJobUpdate, job.startedAt?.getTime?.() ?? 0);
+        const isStale = lastActivity > 0 && now - lastActivity > staleThresholdMs;
+        if (!isStale) {
+          continue;
+        }
+
+        await this.tryUpdateJob(job.id, {
+          status: 'failed',
+          currentStage: null
+        });
+        cleaned += 1;
         continue;
       }
 
