@@ -348,19 +348,25 @@ model CallDietTag {
 
 // News Articles fetched via hybrid Layer 1/Layer 2 approach
 model NewsArticle {
-  id           String           @id @default(cuid())
-  headline     String
-  summary      String?
-  whyItMatters String?          @map("why_it_matters")
+  id            String           @id @default(cuid())
+  headline      String
+  shortSummary  String?          @map("short_summary")  // 1-2 sentence preview
+  longSummary   String?          @map("long_summary")   // 3-5 sentence detailed summary
+  summary       String?          // Legacy field, kept for compatibility
+  whyItMatters  String?          @map("why_it_matters")
+  publishedAt   DateTime?        @map("published_at")
+  fetchedAt     DateTime         @default(now()) @map("fetched_at")
+  priority      ArticlePriority?
+  priorityScore Int?             @map("priority_score") // 1-10 for sorting (hidden)
+  status        ArticleStatus?
+  matchType     MatchType?       @map("match_type")
+  fetchLayer    FetchLayer?      @map("fetch_layer")
+  rawContent    String?          @map("raw_content")
+  isSent        Boolean          @default(false) @map("is_sent") // Sent to client status
+
+  // Primary source (for backward compatibility)
   sourceUrl    String           @unique @map("source_url")
   sourceName   String?          @map("source_name")
-  publishedAt  DateTime?        @map("published_at")
-  fetchedAt    DateTime         @default(now()) @map("fetched_at")
-  priority     ArticlePriority?
-  status       ArticleStatus?
-  matchType    MatchType?       @map("match_type")
-  fetchLayer   FetchLayer?      @map("fetch_layer")
-  rawContent   String?          @map("raw_content")
 
   // Scraped full content (high-priority articles only)
   fullContent    String?   @map("full_content")
@@ -375,12 +381,30 @@ model NewsArticle {
   tagId        String?          @map("tag_id")
 
   revenueOwners ArticleRevenueOwner[]
+  sources       ArticleSource[]  // Multiple sources for merged stories
 
   @@index([publishedAt(sort: Desc)])
   @@index([priority])
+  @@index([priorityScore(sort: Desc)])
   @@index([companyId])
   @@index([tagId])
+  @@index([isSent])
   @@map("news_articles")
+}
+
+// Multiple sources for a single article (when stories are merged)
+model ArticleSource {
+  id         String      @id @default(cuid())
+  article    NewsArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId  String      @map("article_id")
+  sourceUrl  String      @map("source_url")
+  sourceName String      @map("source_name")
+  fetchLayer FetchLayer? @map("fetch_layer")
+  fetchedAt  DateTime    @default(now()) @map("fetched_at")
+
+  @@unique([articleId, sourceUrl])
+  @@index([articleId])
+  @@map("article_sources")
 }
 
 // Junction: Article <-> Revenue Owner (many-to-many)

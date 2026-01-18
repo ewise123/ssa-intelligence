@@ -19,6 +19,7 @@ router.get('/', async (req: Request, res: Response) => {
       personId,
       tagId,
       priority,
+      isSent,
       limit = '50',
       offset = '0',
     } = req.query;
@@ -53,11 +54,16 @@ router.get('/', async (req: Request, res: Response) => {
       where.priority = priority as ArticlePriority;
     }
 
+    // Filter by sent status
+    if (isSent !== undefined) {
+      where.isSent = isSent === 'true';
+    }
+
     const [articles, total] = await Promise.all([
       prisma.newsArticle.findMany({
         where,
         orderBy: [
-          { priority: 'asc' }, // high comes before medium, medium before low
+          { priorityScore: 'desc' }, // Sort by priorityScore (highest first)
           { publishedAt: 'desc' },
           { fetchedAt: 'desc' },
         ],
@@ -67,6 +73,7 @@ router.get('/', async (req: Request, res: Response) => {
           company: true,
           person: true,
           tag: true,
+          sources: true, // Include all sources for merged stories
           revenueOwners: {
             include: {
               revenueOwner: {
@@ -83,14 +90,19 @@ router.get('/', async (req: Request, res: Response) => {
     const transformedArticles = articles.map(article => ({
       id: article.id,
       headline: article.headline,
+      shortSummary: article.shortSummary,
+      longSummary: article.longSummary,
       summary: article.summary,
       whyItMatters: article.whyItMatters,
       sourceUrl: article.sourceUrl,
       sourceName: article.sourceName,
+      sources: article.sources, // All sources for merged stories
       publishedAt: article.publishedAt,
       fetchedAt: article.fetchedAt,
       priority: article.priority,
+      priorityScore: article.priorityScore,
       status: article.status,
+      isSent: article.isSent,
       company: article.company,
       person: article.person,
       tag: article.tag,
@@ -142,6 +154,33 @@ router.get('/:id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching article:', error);
     res.status(500).json({ error: 'Failed to fetch article' });
+  }
+});
+
+// PATCH /api/news/articles/:id/sent - Toggle isSent status
+router.patch('/:id/sent', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { isSent } = req.body;
+
+    const article = await prisma.newsArticle.findUnique({ where: { id } });
+    if (!article) {
+      res.status(404).json({ error: 'Article not found' });
+      return;
+    }
+
+    // If isSent is provided, use it; otherwise toggle current value
+    const newIsSent = typeof isSent === 'boolean' ? isSent : !article.isSent;
+
+    const updated = await prisma.newsArticle.update({
+      where: { id },
+      data: { isSent: newIsSent },
+    });
+
+    res.json({ success: true, isSent: updated.isSent });
+  } catch (error) {
+    console.error('Error updating article sent status:', error);
+    res.status(500).json({ error: 'Failed to update article' });
   }
 });
 

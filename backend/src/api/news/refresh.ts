@@ -64,6 +64,20 @@ router.post('/', async (req: Request, res: Response) => {
   ];
 
   try {
+    // Purge articles older than 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const purgeResult = await prisma.newsArticle.deleteMany({
+      where: {
+        publishedAt: { lt: thirtyDaysAgo },
+      },
+    });
+
+    if (purgeResult.count > 0) {
+      console.log(`[refresh] Purged ${purgeResult.count} articles older than 30 days`);
+    }
+
     // Get all revenue owners with their call diets
     const revenueOwners = await prisma.revenueOwner.findMany({
       include: {
@@ -181,7 +195,9 @@ router.post('/', async (req: Request, res: Response) => {
           where: { sourceUrl: article.sourceUrl },
           create: {
             headline: article.headline,
-            summary: article.summary,
+            shortSummary: article.shortSummary,
+            longSummary: article.longSummary,
+            summary: article.summary, // Legacy field
             whyItMatters: article.whyItMatters,
             sourceUrl: article.sourceUrl,
             sourceName: article.sourceName,
@@ -190,16 +206,48 @@ router.post('/', async (req: Request, res: Response) => {
             personId,
             tagId: tag?.id || null,
             priority: article.priority as ArticlePriority,
+            priorityScore: article.priorityScore,
             status: ArticleStatus.new_article,
             matchType,
             fetchLayer,
           },
           update: {
+            shortSummary: article.shortSummary,
+            longSummary: article.longSummary,
             summary: article.summary,
             whyItMatters: article.whyItMatters,
+            priorityScore: article.priorityScore,
             status: ArticleStatus.update,
           },
         });
+
+        // Save additional sources for merged stories
+        if (article.sources && article.sources.length > 0) {
+          for (const source of article.sources) {
+            const sourceFetchLayer = source.fetchLayer === 'layer1_rss' ? FetchLayer.layer1_rss :
+                                     source.fetchLayer === 'layer1_api' ? FetchLayer.layer1_api :
+                                     source.fetchLayer === 'layer2_llm' ? FetchLayer.layer2_llm : null;
+
+            await prisma.articleSource.upsert({
+              where: {
+                articleId_sourceUrl: {
+                  articleId: savedArticle.id,
+                  sourceUrl: source.sourceUrl,
+                },
+              },
+              create: {
+                articleId: savedArticle.id,
+                sourceUrl: source.sourceUrl,
+                sourceName: source.sourceName,
+                fetchLayer: sourceFetchLayer,
+              },
+              update: {
+                sourceName: source.sourceName,
+                fetchLayer: sourceFetchLayer,
+              },
+            });
+          }
+        }
 
         // Link to revenue owners
         for (const ownerName of article.revenueOwners) {

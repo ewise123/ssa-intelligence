@@ -60,17 +60,30 @@ export interface RevenueOwner {
   };
 }
 
+export interface ArticleSource {
+  id: string;
+  sourceUrl: string;
+  sourceName: string;
+  fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm' | null;
+  fetchedAt: string;
+}
+
 export interface NewsArticle {
   id: string;
   headline: string;
-  summary: string | null;
+  shortSummary: string | null;  // 1-2 sentences for card preview
+  longSummary: string | null;   // 3-5 sentences for expanded view
+  summary: string | null;       // Legacy field
   whyItMatters: string | null;
   sourceUrl: string;
   sourceName: string | null;
+  sources: ArticleSource[];     // All sources for merged stories
   publishedAt: string | null;
   fetchedAt: string;
   priority: 'high' | 'medium' | 'low' | null;
+  priorityScore: number | null; // 1-10 for sorting (hidden from UI)
   status: 'new_article' | 'update' | null;
+  isSent: boolean;              // Sent to client status
   matchType: 'exact' | 'contextual' | null;
   fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm' | null;
   company: TrackedCompany | null;
@@ -354,6 +367,7 @@ export interface ArticleFilters {
   personId?: string;
   tagId?: string;
   priority?: 'high' | 'medium' | 'low';
+  isSent?: boolean;
 }
 
 export const useNewsArticles = (filters?: ArticleFilters) => {
@@ -469,4 +483,16 @@ export const useNewsSearch = () => {
   const clearResults = () => setResults([]);
 
   return { results, searching, error, search, clearResults };
+};
+
+// ============================================================================
+// Toggle Article Sent Status
+// ============================================================================
+
+export const toggleArticleSent = async (articleId: string, isSent?: boolean): Promise<boolean> => {
+  const data = await fetchJson(`/news/articles/${articleId}/sent`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isSent }),
+  });
+  return data.isSent;
 };

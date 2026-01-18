@@ -22,20 +22,30 @@ export interface CallDietInput {
   revenueOwnerName: string;
   companies: Array<{ name: string; ticker?: string; cik?: string }>;
   people: Array<{ name: string; title?: string }>;
-  topics: string[];
+  topics: string[]; // Kept for backward compatibility but not used in search
+}
+
+export interface ArticleSourceInfo {
+  sourceUrl: string;
+  sourceName: string;
+  fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm';
 }
 
 export interface ProcessedArticle {
   headline: string;
-  summary: string | null;
+  shortSummary: string | null;  // 1-2 sentences for card preview
+  longSummary: string | null;   // 3-5 sentences for expanded view
+  summary: string | null;       // Legacy field for compatibility
   whyItMatters: string | null;
-  sourceUrl: string;
-  sourceName: string;
+  sourceUrl: string;            // Primary source URL
+  sourceName: string;           // Primary source name
+  sources: ArticleSourceInfo[]; // All sources for merged stories
   publishedAt: string;
   company: string | null;
   person: string | null;
   category: string;
   priority: 'high' | 'medium' | 'low';
+  priorityScore: number;        // 1-10 for sorting (hidden from UI)
   status: 'new_article' | 'update';
   matchType: 'exact' | 'contextual';
   fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm';
@@ -84,10 +94,9 @@ export async function fetchNewsHybrid(
     afterProcessing: 0,
   };
 
-  // Extract unique companies and people
+  // Extract unique companies and people (topics are no longer used for search)
   const allCompanies = new Map<string, { name: string; ticker?: string; cik?: string }>();
   const allPeople = new Map<string, { name: string; title?: string }>();
-  const allTopics = new Set<string>();
 
   for (const cd of callDiets) {
     for (const company of cd.companies) {
@@ -96,106 +105,89 @@ export async function fetchNewsHybrid(
     for (const person of cd.people) {
       allPeople.set(person.name.toLowerCase(), person);
     }
-    for (const topic of cd.topics) {
-      allTopics.add(topic);
-    }
   }
 
   const companies = Array.from(allCompanies.values());
   const people = Array.from(allPeople.values());
-  const topics = Array.from(allTopics);
 
   if (companies.length === 0 && people.length === 0) {
     return { articles: [], coverageGaps: [] };
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // LAYER 1: DETERMINISTIC FETCH (RSS/APIs)
+  // LAYER 1 & LAYER 2: RUN IN PARALLEL
   // ═══════════════════════════════════════════════════════════════════
-  await onProgress?.(10, 'Starting Layer 1: RSS feeds and APIs...', { index: 1, status: 'in_progress' });
-  console.log('[hybrid] Starting Layer 1 fetch...');
+  await onProgress?.(10, 'Starting Layer 1 (RSS/APIs) and Layer 2 (AI Search) in parallel...', { index: 1, status: 'in_progress' });
+  console.log('[hybrid] Starting Layer 1 and Layer 2 in parallel...');
 
-  const layer1Articles: RawArticle[] = [];
-  const companiesWithResults = new Set<string>();
+  // Run Layer 1 and Layer 2 concurrently
+  const [layer1Results, layer2Articles] = await Promise.all([
+    // Layer 1: RSS/API fetch
+    (async () => {
+      const layer1Articles: RawArticle[] = [];
 
-  // Fetch Google News for each company
-  let googleNewsCount = 0;
-  for (const company of companies) {
-    const articles = await fetchGoogleNewsRSS(company.name);
-    if (articles.length > 0) {
-      companiesWithResults.add(company.name.toLowerCase());
-      googleNewsCount += articles.length;
-    }
-    layer1Articles.push(...articles);
-  }
-
-  // Fetch Google News for each person
-  for (const person of people) {
-    const articles = await fetchGoogleNewsRSS(`"${person.name}"`);
-    googleNewsCount += articles.length;
-    layer1Articles.push(...articles);
-  }
-
-  await onProgress?.(20, `Fetched ${googleNewsCount} articles from Google News`, { index: 1, status: 'completed', detail: `${googleNewsCount} articles from ${companies.length} companies, ${people.length} people` });
-
-  // Fetch SEC filings for companies with CIK
-  await onProgress?.(22, 'Fetching SEC EDGAR filings...', { index: 2, status: 'in_progress' });
-  let secFilingsCount = 0;
-  const companiesWithCIK = companies.filter(c => c.cik);
-  for (const company of companiesWithCIK) {
-    if (company.cik) {
-      const filings = await fetchSECFilings(company.cik, company.name);
-      if (filings.length > 0) {
-        companiesWithResults.add(company.name.toLowerCase());
-        secFilingsCount += filings.length;
+      // Fetch Google News for each company
+      let googleNewsCount = 0;
+      for (const company of companies) {
+        const articles = await fetchGoogleNewsRSS(company.name);
+        googleNewsCount += articles.length;
+        layer1Articles.push(...articles);
       }
-      layer1Articles.push(...filings);
-    }
-  }
 
-  await onProgress?.(28, `Fetched ${secFilingsCount} SEC filings`, { index: 2, status: 'completed', detail: companiesWithCIK.length > 0 ? `${secFilingsCount} filings from ${companiesWithCIK.length} companies` : 'No companies have CIK configured' });
+      // Fetch Google News for each person
+      for (const person of people) {
+        const articles = await fetchGoogleNewsRSS(`"${person.name}"`);
+        googleNewsCount += articles.length;
+        layer1Articles.push(...articles);
+      }
 
-  // Fetch PE industry feeds and filter for relevant mentions
-  await onProgress?.(30, 'Scanning PE industry feeds...', { index: 3, status: 'in_progress' });
-  const peFeedArticles = await fetchPEFeeds();
-  const relevantPEArticles = filterPEFeedArticles(
-    peFeedArticles,
-    companies.map((c) => c.name),
-    people.map((p) => p.name)
-  );
-  layer1Articles.push(...relevantPEArticles);
+      console.log(`[layer1] Google News: ${googleNewsCount} articles`);
 
-  await onProgress?.(35, `Scanned ${peFeedArticles.length} PE feed articles`, { index: 3, status: 'completed', detail: `${relevantPEArticles.length} relevant from ${peFeedArticles.length} total` });
+      // Fetch SEC filings for companies with CIK
+      let secFilingsCount = 0;
+      const companiesWithCIK = companies.filter(c => c.cik);
+      for (const company of companiesWithCIK) {
+        if (company.cik) {
+          const filings = await fetchSECFilings(company.cik, company.name);
+          secFilingsCount += filings.length;
+          layer1Articles.push(...filings);
+        }
+      }
 
+      console.log(`[layer1] SEC filings: ${secFilingsCount} articles`);
+
+      // Fetch PE industry feeds and filter for relevant mentions
+      const peFeedArticles = await fetchPEFeeds();
+      const relevantPEArticles = filterPEFeedArticles(
+        peFeedArticles,
+        companies.map((c) => c.name),
+        people.map((p) => p.name)
+      );
+      layer1Articles.push(...relevantPEArticles);
+
+      console.log(`[layer1] PE feeds: ${relevantPEArticles.length} relevant articles`);
+
+      return layer1Articles;
+    })(),
+
+    // Layer 2: Claude web search (runs independently for ALL companies/people)
+    fetchLayer2Contextual(
+      companies.map((c) => c.name),
+      people.slice(0, 10).map((p) => p.name) // Top 10 people
+    ),
+  ]);
+
+  const layer1Articles = layer1Results;
   stats.layer1Articles = layer1Articles.length;
+  stats.layer2Articles = layer2Articles.length;
+
   console.log(`[hybrid] Layer 1 complete: ${layer1Articles.length} articles`);
+  console.log(`[hybrid] Layer 2 complete: ${layer2Articles.length} articles`);
 
-  // ═══════════════════════════════════════════════════════════════════
-  // LAYER 2: CONTEXTUAL FETCH (Claude Web Search)
-  // ═══════════════════════════════════════════════════════════════════
-  await onProgress?.(40, 'Starting Layer 2: Claude web search for gap filling...', { index: 4, status: 'in_progress' });
-
-  // Identify coverage gaps
-  const gapCompanies = companies.filter(
-    (c) => !companiesWithResults.has(c.name.toLowerCase())
-  );
-
-  console.log(`[hybrid] Found ${gapCompanies.length} companies with no Layer 1 coverage`);
-
-  let layer2Articles: RawArticle[] = [];
-
-  // Use Claude web search for gap companies and contextual enrichment
-  if (gapCompanies.length > 0 || people.length > 0) {
-    const contextualResults = await fetchLayer2Contextual(
-      gapCompanies.map((c) => c.name),
-      people.slice(0, 5).map((p) => p.name), // Top 5 people
-      topics
-    );
-    layer2Articles = contextualResults;
-    stats.layer2Articles = layer2Articles.length;
-  }
-
-  await onProgress?.(55, `Layer 2 found ${layer2Articles.length} additional articles`, { index: 4, status: 'completed', detail: gapCompanies.length > 0 ? `${layer2Articles.length} articles for ${gapCompanies.length} gap companies` : 'All companies had Layer 1 coverage' });
+  await onProgress?.(20, `Layer 1: ${layer1Articles.length} articles`, { index: 1, status: 'completed', detail: `${layer1Articles.length} from RSS/APIs` });
+  await onProgress?.(25, 'Fetched SEC EDGAR filings', { index: 2, status: 'completed', detail: 'Included in Layer 1' });
+  await onProgress?.(30, 'Scanned PE industry feeds', { index: 3, status: 'completed', detail: 'Included in Layer 1' });
+  await onProgress?.(40, `Layer 2: ${layer2Articles.length} articles`, { index: 4, status: 'completed', detail: `${layer2Articles.length} from AI web search` });
 
   // ═══════════════════════════════════════════════════════════════════
   // COMBINE & DEDUPLICATE (Two-phase: heuristic + LLM)
@@ -207,7 +199,7 @@ export async function fetchNewsHybrid(
 
   // Phase 1: Fast heuristic dedup (URL, fingerprint, similarity)
   const heuristicDeduped = deduplicateArticles(allRawArticles);
-  const recentArticles = filterRecentArticles(heuristicDeduped, 7);
+  const recentArticles = filterRecentArticles(heuristicDeduped, 3); // 72 hours = 3 days
 
   console.log(`[hybrid] After heuristic dedup: ${recentArticles.length} articles`);
 
@@ -230,8 +222,7 @@ export async function fetchNewsHybrid(
     llmDeduped,
     callDiets,
     companies.map((c) => c.name),
-    people.map((p) => p.name),
-    topics
+    people.map((p) => p.name)
   );
 
   stats.afterProcessing = processed.articles.length;
@@ -247,40 +238,47 @@ export async function fetchNewsHybrid(
 }
 
 /**
- * Layer 2: Claude web search for contextual discovery
+ * Layer 2: Claude web search for comprehensive discovery
+ * Searches for news in the last 72 hours for ALL companies and people
  */
 async function fetchLayer2Contextual(
-  gapCompanies: string[],
-  priorityPeople: string[],
-  topics: string[]
+  companies: string[],
+  people: string[]
 ): Promise<RawArticle[]> {
-  if (gapCompanies.length === 0 && priorityPeople.length === 0) {
+  if (companies.length === 0 && people.length === 0) {
     return [];
   }
 
-  const searchPrompt = `Search for recent news (last 7 days) about:
+  const searchPrompt = `You are a news intelligence analyst. Search for recent news (last 72 hours / 3 days only) about these companies and people. This is an INDEPENDENT search to complement RSS feeds - search comprehensively.
 
-${gapCompanies.length > 0 ? `Companies (need coverage gap filling):
-${gapCompanies.map((c) => `- ${c}`).join('\n')}` : ''}
+${companies.length > 0 ? `## Companies to Search
+${companies.map((c) => `- ${c}`).join('\n')}` : ''}
 
-${priorityPeople.length > 0 ? `Key people to track:
-${priorityPeople.map((p) => `- ${p}`).join('\n')}` : ''}
+${people.length > 0 ? `## Key People to Search
+${people.map((p) => `- ${p}`).join('\n')}` : ''}
 
-Focus on these topics: ${topics.length > 0 ? topics.join(', ') : 'M&A, Leadership Changes, Earnings, Strategy'}
-
+## Search Strategy
 For each company/person, search broadly - include:
-- Direct news mentions
-- Parent company news
-- Subsidiary news
-- Industry context affecting them
-- Executive speaking engagements or quotes
+- Direct news mentions and press releases
+- M&A activity, deals, and investments
+- Leadership changes and executive appointments
+- Earnings reports and financial performance
+- Strategic initiatives and partnerships
+- Parent company or subsidiary news
+- Industry developments affecting them
+- Executive speaking engagements, quotes, or interviews
+
+IMPORTANT:
+- Only include articles published within the last 72 hours (3 days)
+- Prioritize high-quality sources (Reuters, WSJ, Bloomberg, etc.)
+- Include actionable business news useful for consultants
 
 Return results as JSON array with this format:
 {
   "results": [
     {
       "headline": "Article headline",
-      "description": "Brief description",
+      "description": "Brief description (2-3 sentences)",
       "sourceUrl": "https://...",
       "sourceName": "Source name",
       "publishedAt": "2026-01-15",
@@ -289,7 +287,7 @@ Return results as JSON array with this format:
   ]
 }
 
-Return maximum 15 results, prioritizing actionable news.`;
+Return maximum 25 results, prioritizing the most actionable and relevant news.`;
 
   try {
     console.log('[layer2] Starting Claude web search...');
@@ -346,13 +344,13 @@ Return maximum 15 results, prioritizing actionable news.`;
 
 /**
  * Process raw articles with LLM for filtering, categorization, and summarization
+ * Focuses on consultant-client engagement usefulness for priority scoring
  */
 async function processArticlesWithLLM(
   rawArticles: RawArticle[],
   callDiets: CallDietInput[],
   companies: string[],
-  people: string[],
-  topics: string[]
+  people: string[]
 ): Promise<FetchResult> {
   if (rawArticles.length === 0) {
     return { articles: [], coverageGaps: [] };
@@ -369,7 +367,7 @@ async function processArticlesWithLLM(
     layer: a.fetchLayer,
   }));
 
-  const prompt = `You are a news intelligence analyst. Process these raw news articles for revenue owners tracking PE and industrial companies.
+  const prompt = `You are a news intelligence analyst helping consultants prepare for client engagements. Process these raw news articles for revenue owners tracking PE and industrial companies.
 
 ## Raw Articles
 ${JSON.stringify(articleSummaries, null, 2)}
@@ -385,20 +383,27 @@ ${callDiets.map((cd) => `- ${cd.revenueOwnerName}: tracks ${cd.companies.map((c)
 
 ## Instructions
 
-1. **Filter out**:
-   - Generic industry commentary with no company-specific angle
-   - Routine announcements (conference attendance, minor hires)
-   - Press releases with no substantive content
-   - Duplicates of the same story
+1. **Filter out** (be lenient - when in doubt, include the article):
+   - Clear duplicates of the same story
+   - Completely generic industry commentary with no company-specific angle
+   - Extremely routine announcements with no substance
 
 2. **For each relevant article**:
    - Match to tracked company/person
    - Assign category: M&A / Deal Activity, Leadership Changes, Earnings & Operational Performance, Strategy, Value Creation / Cost Initiatives, Digital & Technology Modernization, Fundraising / New Funds, Operating Partner Activity, Supply Chain & Logistics, Plant & Footprint Changes
    - Assign priority: high (actionable), medium (notable), low (informational)
-   - Generate 2-3 sentence summary
-   - Generate "Why It Matters" (1-2 sentences on relevance)
+   - Assign priorityScore (1-10): Based on how useful this story would be for a consultant preparing to engage the company or person. Consider:
+     * 9-10: Major deals, significant leadership changes, earnings surprises, strategic pivots
+     * 7-8: Notable operational changes, new initiatives, meaningful partnerships
+     * 5-6: Informative updates, industry context, minor developments
+     * 3-4: Routine news, general mentions
+     * 1-2: Tangentially related, minimal engagement value
+   - Generate shortSummary: 1-2 sentences for card preview
+   - Generate longSummary: 3-5 sentences for detailed view
+   - Generate "Why It Matters": 1-2 sentences explaining relevance for consultant engagement
    - Determine matchType: "exact" if article explicitly names the entity, "contextual" if related indirectly
    - Identify which revenue owner(s) this is relevant to
+   - If multiple articles cover the SAME story, merge them: use the best headline, combine information in summaries, and list all sources
 
 3. **Identify coverage gaps**: Companies with no relevant news found
 
@@ -409,16 +414,22 @@ Return ONLY valid JSON:
     {
       "id": 0,
       "headline": "Original headline",
-      "summary": "2-3 sentence summary",
-      "whyItMatters": "Why this matters",
-      "sourceUrl": "url from input",
-      "sourceName": "source from input",
+      "shortSummary": "1-2 sentence preview",
+      "longSummary": "3-5 sentence detailed summary",
+      "whyItMatters": "Why this matters for client engagement",
+      "sourceUrl": "primary url from input",
+      "sourceName": "primary source from input",
+      "sources": [
+        {"sourceUrl": "url1", "sourceName": "Source 1", "fetchLayer": "layer1_rss"},
+        {"sourceUrl": "url2", "sourceName": "Source 2", "fetchLayer": "layer1_rss"}
+      ],
       "publishedAt": "date from input",
       "company": "matched company or null",
       "person": "matched person or null",
       "category": "topic category",
       "priority": "high|medium|low",
-      "status": "new|update",
+      "priorityScore": 8,
+      "status": "new_article",
       "matchType": "exact|contextual",
       "fetchLayer": "layer from input",
       "revenueOwners": ["Owner Name 1"]
@@ -432,7 +443,7 @@ Return ONLY valid JSON:
   ]
 }
 
-Return maximum 25 most relevant articles, sorted by priority then recency.`;
+Return maximum 30 most relevant articles, sorted by priorityScore (highest first) then recency.`;
 
   try {
     console.log('[process] Sending articles to Claude for processing...');
@@ -452,19 +463,23 @@ Return maximum 25 most relevant articles, sorted by priority then recency.`;
     const textContent = response.content.find((c) => c.type === 'text');
     if (!textContent || textContent.type !== 'text') {
       console.error('[process] No text response');
-      // Fall back to raw articles
+      // Fall back to raw articles with basic formatting
       return {
-        articles: rawArticles.slice(0, 25).map((a) => ({
+        articles: rawArticles.slice(0, 30).map((a) => ({
           headline: a.headline,
+          shortSummary: a.description?.substring(0, 150) || null,
+          longSummary: a.description || null,
           summary: a.description?.substring(0, 200) || null,
           whyItMatters: null,
           sourceUrl: a.sourceUrl,
           sourceName: a.sourceName,
+          sources: [{ sourceUrl: a.sourceUrl, sourceName: a.sourceName, fetchLayer: a.fetchLayer }],
           publishedAt: a.publishedAt.toISOString().split('T')[0],
           company: null,
           person: null,
           category: 'News',
           priority: 'medium' as const,
+          priorityScore: 5,
           status: 'new_article' as const,
           matchType: 'contextual' as const,
           fetchLayer: a.fetchLayer,
@@ -530,15 +545,28 @@ Return maximum 25 most relevant articles, sorted by priority then recency.`;
       }
     }
 
-    // Enrich with original URLs if IDs provided
+    // Enrich with original URLs if IDs provided and ensure all fields exist
     const processedArticles: ProcessedArticle[] = result.articles.map((a: any) => {
       const original = typeof a.id === 'number' ? rawArticles[a.id] : null;
       return {
-        ...a,
+        headline: a.headline || original?.headline || '',
+        shortSummary: a.shortSummary || a.summary?.substring(0, 150) || null,
+        longSummary: a.longSummary || a.summary || null,
+        summary: a.summary || a.longSummary || null,
+        whyItMatters: a.whyItMatters || null,
         sourceUrl: a.sourceUrl || original?.sourceUrl || '',
         sourceName: a.sourceName || original?.sourceName || '',
+        sources: a.sources || [{ sourceUrl: a.sourceUrl || original?.sourceUrl || '', sourceName: a.sourceName || original?.sourceName || '', fetchLayer: a.fetchLayer || original?.fetchLayer || 'layer2_llm' }],
         publishedAt: a.publishedAt || original?.publishedAt?.toISOString().split('T')[0] || '',
+        company: a.company || null,
+        person: a.person || null,
+        category: a.category || 'News',
+        priority: a.priority || 'medium',
+        priorityScore: a.priorityScore || 5,
+        status: a.status || 'new_article',
+        matchType: a.matchType || 'contextual',
         fetchLayer: a.fetchLayer || original?.fetchLayer || 'layer2_llm',
+        revenueOwners: a.revenueOwners || [],
       };
     });
 
@@ -551,17 +579,21 @@ Return maximum 25 most relevant articles, sorted by priority then recency.`;
     // Fall back to raw articles with basic formatting
     console.log('[process] Falling back to raw articles...');
     return {
-      articles: rawArticles.slice(0, 25).map((a) => ({
+      articles: rawArticles.slice(0, 30).map((a) => ({
         headline: a.headline,
+        shortSummary: a.description?.substring(0, 150) || null,
+        longSummary: a.description || null,
         summary: a.description?.substring(0, 200) || null,
         whyItMatters: null,
         sourceUrl: a.sourceUrl,
         sourceName: a.sourceName,
+        sources: [{ sourceUrl: a.sourceUrl, sourceName: a.sourceName, fetchLayer: a.fetchLayer }],
         publishedAt: a.publishedAt.toISOString().split('T')[0],
         company: null,
         person: null,
         category: 'News',
         priority: 'medium' as const,
+        priorityScore: 5,
         status: 'new_article' as const,
         matchType: 'contextual' as const,
         fetchLayer: a.fetchLayer,
@@ -693,32 +725,32 @@ Return ONLY valid JSON:
 export { fetchNewsHybrid as fetchNewsForCallDiets };
 
 /**
- * Ad-hoc search for specific company/person/topics
+ * Ad-hoc search for specific company/person
+ * Searches within the last 72 hours
  */
 export async function searchNews(params: {
   company?: string;
   person?: string;
-  topics?: string[];
+  topics?: string[]; // Kept for compatibility but not used
 }): Promise<FetchResult> {
-  const { company, person, topics = [] } = params;
+  const { company, person } = params;
 
   if (!company && !person) {
     return { articles: [], coverageGaps: [] };
   }
 
-  const searchPrompt = `You are a news intelligence analyst. Search for recent news (last 7 days) about:
+  const searchPrompt = `You are a news intelligence analyst helping consultants prepare for client engagements. Search for recent news (last 72 hours / 3 days only) about:
 
 ${company ? `Company: ${company}` : ''}
 ${person ? `Person: ${person}` : ''}
-${topics.length > 0 ? `Topics of interest: ${topics.join(', ')}` : ''}
 
 ## Instructions
-1. Search for relevant news articles
-2. Filter out routine/generic content
+1. Search for relevant news articles from the last 72 hours only
+2. Filter out routine/generic content (be lenient - include when in doubt)
 3. Categorize by topic
-4. Prioritize: High (actionable), Medium (notable), Low (informational)
-5. Summarize each article (2-3 sentences)
-6. Explain why it matters (1-2 sentences)
+4. Assign priorityScore (1-10) based on usefulness for consultant-client engagement
+5. Generate both short (1-2 sentences) and long (3-5 sentences) summaries
+6. Explain why it matters for client engagement
 
 ## Output Format
 Return ONLY valid JSON (no markdown, no backticks):
@@ -726,16 +758,19 @@ Return ONLY valid JSON (no markdown, no backticks):
   "articles": [
     {
       "headline": "Article headline",
-      "summary": "2-3 sentence summary",
-      "whyItMatters": "Why this matters",
+      "shortSummary": "1-2 sentence preview",
+      "longSummary": "3-5 sentence detailed summary",
+      "whyItMatters": "Why this matters for client engagement",
       "sourceUrl": "https://...",
       "sourceName": "Source name",
+      "sources": [{"sourceUrl": "https://...", "sourceName": "Source name", "fetchLayer": "layer2_llm"}],
       "publishedAt": "2026-01-15",
       "company": "${company || 'null'}",
       "person": "${person || 'null'}",
       "category": "Topic category",
       "priority": "high|medium|low",
-      "status": "new",
+      "priorityScore": 8,
+      "status": "new_article",
       "matchType": "exact",
       "fetchLayer": "layer2_llm",
       "revenueOwners": []
@@ -744,7 +779,7 @@ Return ONLY valid JSON (no markdown, no backticks):
   "coverageGaps": []
 }
 
-Return maximum 10 most relevant articles.`;
+Return maximum 10 most relevant articles, sorted by priorityScore.`;
 
   console.log(`[search] Ad-hoc search for company="${company}", person="${person}"`);
 

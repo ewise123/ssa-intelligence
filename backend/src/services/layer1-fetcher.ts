@@ -89,13 +89,13 @@ export async function fetchSECFilings(cik: string, companyName: string): Promise
     const accessions = recentFilings.accessionNumber || [];
     const descriptions = recentFilings.primaryDocDescription || [];
 
-    // Get filings from the last 7 days
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    // Get filings from the last 3 days (72 hours)
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
     for (let i = 0; i < Math.min(20, forms.length); i++) {
       const filingDate = new Date(dates[i]);
-      if (filingDate < sevenDaysAgo) continue;
+      if (filingDate < threeDaysAgo) continue;
 
       // Only include relevant filing types
       if (['8-K', '10-K', '10-Q', '13F-HR', '4', 'S-1', 'S-4'].includes(forms[i])) {

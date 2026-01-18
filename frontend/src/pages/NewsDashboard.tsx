@@ -1,9 +1,9 @@
 /**
  * News Dashboard Page
- * Display news articles with filtering, refresh, and search capabilities
+ * Carousel-based layout with Top Stories + per-revenue-owner carousels
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   RefreshCw,
   Filter,
@@ -14,14 +14,18 @@ import {
   User,
   Tag,
   AlertCircle,
-  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   X,
   Loader2,
   Newspaper,
-  Download,
-  FileText,
   CheckCircle2,
   Circle,
+  Send,
+  Sparkles,
+  Link2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import {
   useNewsArticles,
@@ -32,6 +36,7 @@ import {
   useNewsSearch,
   NewsArticle,
   ArticleFilters,
+  toggleArticleSent,
 } from '../services/newsManager';
 
 interface NewsDashboardProps {
@@ -48,36 +53,46 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
   const [searchCompany, setSearchCompany] = useState('');
   const [searchPerson, setSearchPerson] = useState('');
 
-  // Selected article for detail view
+  // Selected article for detail modal
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
 
-  // Export menu state
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [exportOwnerId, setExportOwnerId] = useState<string>('');
+
+  // Progress popup state
+  const [showProgressPopup, setShowProgressPopup] = useState(false);
 
   // Data hooks
   const { articles, total, loading: articlesLoading, fetchArticles } = useNewsArticles(filters);
   const { owners } = useRevenueOwners();
   const { tags } = useNewsTags();
   const { companies } = useTrackedCompanies();
-  const { status, refreshing, refresh } = useNewsRefresh();
+  const { status, refreshing, refresh, fetchStatus } = useNewsRefresh();
   const { results: searchResults, searching, search, clearResults } = useNewsSearch();
+
+  // Show progress popup when refresh starts
+  useEffect(() => {
+    if (refreshing) {
+      setShowProgressPopup(true);
+    }
+  }, [refreshing]);
+
+  // Poll status while refreshing
+  useEffect(() => {
+    if (!refreshing) return;
+    const interval = setInterval(() => {
+      fetchStatus();
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [refreshing, fetchStatus]);
 
   const handleRefresh = async () => {
     try {
+      setShowProgressPopup(true);
       const result = await refresh();
       await fetchArticles();
-
-      // Show feedback to user
-      if (result.articlesFound > 0) {
-        alert(`Found ${result.articlesFound} new article${result.articlesFound > 1 ? 's' : ''}!`);
-      } else if (result.coverageGaps?.length > 0) {
-        alert(`No new articles found. Coverage gaps: ${result.coverageGaps.map(g => g.company).join(', ')}`);
-      } else {
-        alert('Refresh complete. No new articles found.');
-      }
+      // Keep popup open for a moment to show completion
+      setTimeout(() => setShowProgressPopup(false), 2000);
     } catch (err) {
-      alert(`Refresh failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      // Keep popup open to show error
     }
   };
 
@@ -99,34 +114,59 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
 
   const hasActiveFilters = Object.values(filters).some(Boolean);
 
-  const handleExport = (format: 'pdf' | 'markdown') => {
-    if (!exportOwnerId) {
-      alert('Please select a Revenue Owner to export');
-      return;
+  // Handle article sent status toggle
+  const handleToggleSent = async (articleId: string, currentStatus: boolean) => {
+    try {
+      await toggleArticleSent(articleId, !currentStatus);
+      // Refresh articles to get updated status
+      await fetchArticles();
+      // Update selected article if it's the one being toggled
+      if (selectedArticle && selectedArticle.id === articleId) {
+        setSelectedArticle({ ...selectedArticle, isSent: !currentStatus });
+      }
+    } catch (err) {
+      console.error('Failed to toggle sent status:', err);
+    }
+  };
+
+  // Group articles for carousels (exclude low priority)
+  const carouselData = useMemo(() => {
+    // Filter out low priority articles - only show high and medium
+    const visibleArticles = articles.filter(a => a.priority === 'high' || a.priority === 'medium');
+
+    // Sort by priority (high first) then by priorityScore
+    const sortByPriority = (a: NewsArticle, b: NewsArticle) => {
+      const priorityOrder = { high: 0, medium: 1 };
+      const aPriority = priorityOrder[a.priority as 'high' | 'medium'] ?? 2;
+      const bPriority = priorityOrder[b.priority as 'high' | 'medium'] ?? 2;
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      return (b.priorityScore || 0) - (a.priorityScore || 0);
+    };
+
+    // Top Stories: High priority articles sorted by priorityScore, max 10
+    const topStories = visibleArticles
+      .filter(a => a.priority === 'high')
+      .sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0))
+      .slice(0, 10);
+
+    // Group by revenue owner for individual carousels
+    const ownerArticles: Record<string, NewsArticle[]> = {};
+
+    // Sort owners alphabetically
+    const sortedOwners = [...owners].sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const owner of sortedOwners) {
+      const ownerArts = visibleArticles
+        .filter(a => a.revenueOwners.some(ro => ro.id === owner.id))
+        .sort(sortByPriority);
+
+      if (ownerArts.length > 0) {
+        ownerArticles[owner.id] = ownerArts;
+      }
     }
 
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-    const url = `${baseUrl}/api/news/export/${format}/${exportOwnerId}`;
-
-    // Open in new tab to trigger download
-    window.open(url, '_blank');
-    setShowExportMenu(false);
-  };
-
-  // Group articles by priority
-  const groupedArticles = useMemo(() => {
-    const high = articles.filter(a => a.priority === 'high');
-    const medium = articles.filter(a => a.priority === 'medium');
-    const low = articles.filter(a => a.priority === 'low');
-    const other = articles.filter(a => !a.priority);
-    return { high, medium, low, other };
-  }, [articles]);
-
-  const priorityColors = {
-    high: 'bg-rose-100 text-rose-700 border-rose-200',
-    medium: 'bg-amber-100 text-amber-700 border-amber-200',
-    low: 'bg-slate-100 text-slate-600 border-slate-200',
-  };
+    return { topStories, ownerArticles, sortedOwners };
+  }, [articles, owners]);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Unknown date';
@@ -174,59 +214,6 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
             <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
             <span className="hidden sm:inline">{refreshing ? 'Refreshing...' : 'Refresh News'}</span>
           </button>
-          <div className="relative">
-            <button
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
-                showExportMenu ? 'bg-brand-50 border-brand-200 text-brand-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Download size={18} />
-              <span className="hidden sm:inline">Export</span>
-              <ChevronDown size={14} className={showExportMenu ? 'rotate-180' : ''} />
-            </button>
-            {showExportMenu && (
-              <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-lg z-50 p-4">
-                <div className="mb-3">
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Revenue Owner</label>
-                  <select
-                    value={exportOwnerId}
-                    onChange={(e) => setExportOwnerId(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-500/20"
-                  >
-                    <option value="">Select owner...</option>
-                    {owners.map((owner) => (
-                      <option key={owner.id} value={owner.id}>{owner.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => handleExport('pdf')}
-                    disabled={!exportOwnerId}
-                    className="w-full flex items-center gap-3 px-4 py-2 text-left rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <FileText size={18} className="text-rose-500" />
-                    <div>
-                      <div className="font-medium text-slate-700">Export as PDF</div>
-                      <div className="text-xs text-slate-400">Print-ready document</div>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => handleExport('markdown')}
-                    disabled={!exportOwnerId}
-                    className="w-full flex items-center gap-3 px-4 py-2 text-left rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <FileText size={18} className="text-blue-500" />
-                    <div>
-                      <div className="font-medium text-slate-700">Export as Markdown</div>
-                      <div className="text-xs text-slate-400">Copy-paste friendly</div>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -299,7 +286,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">Revenue Owner</label>
               <select
@@ -343,13 +330,24 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
               <label className="block text-sm font-medium text-slate-600 mb-1">Priority</label>
               <select
                 value={filters.priority || ''}
-                onChange={(e) => setFilters({ ...filters, priority: (e.target.value as any) || undefined })}
+                onChange={(e) => setFilters({ ...filters, priority: (e.target.value as 'high' | 'medium') || undefined })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-500/20"
               >
                 <option value="">All priorities</option>
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
-                <option value="low">Low</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Sent Status</label>
+              <select
+                value={filters.isSent === undefined ? '' : filters.isSent ? 'true' : 'false'}
+                onChange={(e) => setFilters({ ...filters, isSent: e.target.value === '' ? undefined : e.target.value === 'true' })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-500/20"
+              >
+                <option value="">All</option>
+                <option value="true">Sent</option>
+                <option value="false">Not Sent</option>
               </select>
             </div>
           </div>
@@ -367,62 +365,13 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Refresh Progress Panel */}
-      {refreshing && status.steps && status.steps.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Loader2 className="animate-spin text-brand-600" size={20} />
-              <div>
-                <h3 className="font-semibold text-slate-800">Refreshing News</h3>
-                <p className="text-sm text-slate-500">{status.progressMessage}</p>
-              </div>
-            </div>
-            <div className="text-sm font-medium text-brand-600">{status.progress}%</div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="w-full bg-slate-100 rounded-full h-2 mb-4">
-            <div
-              className="bg-brand-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${status.progress}%` }}
-            />
-          </div>
-
-          {/* Steps */}
-          <div className="space-y-2">
-            {status.steps.map((step, index) => (
-              <div
-                key={index}
-                className={`flex items-start gap-3 p-2 rounded-lg ${
-                  step.status === 'in_progress' ? 'bg-brand-50' : ''
-                }`}
-              >
-                {step.status === 'completed' ? (
-                  <CheckCircle2 size={18} className="text-emerald-500 mt-0.5 flex-shrink-0" />
-                ) : step.status === 'in_progress' ? (
-                  <Loader2 size={18} className="text-brand-600 animate-spin mt-0.5 flex-shrink-0" />
-                ) : step.status === 'error' ? (
-                  <AlertCircle size={18} className="text-rose-500 mt-0.5 flex-shrink-0" />
-                ) : (
-                  <Circle size={18} className="text-slate-300 mt-0.5 flex-shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className={`text-sm ${
-                    step.status === 'in_progress' ? 'font-medium text-brand-700' :
-                    step.status === 'completed' ? 'text-slate-700' :
-                    'text-slate-400'
-                  }`}>
-                    {step.step}
-                  </div>
-                  {step.detail && (
-                    <div className="text-xs text-slate-500 mt-0.5">{step.detail}</div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Progress Popup */}
+      {showProgressPopup && (
+        <ProgressPopup
+          status={status}
+          refreshing={refreshing}
+          onClose={() => setShowProgressPopup(false)}
+        />
       )}
 
       {/* Empty State */}
@@ -461,87 +410,38 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Articles by Priority */}
+      {/* Carousels */}
       {!articlesLoading && articles.length > 0 && (
         <div className="space-y-8">
-          {/* High Priority */}
-          {groupedArticles.high.length > 0 && (
-            <div>
-              <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800 mb-4">
-                <span className="w-3 h-3 bg-rose-500 rounded-full"></span>
-                High Priority
-                <span className="text-sm font-normal text-slate-400">({groupedArticles.high.length})</span>
-              </h3>
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                {groupedArticles.high.map((article) => (
-                  <ArticleCard
-                    key={article.id}
-                    article={article}
-                    onClick={() => setSelectedArticle(article)}
-                  />
-                ))}
-              </div>
-            </div>
+          {/* Top Stories Carousel */}
+          {carouselData.topStories.length > 0 && (
+            <NewsCarousel
+              title="Top Stories"
+              icon={<Sparkles size={20} className="text-amber-500" />}
+              articles={carouselData.topStories}
+              onArticleClick={setSelectedArticle}
+              accentColor="amber"
+              showRevenueOwner={true}
+              showCount={false}
+            />
           )}
 
-          {/* Medium Priority */}
-          {groupedArticles.medium.length > 0 && (
-            <div>
-              <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800 mb-4">
-                <span className="w-3 h-3 bg-amber-500 rounded-full"></span>
-                Medium Priority
-                <span className="text-sm font-normal text-slate-400">({groupedArticles.medium.length})</span>
-              </h3>
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                {groupedArticles.medium.map((article) => (
-                  <ArticleCard
-                    key={article.id}
-                    article={article}
-                    onClick={() => setSelectedArticle(article)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Revenue Owner Carousels */}
+          {carouselData.sortedOwners.map((owner) => {
+            const ownerArts = carouselData.ownerArticles[owner.id];
+            if (!ownerArts || ownerArts.length === 0) return null;
 
-          {/* Low Priority */}
-          {groupedArticles.low.length > 0 && (
-            <div>
-              <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800 mb-4">
-                <span className="w-3 h-3 bg-slate-400 rounded-full"></span>
-                Low Priority
-                <span className="text-sm font-normal text-slate-400">({groupedArticles.low.length})</span>
-              </h3>
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                {groupedArticles.low.map((article) => (
-                  <ArticleCard
-                    key={article.id}
-                    article={article}
-                    onClick={() => setSelectedArticle(article)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Other (No Priority) */}
-          {groupedArticles.other.length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">
-                Other
-                <span className="text-sm font-normal text-slate-400 ml-2">({groupedArticles.other.length})</span>
-              </h3>
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                {groupedArticles.other.map((article) => (
-                  <ArticleCard
-                    key={article.id}
-                    article={article}
-                    onClick={() => setSelectedArticle(article)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+            return (
+              <NewsCarousel
+                key={owner.id}
+                title={owner.name}
+                icon={<User size={20} className="text-brand-600" />}
+                articles={ownerArts}
+                onArticleClick={setSelectedArticle}
+                accentColor="brand"
+              />
+            );
+          })}
         </div>
       )}
 
@@ -550,61 +450,295 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
         <ArticleDetailModal
           article={selectedArticle}
           onClose={() => setSelectedArticle(null)}
+          onToggleSent={handleToggleSent}
         />
       )}
     </div>
   );
 };
 
-// Article Card Component
-const ArticleCard: React.FC<{ article: NewsArticle; onClick: () => void }> = ({ article, onClick }) => {
-  const priorityColors: Record<string, string> = {
-    high: 'border-l-rose-500',
-    medium: 'border-l-amber-500',
-    low: 'border-l-slate-400',
+// Progress Popup Component
+const ProgressPopup: React.FC<{
+  status: any;
+  refreshing: boolean;
+  onClose: () => void;
+}> = ({ status, refreshing, onClose }) => {
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            {refreshing ? (
+              <Loader2 className="animate-spin text-brand-600" size={24} />
+            ) : status.lastError ? (
+              <AlertCircle className="text-rose-500" size={24} />
+            ) : (
+              <CheckCircle2 className="text-emerald-500" size={24} />
+            )}
+            <div>
+              <h3 className="font-semibold text-slate-800">
+                {refreshing ? 'Refreshing News' : status.lastError ? 'Refresh Failed' : 'Refresh Complete'}
+              </h3>
+              <p className="text-sm text-slate-500">{status.progressMessage}</p>
+            </div>
+          </div>
+          {!refreshing && (
+            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600">
+              <X size={20} />
+            </button>
+          )}
+        </div>
+
+        {/* Progress Bar */}
+        <div className="w-full bg-slate-100 rounded-full h-2 mb-4">
+          <div
+            className={`h-2 rounded-full transition-all duration-300 ${
+              status.lastError ? 'bg-rose-500' : 'bg-brand-600'
+            }`}
+            style={{ width: `${status.progress}%` }}
+          />
+        </div>
+
+        {/* Steps */}
+        {status.steps && status.steps.length > 0 && (
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {status.steps.map((step: any, index: number) => (
+              <div
+                key={index}
+                className={`flex items-start gap-3 p-2 rounded-lg ${
+                  step.status === 'in_progress' ? 'bg-brand-50' : ''
+                }`}
+              >
+                {step.status === 'completed' ? (
+                  <CheckCircle2 size={18} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                ) : step.status === 'in_progress' ? (
+                  <Loader2 size={18} className="text-brand-600 animate-spin mt-0.5 flex-shrink-0" />
+                ) : step.status === 'error' ? (
+                  <AlertCircle size={18} className="text-rose-500 mt-0.5 flex-shrink-0" />
+                ) : (
+                  <Circle size={18} className="text-slate-300 mt-0.5 flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className={`text-sm ${
+                    step.status === 'in_progress' ? 'font-medium text-brand-700' :
+                    step.status === 'completed' ? 'text-slate-700' :
+                    'text-slate-400'
+                  }`}>
+                    {step.step}
+                  </div>
+                  {step.detail && (
+                    <div className="text-xs text-slate-500 mt-0.5">{step.detail}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Stats */}
+        {!refreshing && status.stats && (
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-brand-600">{status.stats.layer1Articles}</div>
+                <div className="text-xs text-slate-500">Layer 1 (RSS/API)</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-violet-600">{status.stats.layer2Articles}</div>
+                <div className="text-xs text-slate-500">Layer 2 (AI)</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-emerald-600">{status.stats.afterProcessing}</div>
+                <div className="text-xs text-slate-500">Final Articles</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {status.lastError && (
+          <div className="mt-4 p-3 bg-rose-50 border border-rose-100 rounded-lg">
+            <p className="text-sm text-rose-700">{status.lastError}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// News Carousel Component
+const NewsCarousel: React.FC<{
+  title: string;
+  icon: React.ReactNode;
+  articles: NewsArticle[];
+  onArticleClick: (article: NewsArticle) => void;
+  accentColor: 'amber' | 'brand';
+  showRevenueOwner?: boolean;
+  showCount?: boolean;
+}> = ({ title, icon, articles, onArticleClick, accentColor, showRevenueOwner = false, showCount = true }) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkScrollButtons = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    setCanScrollLeft(container.scrollLeft > 0);
+    setCanScrollRight(container.scrollLeft < container.scrollWidth - container.clientWidth - 10);
   };
+
+  useEffect(() => {
+    checkScrollButtons();
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', checkScrollButtons);
+      return () => container.removeEventListener('scroll', checkScrollButtons);
+    }
+  }, [articles]);
+
+  const scroll = (direction: 'left' | 'right') => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const scrollAmount = 320; // Card width + gap
+    container.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    });
+  };
+
+  return (
+    <div className="relative">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
+          {showCount && <span className="text-sm text-slate-400">({articles.length})</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => scroll('left')}
+            disabled={!canScrollLeft}
+            className="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            onClick={() => scroll('right')}
+            disabled={!canScrollRight}
+            className="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* Cards Container */}
+      <div
+        ref={scrollContainerRef}
+        className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        {articles.map((article) => (
+          <NewsCard
+            key={article.id}
+            article={article}
+            onClick={() => onArticleClick(article)}
+            accentColor={accentColor}
+            showRevenueOwner={showRevenueOwner}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// News Card Component
+const NewsCard: React.FC<{
+  article: NewsArticle;
+  onClick: () => void;
+  accentColor: 'amber' | 'brand';
+  showRevenueOwner?: boolean;
+}> = ({ article, onClick, accentColor, showRevenueOwner = false }) => {
+  const priorityColors: Record<string, string> = {
+    high: 'bg-rose-500',
+    medium: 'bg-amber-500',
+    low: 'bg-slate-400',
+  };
+
+  const accentBorder = accentColor === 'amber' ? 'hover:border-amber-300' : 'hover:border-brand-300';
 
   return (
     <div
       onClick={onClick}
-      className={`bg-white border border-slate-200 rounded-xl p-4 cursor-pointer hover:shadow-md transition-shadow border-l-4 ${
-        priorityColors[article.priority || ''] || 'border-l-slate-200'
-      }`}
+      className={`flex-shrink-0 w-72 bg-white border border-slate-200 rounded-xl p-4 cursor-pointer hover:shadow-lg transition-all ${accentBorder}`}
     >
+      {/* Header with priority indicator and sent status */}
       <div className="flex items-start justify-between gap-2 mb-2">
-        <h4 className="font-semibold text-slate-800 line-clamp-2">{article.headline}</h4>
+        <div className="flex items-center gap-2">
+          {article.priority && (
+            <span className={`w-2 h-2 rounded-full ${priorityColors[article.priority]}`} />
+          )}
+          {article.isSent && (
+            <span className="flex items-center gap-1 text-xs text-emerald-600">
+              <Send size={10} />
+              Sent
+            </span>
+          )}
+        </div>
+        {article.sources && article.sources.length > 1 && (
+          <span className="flex items-center gap-1 text-xs text-slate-400">
+            <Link2 size={10} />
+            {article.sources.length} sources
+          </span>
+        )}
       </div>
 
-      {article.summary && (
-        <p className="text-sm text-slate-600 line-clamp-2 mb-3">{article.summary}</p>
+      {/* Headline */}
+      <h4 className="font-semibold text-slate-800 line-clamp-2 mb-2">{article.headline}</h4>
+
+      {/* Short Summary */}
+      {(article.shortSummary || article.summary) && (
+        <p className="text-sm text-slate-600 line-clamp-2 mb-3">
+          {article.shortSummary || article.summary}
+        </p>
       )}
 
-      <div className="flex flex-wrap gap-2 mb-3">
-        {article.matchType && (
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-            article.matchType === 'exact'
-              ? 'bg-indigo-100 text-indigo-700'
-              : 'bg-violet-100 text-violet-700'
-          }`}>
-            {article.matchType.toUpperCase()}
-          </span>
+      {/* Tags */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {showRevenueOwner && article.revenueOwners && article.revenueOwners.length > 0 && (
+          article.revenueOwners.map((owner) => (
+            <span key={owner.id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-100 text-violet-700 rounded text-xs font-medium">
+              <User size={10} />
+              {owner.name}
+            </span>
+          ))
         )}
         {article.company && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">
-            <Building2 size={12} />
+            <Building2 size={10} />
             {article.company.name}
+          </span>
+        )}
+        {article.person && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs">
+            <User size={10} />
+            {article.person.name}
           </span>
         )}
         {article.tag && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-xs">
-            <Tag size={12} />
+            <Tag size={10} />
             {article.tag.name}
           </span>
         )}
       </div>
 
+      {/* Footer */}
       <div className="flex items-center justify-between text-xs text-slate-400">
-        <span>{article.sourceName || 'Unknown source'}</span>
+        <span className="truncate max-w-[120px]">{article.sourceName || 'Unknown'}</span>
         <span>{article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : ''}</span>
       </div>
     </div>
@@ -612,7 +746,23 @@ const ArticleCard: React.FC<{ article: NewsArticle; onClick: () => void }> = ({ 
 };
 
 // Article Detail Modal
-const ArticleDetailModal: React.FC<{ article: NewsArticle; onClose: () => void }> = ({ article, onClose }) => {
+const ArticleDetailModal: React.FC<{
+  article: NewsArticle;
+  onClose: () => void;
+  onToggleSent: (articleId: string, currentStatus: boolean) => void;
+}> = ({ article, onClose, onToggleSent }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyToClipboard = () => {
+    const summary = article.longSummary || article.shortSummary || article.summary || '';
+    const text = `${article.headline}\n\n${summary}\n\n${article.sourceUrl}`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-start justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8">
@@ -624,7 +774,7 @@ const ArticleDetailModal: React.FC<{ article: NewsArticle; onClose: () => void }
               <span>{article.sourceName}</span>
               {article.publishedAt && (
                 <>
-                  <span>•</span>
+                  <span>-</span>
                   <span>{new Date(article.publishedAt).toLocaleDateString()}</span>
                 </>
               )}
@@ -637,7 +787,7 @@ const ArticleDetailModal: React.FC<{ article: NewsArticle; onClose: () => void }
 
         {/* Body */}
         <div className="p-6 space-y-4">
-          {/* Tags */}
+          {/* Tags Row */}
           <div className="flex flex-wrap gap-2">
             {article.priority && (
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -648,32 +798,33 @@ const ArticleDetailModal: React.FC<{ article: NewsArticle; onClose: () => void }
                 {article.priority.charAt(0).toUpperCase() + article.priority.slice(1)} Priority
               </span>
             )}
-            {article.matchType && (
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                article.matchType === 'exact'
-                  ? 'bg-indigo-100 text-indigo-700'
-                  : 'bg-violet-100 text-violet-700'
-              }`}>
-                {article.matchType.toUpperCase()} Match
-              </span>
-            )}
             {article.company && (
-              <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm">
+              <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm flex items-center gap-1">
+                <Building2 size={14} />
                 {article.company.name}
               </span>
             )}
+            {article.person && (
+              <span className="px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-sm flex items-center gap-1">
+                <User size={14} />
+                {article.person.name}
+              </span>
+            )}
             {article.tag && (
-              <span className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-sm">
+              <span className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-sm flex items-center gap-1">
+                <Tag size={14} />
                 {article.tag.name}
               </span>
             )}
           </div>
 
-          {/* Summary */}
-          {article.summary && (
+          {/* Long Summary (or fall back to short summary or legacy summary) */}
+          {(article.longSummary || article.shortSummary || article.summary) && (
             <div>
               <h3 className="font-semibold text-slate-800 mb-2">Summary</h3>
-              <p className="text-slate-600">{article.summary}</p>
+              <p className="text-slate-600">
+                {article.longSummary || article.shortSummary || article.summary}
+              </p>
             </div>
           )}
 
@@ -699,18 +850,67 @@ const ArticleDetailModal: React.FC<{ article: NewsArticle; onClose: () => void }
             </div>
           )}
 
-          {/* Source Link */}
-          {article.sourceUrl && (
-            <a
-              href={article.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-brand-600 hover:text-brand-700 font-medium"
-            >
-              Read Full Article
-              <ExternalLink size={16} />
-            </a>
+          {/* Multiple Sources */}
+          {article.sources && article.sources.length > 0 ? (
+            <div>
+              <h3 className="font-semibold text-slate-800 mb-2">Sources ({article.sources.length})</h3>
+              <div className="space-y-2">
+                {article.sources.map((source, idx) => (
+                  <a
+                    key={idx}
+                    href={source.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Link2 size={16} className="text-slate-400" />
+                      <span className="text-slate-700">{source.sourceName}</span>
+                    </div>
+                    <ExternalLink size={14} className="text-slate-400" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : (
+            article.sourceUrl && (
+              <a
+                href={article.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-brand-600 hover:text-brand-700 font-medium"
+              >
+                Read Full Article
+                <ExternalLink size={16} />
+              </a>
+            )
           )}
+        </div>
+
+        {/* Footer with Copy and Sent Status */}
+        <div className="flex items-center justify-between p-6 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+          <button
+            onClick={handleCopyToClipboard}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              copied
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            {copied ? <Check size={16} /> : <Copy size={16} />}
+            {copied ? 'Copied!' : 'Copy for Email'}
+          </button>
+          <button
+            onClick={() => onToggleSent(article.id, article.isSent)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              article.isSent
+                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+            }`}
+          >
+            <Send size={16} />
+            {article.isSent ? 'Sent' : 'Not Sent'}
+          </button>
         </div>
       </div>
     </div>

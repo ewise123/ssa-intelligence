@@ -29,6 +29,9 @@ artifacts/
 Thumbs.db
 .idea/
 .vscode/
+
+# Nested Obsidian vault
+ssa-intelligence/
 ~$Mel's_Workflow_Inventory Copy.xlsx
 Mel's_Workflow_Inventory Copy.xlsx
 docs/PLAN-RESEARCH-BRIEF-GENERATION.md
