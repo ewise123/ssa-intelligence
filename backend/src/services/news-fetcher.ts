@@ -117,7 +117,9 @@ export async function fetchNewsHybrid(
   // ═══════════════════════════════════════════════════════════════════
   // LAYER 1 & LAYER 2: RUN IN PARALLEL
   // ═══════════════════════════════════════════════════════════════════
-  await onProgress?.(10, 'Starting Layer 1 (RSS/APIs) and Layer 2 (AI Search) in parallel...', { index: 1, status: 'in_progress' });
+  // Mark both layers as in_progress since they run simultaneously
+  await onProgress?.(10, 'Starting Layer 1 and Layer 2 in parallel...', { index: 1, status: 'in_progress' });
+  await onProgress?.(10, 'Starting Layer 1 and Layer 2 in parallel...', { index: 2, status: 'in_progress' });
   console.log('[hybrid] Starting Layer 1 and Layer 2 in parallel...');
 
   // Run Layer 1 and Layer 2 concurrently
@@ -184,15 +186,13 @@ export async function fetchNewsHybrid(
   console.log(`[hybrid] Layer 1 complete: ${layer1Articles.length} articles`);
   console.log(`[hybrid] Layer 2 complete: ${layer2Articles.length} articles`);
 
-  await onProgress?.(20, `Layer 1: ${layer1Articles.length} articles`, { index: 1, status: 'completed', detail: `${layer1Articles.length} from RSS/APIs` });
-  await onProgress?.(25, 'Fetched SEC EDGAR filings', { index: 2, status: 'completed', detail: 'Included in Layer 1' });
-  await onProgress?.(30, 'Scanned PE industry feeds', { index: 3, status: 'completed', detail: 'Included in Layer 1' });
-  await onProgress?.(40, `Layer 2: ${layer2Articles.length} articles`, { index: 4, status: 'completed', detail: `${layer2Articles.length} from AI web search` });
+  await onProgress?.(30, `Layer 1: ${layer1Articles.length} articles`, { index: 1, status: 'completed', detail: `${layer1Articles.length} from Google News, SEC, PE feeds` });
+  await onProgress?.(40, `Layer 2: ${layer2Articles.length} articles`, { index: 2, status: 'completed', detail: `${layer2Articles.length} from AI web search` });
 
   // ═══════════════════════════════════════════════════════════════════
   // COMBINE & DEDUPLICATE (Two-phase: heuristic + LLM)
   // ═══════════════════════════════════════════════════════════════════
-  await onProgress?.(58, 'Phase 1: Heuristic deduplication...', { index: 5, status: 'in_progress' });
+  await onProgress?.(45, 'Combining and deduplicating articles...', { index: 3, status: 'in_progress' });
 
   const allRawArticles = [...layer1Articles, ...layer2Articles];
   stats.totalRaw = allRawArticles.length;
@@ -203,7 +203,7 @@ export async function fetchNewsHybrid(
 
   console.log(`[hybrid] After heuristic dedup: ${recentArticles.length} articles`);
 
-  await onProgress?.(62, `Heuristic dedup: ${allRawArticles.length} → ${recentArticles.length}`, { index: 5, status: 'in_progress', detail: 'Now running LLM deduplication...' });
+  await onProgress?.(55, `Heuristic dedup: ${allRawArticles.length} → ${recentArticles.length}`, { index: 3, status: 'in_progress', detail: 'Running LLM deduplication...' });
 
   // Phase 2: LLM-based semantic deduplication (pick best source per story)
   const llmDeduped = await deduplicateWithLLM(recentArticles, onProgress);
@@ -211,12 +211,12 @@ export async function fetchNewsHybrid(
 
   console.log(`[hybrid] After LLM dedup: ${llmDeduped.length} articles`);
 
-  await onProgress?.(68, `Deduplicated to ${llmDeduped.length} unique articles`, { index: 5, status: 'completed', detail: `${allRawArticles.length} raw → ${recentArticles.length} (heuristic) → ${llmDeduped.length} (LLM)` });
+  await onProgress?.(65, `Deduplicated to ${llmDeduped.length} unique articles`, { index: 3, status: 'completed', detail: `${allRawArticles.length} raw → ${recentArticles.length} → ${llmDeduped.length} unique` });
 
   // ═══════════════════════════════════════════════════════════════════
   // PROCESS WITH LLM
   // ═══════════════════════════════════════════════════════════════════
-  await onProgress?.(70, 'Processing articles with Claude AI...', { index: 6, status: 'in_progress' });
+  await onProgress?.(70, 'Processing articles with Claude AI...', { index: 4, status: 'in_progress' });
 
   const processed = await processArticlesWithLLM(
     llmDeduped,
@@ -227,7 +227,7 @@ export async function fetchNewsHybrid(
 
   stats.afterProcessing = processed.articles.length;
 
-  await onProgress?.(90, `Processed ${processed.articles.length} relevant articles`, { index: 6, status: 'completed', detail: `${processed.articles.length} categorized, ${processed.coverageGaps.length} gaps identified` });
+  await onProgress?.(90, `Processed ${processed.articles.length} relevant articles`, { index: 4, status: 'completed', detail: `${processed.articles.length} categorized, ${processed.coverageGaps.length} gaps identified` });
 
   console.log(`[hybrid] Final: ${processed.articles.length} articles, ${processed.coverageGaps.length} gaps`);
 

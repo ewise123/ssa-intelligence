@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, X, Building2, User, Tag, ChevronRight, Loader2, Save } from 'lucide-react';
+import { Plus, Trash2, X, Building2, User, Tag, ChevronRight, Loader2, Save, Settings, Users, Briefcase, Sparkles } from 'lucide-react';
 import {
   useRevenueOwners,
   useNewsTags,
@@ -197,45 +197,68 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
 
   if (ownersLoading || tagsLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-slate-400" size={32} />
+      <div className="flex flex-col items-center justify-center h-64">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-full border-4 border-slate-200"></div>
+          <div className="absolute top-0 left-0 w-16 h-16 rounded-full border-4 border-brand-500 border-t-transparent animate-spin"></div>
+        </div>
+        <p className="mt-4 text-slate-500 font-medium">Loading configuration...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">News Setup</h2>
-          <p className="text-slate-500 mt-1">
-            Configure Revenue Owners and their tracked companies, people, and topics
-          </p>
+      {/* Header with gradient background */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-6 shadow-xl">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-50"></div>
+        <div className="relative flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-gradient-to-br from-violet-400 to-purple-600 rounded-xl shadow-lg">
+                <Settings className="text-white" size={24} />
+              </div>
+              <h2 className="text-2xl font-bold text-white">News Setup</h2>
+            </div>
+            <p className="text-slate-300 ml-12">
+              Configure Revenue Owners and their tracked companies, people, and topics
+            </p>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Revenue Owners List */}
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-slate-100">
-            <h3 className="font-semibold text-slate-800">Revenue Owners</h3>
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+          <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-purple-50">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-gradient-to-br from-violet-400 to-purple-500 rounded-lg shadow-sm">
+                <Users size={16} className="text-white" />
+              </div>
+              <h3 className="font-bold text-slate-800">Revenue Owners</h3>
+              <span className="inline-flex items-center justify-center px-2.5 py-1 bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-full text-xs font-bold min-w-[26px] shadow-md shadow-violet-500/30 border border-violet-400/30">
+                {owners.length}
+              </span>
+            </div>
           </div>
 
-          <div className="p-4 border-b border-slate-100">
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={newOwnerName}
-                onChange={(e) => setNewOwnerName(e.target.value)}
-                placeholder="New owner name..."
-                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none"
-                onKeyDown={(e) => e.key === 'Enter' && handleCreateOwner()}
-              />
+              <div className="relative flex-1">
+                <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={newOwnerName}
+                  onChange={(e) => setNewOwnerName(e.target.value)}
+                  placeholder="New owner name..."
+                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 outline-none transition-all"
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateOwner()}
+                />
+              </div>
               <button
                 onClick={handleCreateOwner}
                 disabled={!newOwnerName.trim()}
-                className="px-3 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2.5 bg-gradient-to-r from-brand-500 to-brand-600 text-white rounded-xl hover:from-brand-600 hover:to-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
               >
                 <Plus size={18} />
               </button>
@@ -244,77 +267,116 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
 
           <div className="max-h-96 overflow-y-auto">
             {owners.length === 0 ? (
-              <div className="p-8 text-center text-slate-400">
-                No revenue owners yet. Create one to get started.
+              <div className="p-8 text-center">
+                <div className="w-16 h-16 mx-auto bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center mb-4">
+                  <Users className="text-slate-400" size={24} />
+                </div>
+                <p className="text-slate-500 font-medium">No revenue owners yet</p>
+                <p className="text-slate-400 text-sm mt-1">Create one to get started</p>
               </div>
             ) : (
-              owners.map((owner) => (
-                <div
-                  key={owner.id}
-                  className={`flex items-center justify-between p-4 border-b border-slate-50 cursor-pointer hover:bg-slate-50 transition-colors ${
-                    selectedOwner?.id === owner.id ? 'bg-brand-50' : ''
-                  }`}
-                  onClick={() => setSelectedOwner(owner)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center text-sm font-medium">
-                      {owner.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="font-medium text-slate-800">{owner.name}</div>
-                      <div className="text-xs text-slate-400">
-                        {owner._count?.companies || 0} companies, {owner._count?.people || 0} people
+              <div className="p-2">
+                {owners.map((owner) => (
+                  <div
+                    key={owner.id}
+                    className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all mb-1 ${
+                      selectedOwner?.id === owner.id
+                        ? 'bg-gradient-to-r from-brand-100 to-violet-100 border border-brand-200 shadow-sm'
+                        : 'hover:bg-slate-50 border border-transparent'
+                    }`}
+                    onClick={() => setSelectedOwner(owner)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shadow-sm ${
+                        selectedOwner?.id === owner.id
+                          ? 'bg-gradient-to-br from-brand-500 to-violet-500 text-white'
+                          : 'bg-gradient-to-br from-brand-100 to-violet-100 text-brand-600'
+                      }`}>
+                        {owner.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className={`font-semibold ${selectedOwner?.id === owner.id ? 'text-brand-800' : 'text-slate-800'}`}>
+                          {owner.name}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                          <span className="flex items-center gap-1">
+                            <Building2 size={10} />
+                            {owner._count?.companies || 0}
+                          </span>
+                          <span className="text-slate-300">|</span>
+                          <span className="flex items-center gap-1">
+                            <User size={10} />
+                            {owner._count?.people || 0}
+                          </span>
+                        </div>
                       </div>
                     </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteOwner(owner.id);
+                        }}
+                        className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <ChevronRight size={16} className={selectedOwner?.id === owner.id ? 'text-brand-500' : 'text-slate-300'} />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteOwner(owner.id);
-                      }}
-                      className="p-1 text-slate-400 hover:text-rose-500 transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                    <ChevronRight size={16} className="text-slate-300" />
-                  </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         </div>
 
         {/* Call Diet Editor */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
           {!selectedOwner ? (
-            <div className="p-8 text-center text-slate-400 h-full flex items-center justify-center">
-              Select a Revenue Owner to edit their Call Diet
+            <div className="p-12 text-center h-full flex flex-col items-center justify-center">
+              <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center mb-5 shadow-inner">
+                <Briefcase className="text-slate-400" size={32} />
+              </div>
+              <p className="text-slate-600 font-semibold text-lg">Select a Revenue Owner</p>
+              <p className="text-slate-400 text-sm mt-1">to edit their Call Diet configuration</p>
             </div>
           ) : loadingDetails ? (
-            <div className="p-8 text-center h-full flex items-center justify-center">
-              <Loader2 className="animate-spin text-slate-400" size={32} />
+            <div className="p-12 text-center h-full flex flex-col items-center justify-center">
+              <div className="relative">
+                <div className="w-12 h-12 rounded-full border-4 border-slate-200"></div>
+                <div className="absolute top-0 left-0 w-12 h-12 rounded-full border-4 border-brand-500 border-t-transparent animate-spin"></div>
+              </div>
+              <p className="mt-4 text-slate-500 font-medium">Loading configuration...</p>
             </div>
           ) : (
             <>
-              <div className="p-4 border-b border-slate-100">
-                <h3 className="font-semibold text-slate-800">
-                  Call Diet for {selectedOwner.name}
-                </h3>
-                <p className="text-sm text-slate-500 mt-1">
-                  Configure companies, people, and topics to track for news
-                </p>
+              <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-brand-50 to-violet-50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-br from-brand-500 to-violet-500 rounded-xl shadow-md">
+                    <Briefcase size={20} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-lg">
+                      Call Diet for {selectedOwner.name}
+                    </h3>
+                    <p className="text-sm text-slate-500 mt-0.5">
+                      Configure companies, people, and topics to track for news
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="p-4 space-y-6">
+              <div className="p-5 space-y-6">
                 {/* Companies Section */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Building2 size={18} className="text-slate-500" />
-                      <span className="font-medium text-slate-700">Companies</span>
-                      <span className="text-xs text-slate-400">
-                        ({ownerDetails?.companies?.length || 0})
+                <div className="bg-gradient-to-br from-blue-50/50 to-cyan-50/50 rounded-2xl p-5 border border-blue-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-xl shadow-sm">
+                        <Building2 size={16} className="text-white" />
+                      </div>
+                      <span className="font-bold text-slate-800">Companies</span>
+                      <span className="inline-flex items-center justify-center px-2.5 py-1 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full text-xs font-bold min-w-[26px] shadow-md shadow-blue-500/30 border border-blue-400/30">
+                        {ownerDetails?.companies?.length || 0}
                       </span>
                     </div>
                     {!showAddCompany && (
@@ -323,15 +385,16 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                           setShowAddCompany(true);
                           setCompanyInputs([{ name: '', ticker: '', cik: '' }]);
                         }}
-                        className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+                        className="flex items-center gap-1 px-3 py-1.5 bg-white text-blue-600 hover:text-blue-700 font-semibold text-sm rounded-lg border border-blue-200 hover:border-blue-300 shadow-sm hover:shadow transition-all"
                       >
-                        + Add Companies
+                        <Plus size={14} />
+                        Add
                       </button>
                     )}
                   </div>
 
                   {showAddCompany && (
-                    <div className="mb-3 p-3 bg-slate-50 rounded-lg space-y-2">
+                    <div className="mb-4 p-4 bg-white rounded-xl border border-blue-100 space-y-3 shadow-sm">
                       {companyInputs.map((input, index) => (
                         <div key={index} className="flex gap-2 items-center">
                           <input
@@ -339,37 +402,37 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                             value={input.name}
                             onChange={(e) => updateCompanyInput(index, 'name', e.target.value)}
                             placeholder="Company name"
-                            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-500/20"
+                            className="flex-1 px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all"
                           />
                           <input
                             type="text"
                             value={input.ticker}
                             onChange={(e) => updateCompanyInput(index, 'ticker', e.target.value)}
                             placeholder="Ticker"
-                            className="w-24 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-500/20"
+                            className="w-24 px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all"
                           />
                           <input
                             type="text"
                             value={input.cik}
                             onChange={(e) => updateCompanyInput(index, 'cik', e.target.value)}
                             placeholder="CIK"
-                            className="w-24 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-500/20"
+                            className="w-24 px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all"
                             title="SEC Central Index Key (10 digits)"
                           />
                           <button
                             onClick={() => removeCompanyInputRow(index)}
-                            className="p-2 text-slate-400 hover:text-rose-500 transition-colors"
+                            className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
                           >
                             <X size={16} />
                           </button>
                         </div>
                       ))}
-                      <div className="flex justify-between items-center pt-2">
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-100">
                         <button
                           onClick={addCompanyInputRow}
-                          className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-700 font-medium"
+                          className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-semibold"
                         >
-                          <Plus size={16} />
+                          <Plus size={14} />
                           Add another
                         </button>
                         <button
@@ -377,7 +440,7 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                             setShowAddCompany(false);
                             setCompanyInputs([]);
                           }}
-                          className="text-sm text-slate-500 hover:text-slate-700"
+                          className="text-sm text-slate-500 hover:text-slate-700 font-medium"
                         >
                           Cancel
                         </button>
@@ -385,24 +448,27 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                     </div>
                   )}
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2.5">
                     {ownerDetails?.companies?.length === 0 && (
-                      <span className="text-sm text-slate-400">No companies added</span>
+                      <div className="w-full py-4 text-center text-sm text-slate-400">
+                        No companies added yet
+                      </div>
                     )}
                     {ownerDetails?.companies?.map((company) => (
                       <span
                         key={company.id}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-sm"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full text-sm font-semibold shadow-lg shadow-blue-500/25 border border-blue-400/30 hover:shadow-xl hover:scale-[1.02] transition-all group"
                       >
+                        <Building2 size={14} />
                         {company.name}
                         {(company.ticker || company.cik) && (
-                          <span className="text-blue-400">
+                          <span className="text-blue-100 text-xs font-medium">
                             ({[company.ticker, company.cik && `CIK: ${company.cik}`].filter(Boolean).join(' | ')})
                           </span>
                         )}
                         <button
                           onClick={() => handleRemoveCompany(company.id)}
-                          className="ml-1 text-blue-400 hover:text-blue-600"
+                          className="ml-1 text-blue-200 hover:text-white hover:bg-white/20 p-0.5 rounded-full transition-all"
                         >
                           <X size={14} />
                         </button>
@@ -412,13 +478,15 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                 </div>
 
                 {/* People Section */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <User size={18} className="text-slate-500" />
-                      <span className="font-medium text-slate-700">People</span>
-                      <span className="text-xs text-slate-400">
-                        ({ownerDetails?.people?.length || 0})
+                <div className="bg-gradient-to-br from-purple-50/50 to-pink-50/50 rounded-2xl p-5 border border-purple-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gradient-to-br from-purple-400 to-pink-500 rounded-xl shadow-sm">
+                        <User size={16} className="text-white" />
+                      </div>
+                      <span className="font-bold text-slate-800">People</span>
+                      <span className="inline-flex items-center justify-center px-2.5 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-xs font-bold min-w-[26px] shadow-md shadow-purple-500/30 border border-purple-400/30">
+                        {ownerDetails?.people?.length || 0}
                       </span>
                     </div>
                     {!showAddPerson && (
@@ -427,15 +495,16 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                           setShowAddPerson(true);
                           setPersonInputs([{ name: '', title: '' }]);
                         }}
-                        className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+                        className="flex items-center gap-1 px-3 py-1.5 bg-white text-purple-600 hover:text-purple-700 font-semibold text-sm rounded-lg border border-purple-200 hover:border-purple-300 shadow-sm hover:shadow transition-all"
                       >
-                        + Add People
+                        <Plus size={14} />
+                        Add
                       </button>
                     )}
                   </div>
 
                   {showAddPerson && (
-                    <div className="mb-3 p-3 bg-slate-50 rounded-lg space-y-2">
+                    <div className="mb-4 p-4 bg-white rounded-xl border border-purple-100 space-y-3 shadow-sm">
                       {personInputs.map((input, index) => (
                         <div key={index} className="flex gap-2 items-center">
                           <input
@@ -443,29 +512,29 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                             value={input.name}
                             onChange={(e) => updatePersonInput(index, 'name', e.target.value)}
                             placeholder="Person name"
-                            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-500/20"
+                            className="flex-1 px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300 transition-all"
                           />
                           <input
                             type="text"
                             value={input.title}
                             onChange={(e) => updatePersonInput(index, 'title', e.target.value)}
                             placeholder="Title"
-                            className="w-32 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-500/20"
+                            className="w-36 px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300 transition-all"
                           />
                           <button
                             onClick={() => removePersonInputRow(index)}
-                            className="p-2 text-slate-400 hover:text-rose-500 transition-colors"
+                            className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
                           >
                             <X size={16} />
                           </button>
                         </div>
                       ))}
-                      <div className="flex justify-between items-center pt-2">
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-100">
                         <button
                           onClick={addPersonInputRow}
-                          className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-700 font-medium"
+                          className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-700 font-semibold"
                         >
-                          <Plus size={16} />
+                          <Plus size={14} />
                           Add another
                         </button>
                         <button
@@ -473,7 +542,7 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                             setShowAddPerson(false);
                             setPersonInputs([]);
                           }}
-                          className="text-sm text-slate-500 hover:text-slate-700"
+                          className="text-sm text-slate-500 hover:text-slate-700 font-medium"
                         >
                           Cancel
                         </button>
@@ -481,22 +550,25 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                     </div>
                   )}
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2.5">
                     {ownerDetails?.people?.length === 0 && (
-                      <span className="text-sm text-slate-400">No people added</span>
+                      <div className="w-full py-4 text-center text-sm text-slate-400">
+                        No people added yet
+                      </div>
                     )}
                     {ownerDetails?.people?.map((person) => (
                       <span
                         key={person.id}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-full text-sm"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-sm font-semibold shadow-lg shadow-purple-500/25 border border-purple-400/30 hover:shadow-xl hover:scale-[1.02] transition-all group"
                       >
+                        <User size={14} />
                         {person.name}
                         {person.title && (
-                          <span className="text-purple-400">({person.title})</span>
+                          <span className="text-purple-100 text-xs font-medium">({person.title})</span>
                         )}
                         <button
                           onClick={() => handleRemovePerson(person.id)}
-                          className="ml-1 text-purple-400 hover:text-purple-600"
+                          className="ml-1 text-purple-200 hover:text-white hover:bg-white/20 p-0.5 rounded-full transition-all"
                         >
                           <X size={14} />
                         </button>
@@ -506,22 +578,25 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                 </div>
 
                 {/* Tags Section */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Tag size={18} className="text-slate-500" />
-                    <span className="font-medium text-slate-700">Topics to Track</span>
-                    <span className="text-xs text-slate-400">
-                      ({ownerDetails?.tags?.length || 0} selected)
+                <div className="bg-gradient-to-br from-emerald-50/50 to-teal-50/50 rounded-2xl p-5 border border-emerald-100">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl shadow-sm">
+                      <Tag size={16} className="text-white" />
+                    </div>
+                    <span className="font-bold text-slate-800">Topics to Track</span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-xs font-bold shadow-md shadow-emerald-500/30 border border-emerald-400/30">
+                      <span className="w-1.5 h-1.5 bg-white/80 rounded-full"></span>
+                      {ownerDetails?.tags?.length || 0} selected
                     </span>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {['universal', 'pe', 'industrials'].map((category) => {
                       const categoryTags = tags.filter((t) => t.category === category);
                       if (categoryTags.length === 0) return null;
                       return (
-                        <div key={category}>
-                          <div className="text-xs font-semibold text-slate-400 uppercase mb-2">
+                        <div key={category} className="bg-white/60 rounded-xl p-4 border border-emerald-100/50">
+                          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">
                             {category === 'pe' ? 'PE-Specific' : category.charAt(0).toUpperCase() + category.slice(1)}
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -531,10 +606,10 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                                 <button
                                   key={tag.id}
                                   onClick={() => handleToggleTag(tag.id)}
-                                  className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                                  className={`px-3 py-2 rounded-xl text-sm font-medium transition-all ${
                                     isSelected
-                                      ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-300'
-                                      : 'bg-slate-100 text-slate-600 border-2 border-transparent hover:bg-slate-200'
+                                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/30'
+                                      : 'bg-white text-slate-600 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50'
                                   }`}
                                 >
                                   {tag.name}
@@ -550,22 +625,22 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
 
                 {/* Save Button */}
                 {(validCompanyInputs.length > 0 || validPersonInputs.length > 0) && (
-                  <div className="pt-4 border-t border-slate-100">
+                  <div className="pt-5 border-t border-slate-100">
                     <button
                       onClick={handleSaveChanges}
                       disabled={saving}
-                      className="w-full px-4 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
+                      className="w-full px-5 py-4 bg-gradient-to-r from-brand-500 to-violet-500 text-white rounded-xl hover:from-brand-600 hover:to-violet-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-semibold flex items-center justify-center gap-3 shadow-lg shadow-brand-500/30 hover:shadow-xl hover:shadow-brand-500/40"
                     >
                       {saving ? (
                         <>
-                          <Loader2 size={18} className="animate-spin" />
+                          <Loader2 size={20} className="animate-spin" />
                           Saving...
                         </>
                       ) : (
                         <>
-                          <Save size={18} />
+                          <Save size={20} />
                           Save Changes
-                          <span className="bg-white/20 px-2 py-0.5 rounded text-sm">
+                          <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">
                             {validCompanyInputs.length + validPersonInputs.length} items
                           </span>
                         </>
@@ -581,18 +656,42 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="text-sm text-slate-500">Total Revenue Owners</div>
-          <div className="text-2xl font-bold text-slate-900">{owners.length}</div>
+        <div className="relative overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl p-5 shadow-lg shadow-violet-500/20">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-1.5 bg-white/20 rounded-lg">
+                <Users size={14} className="text-white" />
+              </div>
+              <div className="text-sm font-medium text-white/80">Revenue Owners</div>
+            </div>
+            <div className="text-3xl font-bold text-white">{owners.length}</div>
+          </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="text-sm text-slate-500">Available Tags</div>
-          <div className="text-2xl font-bold text-slate-900">{tags.length}</div>
+        <div className="relative overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 shadow-lg shadow-emerald-500/20">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-1.5 bg-white/20 rounded-lg">
+                <Tag size={14} className="text-white" />
+              </div>
+              <div className="text-sm font-medium text-white/80">Available Tags</div>
+            </div>
+            <div className="text-3xl font-bold text-white">{tags.length}</div>
+          </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="text-sm text-slate-500">Ready for News Fetch</div>
-          <div className="text-2xl font-bold text-slate-900">
-            {owners.filter((o) => (o._count?.companies || 0) > 0 || (o._count?.people || 0) > 0).length}
+        <div className="relative overflow-hidden bg-gradient-to-br from-brand-500 to-blue-600 rounded-2xl p-5 shadow-lg shadow-brand-500/20">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-1.5 bg-white/20 rounded-lg">
+                <Sparkles size={14} className="text-white" />
+              </div>
+              <div className="text-sm font-medium text-white/80">Ready for News</div>
+            </div>
+            <div className="text-3xl font-bold text-white">
+              {owners.filter((o) => (o._count?.companies || 0) > 0 || (o._count?.people || 0) > 0).length}
+            </div>
           </div>
         </div>
       </div>

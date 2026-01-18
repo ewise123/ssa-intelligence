@@ -54,11 +54,9 @@ router.post('/', async (req: Request, res: Response) => {
   refreshState.currentStep = 'init';
   refreshState.steps = [
     { step: 'Loading revenue owners', status: 'in_progress' },
-    { step: 'Fetching Google News RSS', status: 'pending' },
-    { step: 'Fetching SEC EDGAR filings', status: 'pending' },
-    { step: 'Fetching PE industry feeds', status: 'pending' },
-    { step: 'AI gap-fill search', status: 'pending' },
-    { step: 'Deduplicating articles', status: 'pending' },
+    { step: 'Layer 1: RSS feeds & APIs', status: 'pending' },
+    { step: 'Layer 2: AI web search', status: 'pending' },
+    { step: 'Combining & deduplicating', status: 'pending' },
     { step: 'AI processing & categorization', status: 'pending' },
     { step: 'Saving to database', status: 'pending' },
   ];
@@ -152,7 +150,7 @@ router.post('/', async (req: Request, res: Response) => {
     console.log('[refresh] Got', result.articles.length, 'articles');
 
     // Save articles to database
-    refreshState.steps[7].status = 'in_progress';
+    refreshState.steps[5].status = 'in_progress';
     refreshState.progress = 92;
     refreshState.progressMessage = `Saving ${result.articles.length} articles to database...`;
 
@@ -278,8 +276,8 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     // Update refresh state
-    refreshState.steps[7].status = 'completed';
-    refreshState.steps[7].detail = `${savedCount} articles saved`;
+    refreshState.steps[5].status = 'completed';
+    refreshState.steps[5].detail = `${savedCount} articles saved`;
     refreshState.isRefreshing = false;
     refreshState.lastRefreshedAt = new Date();
     refreshState.articlesFound = savedCount;
