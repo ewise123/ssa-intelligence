@@ -13,6 +13,8 @@ export const deriveJobStatus = ({ status, subJobs }: StatusArgs): string => {
   const hasRunning = subJobs.some((subJob) => subJob.status === 'running');
   const hasPending = subJobs.some((subJob) => subJob.status === 'pending');
   const hasCompleted = subJobs.some((subJob) => subJob.status === 'completed');
+  const hasFailed = subJobs.some((subJob) => subJob.status === 'failed');
+  const isTerminal = !hasRunning && !hasPending;
 
   if (status === 'cancelled' || status === 'failed') {
     return status;
@@ -26,7 +28,11 @@ export const deriveJobStatus = ({ status, subJobs }: StatusArgs): string => {
     return 'running';
   }
 
-  if (!hasPending && hasCompleted) {
+  if (isTerminal && hasFailed) {
+    return 'completed_with_errors';
+  }
+
+  if (isTerminal && hasCompleted) {
     return 'completed';
   }
 
