@@ -6,7 +6,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { getClaudeClient } from './claude-client.js';
 import type { FoundationOutput } from '../types/prompts.js';
-import type { ClaudeResponse } from './claude-client.js';
+import type { ClaudeClient, ClaudeResponse } from './claude-client.js';
 
 // Import prompt builders (these will be renamed section files)
 import { buildFoundationPrompt } from '../../prompts/foundation-prompt.js';
@@ -317,7 +317,7 @@ export const STAGE_CONFIGS: Record<StageId, StageConfig> = {
 
 export class ResearchOrchestrator {
   private prisma: PrismaClient;
-  private claudeClient;
+  private claudeClient: ClaudeClient;
   private queueLockId = BigInt(937451); // arbitrary global lock id
   private queueLoopRunning = false;
   private queueWatchdogStarted = false;
@@ -398,7 +398,7 @@ export class ResearchOrchestrator {
           focusAreas: input.focusAreas || [],
           requestedSections: requestedStageIds,
           blueprintVersion: input.blueprintVersion || null,
-          reportInputs: input.reportInputs || {},
+          reportInputs: (input.reportInputs || {}) as Prisma.InputJsonValue,
           sourceTracking: {
             baseSourceCount: 0,
             sectionSources: {},
@@ -732,20 +732,21 @@ export class ResearchOrchestrator {
       const prompt = await this.buildStagePrompt(jobId, stageId);
 
       // Execute with Claude
-      response = await this.claudeClient.execute(prompt);
+      const initialResponse = await this.claudeClient.execute(prompt);
+      response = initialResponse;
 
       // Parse and validate
       const validationSchema = getValidationSchema(stageId, reportType);
       let output: any;
       try {
-        output = this.parseStageOutput(stageId, response, validationSchema);
+        output = this.parseStageOutput(stageId, initialResponse, validationSchema);
       } catch (error) {
         if (!this.shouldRetryFormatOnly(error)) {
           throw error;
         }
 
         console.warn(`[format-only] ${stageId} attempting JSON reformat`);
-        const formatPrompt = this.buildFormatOnlyPrompt(prompt, response.content);
+        const formatPrompt = this.buildFormatOnlyPrompt(prompt, initialResponse.content);
         const formatResponse = await this.claudeClient.execute(formatPrompt);
         response = formatResponse;
 
