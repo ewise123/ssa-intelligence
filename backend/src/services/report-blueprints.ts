@@ -76,10 +76,10 @@ const peSections: BlueprintSection[] = [
 
 const fsSections: BlueprintSection[] = [
   { id: 'exec_summary', title: 'Executive Summary', defaultSelected: true, focus: 'Performance drivers, operating pressure, and leadership focus.' },
+  { id: 'financial_snapshot', title: 'Performance and Capital Snapshot', defaultSelected: true, focus: 'Revenue mix, margins, efficiency, and capital metrics.' },
   { id: 'company_overview', title: 'Institution Overview and Business Lines', defaultSelected: true, focus: 'Business mix, revenue drivers, and footprint.' },
   { id: 'leadership_and_governance', title: 'Leadership and Governance', defaultSelected: true, focus: 'Leadership profiles, accountability signals, governance notes.', reportSpecific: true },
   { id: 'strategic_priorities', title: 'Strategic Priorities and Transformation', defaultSelected: true, focus: 'Strategic focus areas, transformation agenda, and trade-offs.', reportSpecific: true },
-  { id: 'financial_snapshot', title: 'Performance and Capital Snapshot', defaultSelected: true, focus: 'Revenue mix, margins, efficiency, and capital metrics.' },
   { id: 'trends', title: 'Market, Regulatory, and Competitive Trends', defaultSelected: true, focus: 'External forces shaping operating priorities.' },
   { id: 'segment_analysis', title: 'Business Line Deep Dive', defaultSelected: false, focus: 'Optional when business-line detail is needed.' },
   { id: 'peer_benchmarking', title: 'Peer Benchmarking', defaultSelected: false, focus: 'Optional peer comparison when data is available.' },

@@ -4,6 +4,14 @@ type SectionId =
   | 'exec_summary'
   | 'financial_snapshot'
   | 'company_overview'
+  | 'investment_strategy'
+  | 'portfolio_snapshot'
+  | 'deal_activity'
+  | 'deal_team'
+  | 'portfolio_maturity'
+  | 'leadership_and_governance'
+  | 'strategic_priorities'
+  | 'operating_capabilities'
   | 'segment_analysis'
   | 'trends'
   | 'peer_benchmarking'
@@ -270,6 +278,144 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
           parts.push('**Regional Leaders**');
           parts.push(regionals.map((e: any) => `- ${e.name}, ${e.title}${e.source ? ` [${e.source}]` : ''}`).join('\n'));
         }
+      }
+      return parts.filter(Boolean).join('\n\n');
+    }
+    case 'investment_strategy': {
+      const parts: string[] = [];
+      if (data.strategy_summary) parts.push(data.strategy_summary);
+      if (Array.isArray(data.focus_areas) && data.focus_areas.length) {
+        parts.push('\n**Focus Areas**');
+        parts.push(data.focus_areas.map((item: any) => `- ${item}`).join('\n'));
+      }
+      if (Array.isArray(data.sector_focus) && data.sector_focus.length) {
+        parts.push('\n**Sector Focus**');
+        parts.push(data.sector_focus.map((item: any) => `- ${item}`).join('\n'));
+      }
+      if (Array.isArray(data.platform_vs_addon_patterns) && data.platform_vs_addon_patterns.length) {
+        parts.push('\n**Platform vs Add-on Patterns**');
+        parts.push(data.platform_vs_addon_patterns.map((item: any) => `- ${item}`).join('\n'));
+      }
+      return parts.filter(Boolean).join('\n\n');
+    }
+    case 'portfolio_snapshot': {
+      const parts: string[] = [];
+      if (data.summary) parts.push(data.summary);
+      if (Array.isArray(data.portfolio_companies) && data.portfolio_companies.length) {
+        parts.push('\n**Portfolio Companies**');
+        parts.push(
+          mdTable(
+            ['Name', 'Sector', 'Type', 'Geography', 'Notes', 'Source'],
+            data.portfolio_companies.map((c: any) => [
+              c.name,
+              c.sector,
+              c.platform_or_addon,
+              c.geography || '',
+              c.notes || '',
+              c.source || ''
+            ])
+          )
+        );
+      }
+      return parts.filter(Boolean).join('\n\n');
+    }
+    case 'deal_activity': {
+      const parts: string[] = [];
+      if (data.summary) parts.push(data.summary);
+      if (Array.isArray(data.deals) && data.deals.length) {
+        parts.push('\n**Deal Activity**');
+        parts.push(
+          mdTable(
+            ['Company', 'Date', 'Type', 'Rationale', 'Source'],
+            data.deals.map((d: any) => [d.company, d.date, d.deal_type, d.rationale, d.source || ''])
+          )
+        );
+      }
+      return parts.filter(Boolean).join('\n\n');
+    }
+    case 'deal_team': {
+      const parts: string[] = [];
+      if (Array.isArray(data.stakeholders) && data.stakeholders.length) {
+        parts.push('\n**Stakeholders**');
+        parts.push(
+          mdTable(
+            ['Name', 'Title', 'Role', 'Focus Area', 'Source'],
+            data.stakeholders.map((s: any) => [s.name, s.title, s.role, s.focus_area || '', s.source || ''])
+          )
+        );
+      }
+      if (data.notes) parts.push(`\n**Notes**\n${data.notes}`);
+      return parts.filter(Boolean).join('\n\n');
+    }
+    case 'portfolio_maturity': {
+      const parts: string[] = [];
+      if (data.summary) parts.push(data.summary);
+      if (Array.isArray(data.holdings) && data.holdings.length) {
+        parts.push('\n**Holdings**');
+        parts.push(
+          mdTable(
+            ['Company', 'Acquired', 'Holding Years', 'Exit Signal', 'Source'],
+            data.holdings.map((h: any) => [
+              h.company,
+              h.acquisition_period || '',
+              h.holding_period_years ?? '',
+              h.exit_signal,
+              h.source || ''
+            ])
+          )
+        );
+      }
+      return parts.filter(Boolean).join('\n\n');
+    }
+    case 'leadership_and_governance': {
+      const parts: string[] = [];
+      if (Array.isArray(data.leadership) && data.leadership.length) {
+        parts.push('\n**Leadership**');
+        parts.push(
+          mdTable(
+            ['Name', 'Title', 'Focus Area', 'Source'],
+            data.leadership.map((l: any) => [l.name, l.title, l.focus_area || '', l.source || ''])
+          )
+        );
+      }
+      if (data.governance_notes) parts.push(`\n**Governance Notes**\n${data.governance_notes}`);
+      return parts.filter(Boolean).join('\n\n');
+    }
+    case 'strategic_priorities': {
+      const parts: string[] = [];
+      if (Array.isArray(data.priorities) && data.priorities.length) {
+        parts.push('\n**Priorities**');
+        parts.push(
+          data.priorities
+            .map((p: any) => `- ${p.priority}${p.source ? ` [${p.source}]` : ''}\n  ${p.description}`)
+            .join('\n')
+        );
+      }
+      if (Array.isArray(data.transformation_themes) && data.transformation_themes.length) {
+        parts.push('\n**Transformation Themes**');
+        parts.push(data.transformation_themes.map((t: any) => `- ${t}`).join('\n'));
+      }
+      return parts.filter(Boolean).join('\n\n');
+    }
+    case 'operating_capabilities': {
+      const parts: string[] = [];
+      if (Array.isArray(data.capabilities) && data.capabilities.length) {
+        parts.push('\n**Capabilities**');
+        parts.push(
+          mdTable(
+            ['Capability', 'Description', 'Maturity', 'Source'],
+            data.capabilities.map((c: any) => [
+              c.capability,
+              c.description,
+              c.maturity || '',
+              c.source || ''
+            ])
+          )
+        );
+      }
+      if (Array.isArray(data.gaps) && data.gaps.length) {
+        parts.push('\n**Gaps**');
+        parts.push(data.gaps.map((g: any) => `- ${g}`).join('\n'));
       }
       return parts.filter(Boolean).join('\n\n');
     }

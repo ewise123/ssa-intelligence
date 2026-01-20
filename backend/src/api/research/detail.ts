@@ -9,6 +9,7 @@ import { createSourceCatalog } from '../../services/source-resolver.js';
 import type { FoundationOutput } from '../../types/prompts.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
 import { getReportBlueprint } from '../../services/report-blueprints.js';
+import { buildCompletedStages } from '../../services/stage-tracking-utils.js';
 import { deriveJobStatus } from './status-utils.js';
 
 // Map database fields to section keys
@@ -132,6 +133,8 @@ export async function getResearchDetail(req: Request, res: Response) {
       })
       .filter(n => n > 0);
 
+    const completedStages = buildCompletedStages(job.subJobs, job.selectedSections);
+
     return res.json({
       id: job.id,
       status: effectiveStatus,
@@ -158,6 +161,7 @@ export async function getResearchDetail(req: Request, res: Response) {
       foundation: job.foundation,
       sections,
       sectionsCompleted: completedSections,
+      completedStages,
       sectionStatuses: job.subJobs.map(subJob => ({
         stage: subJob.stage,
         status: subJob.status,

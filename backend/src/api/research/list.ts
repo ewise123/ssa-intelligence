@@ -6,6 +6,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
+import { buildCompletedStages } from '../../services/stage-tracking-utils.js';
 import { deriveJobStatus } from './status-utils.js';
 
 interface ListQueryParams {
@@ -131,6 +132,7 @@ export async function listResearch(req: Request, res: Response) {
         })
         .filter(n => n > 0)
       ,
+      generatedStages: buildCompletedStages(job.subJobs, job.selectedSections),
       groups: job.jobGroups.map((entry) => entry.group)
     }));
 
