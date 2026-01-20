@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { ReportBlueprint, ResearchJob, SECTIONS_CONFIG, SectionId } from '../types';
+import { ReportBlueprint, ResearchJob, SECTIONS_CONFIG, SectionId, SectionStatus } from '../types';
 import { StatusPill } from '../components/StatusPill';
 import { ChevronRight, BarChart3, Globe, ExternalLink, AlertTriangle, Loader2, CheckCircle2, Circle } from 'lucide-react';
 
@@ -122,9 +122,15 @@ interface ResearchDetailProps {
   jobs: ResearchJob[];
   reportBlueprints?: ReportBlueprint[];
   onNavigate: (path: string) => void;
+  onRerun?: (jobId: string, sections: SectionId[]) => Promise<void>;
 }
 
-export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, reportBlueprints = [], onNavigate }) => {
+export const ResearchDetail: React.FC<ResearchDetailProps> = ({
+  jobs,
+  reportBlueprints = [],
+  onNavigate,
+  onRerun
+}) => {
   // Extract ID from URL hash manually since we are using a custom hash router
   const hash = window.location.hash;
   const id = hash.split('/research/')[1];
@@ -148,9 +154,20 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, reportBlue
       .filter((id) => job.selectedSections?.includes(id));
   }, [job?.selectedSections, sectionsConfig]);
 
+  const [rerunTarget, setRerunTarget] = useState<SectionId | null>(null);
+
   const [activeSection, setActiveSection] = useState<SectionId>(() => {
     return allowedSections[0] || 'exec_summary';
   });
+
+  const canRerun = Boolean(onRerun) && job?.status !== 'running' && job?.status !== 'queued';
+  const failedSections = useMemo(
+    () =>
+      allowedSections.filter(
+        (sectionId) => job?.sections?.[sectionId]?.status === SectionStatus.FAILED
+      ),
+    [allowedSections, job?.sections]
+  );
 
   const overallScore = job?.overallConfidenceScore ?? 0;
   const overallPercent = Math.round(overallScore * 100);
@@ -178,6 +195,16 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, reportBlue
     if (contentContainer) contentContainer.scrollTop = 0;
   }, [activeSection]);
 
+  const handleRerun = async (sectionId: SectionId) => {
+    if (!onRerun || !job || !canRerun) return;
+    setRerunTarget(sectionId);
+    try {
+      await onRerun(job.id, [sectionId]);
+    } finally {
+      setRerunTarget(null);
+    }
+  };
+
   if (!job) {
     return (
       <div className="text-center py-20">
@@ -193,7 +220,7 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, reportBlue
   }
 
   // Show progress/error view while running or failed
-  if (job.status !== 'completed') {
+  if (job.status !== 'completed' && job.status !== 'completed_with_errors') {
     const isFailed = job.status === 'failed';
     const isQueued = job.status === 'queued';
     return (
@@ -284,6 +311,11 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, reportBlue
   }
 
   const currentSectionData = job.sections[activeSection];
+  const isRerunningSection = rerunTarget === activeSection;
+  const canRerunSection =
+    canRerun &&
+    (currentSectionData?.status === SectionStatus.FAILED ||
+      currentSectionData?.status === SectionStatus.COMPLETED);
 
   const sectionConfidence = currentSectionData?.confidence ?? null;
   const sectionConfidenceLabel =
@@ -352,6 +384,8 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, reportBlue
                <div className="h-9 w-9 rounded-full bg-white flex items-center justify-center border border-slate-100">
                  {job?.status === 'completed' ? (
                    <CheckCircle2 size={18} className="text-emerald-600" />
+                 ) : job?.status === 'completed_with_errors' ? (
+                   <AlertTriangle size={18} className="text-amber-500" />
                  ) : job?.status === 'failed' ? (
                    <AlertTriangle size={18} className="text-rose-500" />
                  ) : (
@@ -362,6 +396,38 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, reportBlue
           </div>
         </div>
       </div>
+
+      {job.status === 'completed_with_errors' && failedSections.length > 0 && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 text-amber-700">
+                <AlertTriangle size={16} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-amber-900">Completed with errors</p>
+                <p className="text-xs text-amber-700">
+                  Jump to failed sections to review errors or rerun them.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {failedSections.map((sectionId) => {
+                const label = sectionsConfig.find((section) => section.id === sectionId)?.title || sectionId;
+                return (
+                  <button
+                    key={sectionId}
+                    onClick={() => setActiveSection(sectionId)}
+                    className="text-xs font-semibold text-amber-800 bg-white border border-amber-200 rounded-full px-3 py-1 hover:bg-amber-100"
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Layout: Sidebar + Content */}
       <div className="flex flex-col md:flex-row gap-8 items-start">
@@ -422,12 +488,27 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, reportBlue
                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                  {sectionsConfig.find(s => s.id === activeSection)?.title}
                </h2>
-               <span
-                 className={`text-xs font-semibold px-3 py-1 rounded-full border ${sectionConfidenceColor}`}
-                 title="Section-level confidence"
-               >
-                 Confidence: {sectionConfidenceLabel}
-               </span>
+               <div className="flex items-center gap-3">
+                 {canRerunSection && (
+                   <button
+                     onClick={() => handleRerun(activeSection)}
+                     disabled={!canRerunSection || isRerunningSection}
+                     className={`text-xs font-semibold px-3 py-1 rounded-full border transition-colors ${
+                       isRerunningSection
+                         ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                     }`}
+                   >
+                     {isRerunningSection ? 'Rerunning...' : 'Rerun section'}
+                   </button>
+                 )}
+                 <span
+                   className={`text-xs font-semibold px-3 py-1 rounded-full border ${sectionConfidenceColor}`}
+                   title="Section-level confidence"
+                 >
+                   Confidence: {sectionConfidenceLabel}
+                 </span>
+               </div>
             </div>
 
             {/* Scrollable Content Area */}
@@ -449,8 +530,16 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({ jobs, reportBlue
                   </div>
                   <h3 className="text-rose-900 font-bold text-lg mb-2">Analysis Failed</h3>
                   <p className="text-rose-700 mb-6 max-w-md mx-auto">{currentSectionData.lastError || "The research agent encountered an error while processing this section."}</p>
-                  <button className="bg-white border border-rose-200 text-rose-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-rose-50 transition-colors shadow-sm">
-                    Retry Section
+                  <button
+                    onClick={() => handleRerun(activeSection)}
+                    disabled={!canRerunSection || isRerunningSection}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm ${
+                      !canRerunSection || isRerunningSection
+                        ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-white border border-rose-200 text-rose-700 hover:bg-rose-50'
+                    }`}
+                  >
+                    {isRerunningSection ? 'Rerunning...' : 'Rerun Section'}
                   </button>
                 </div>
               ) : (

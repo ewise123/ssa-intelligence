@@ -9,7 +9,7 @@ import { useReportBlueprints, useResearchManager, useUserContext } from './servi
 export default function App() {
   const [currentPath, setCurrentPath] = useState(window.location.hash.slice(1) || '/');
   const [navResetKey, setNavResetKey] = useState(0);
-  const { jobs, createJob, runJob, cancelJob, deleteJob } = useResearchManager();
+  const { jobs, createJob, runJob, rerunJob, cancelJob, deleteJob } = useResearchManager();
   const userContext = useUserContext();
   const reportBlueprints = useReportBlueprints();
 
@@ -62,7 +62,14 @@ export default function App() {
       return <AdminUsers isAdmin={userContext.user?.isAdmin} />;
     }
     if (currentPath.startsWith('/research/')) {
-      return <ResearchDetail jobs={jobs} reportBlueprints={reportBlueprints.blueprints} onNavigate={navigate} />;
+      return (
+        <ResearchDetail
+          jobs={jobs}
+          reportBlueprints={reportBlueprints.blueprints}
+          onNavigate={navigate}
+          onRerun={rerunJob}
+        />
+      );
     }
     return <Home jobs={jobs} reportBlueprints={reportBlueprints.blueprints} onNavigate={navigate} onDelete={deleteJob} />;
   };

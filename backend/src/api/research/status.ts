@@ -85,7 +85,12 @@ export async function getJobStatus(req: Request, res: Response) {
       promptTokens: job.promptTokens,
       completionTokens: job.completionTokens,
       costUsd: job.costUsd,
-      error: effectiveStatus === 'failed' ? 'Job execution failed' : null,
+      error:
+        effectiveStatus === 'failed'
+          ? 'Job execution failed'
+          : effectiveStatus === 'completed_with_errors'
+            ? 'Job completed with errors'
+            : null,
       jobs: job.subJobs,
       summary: {
         total: job.subJobs.length,

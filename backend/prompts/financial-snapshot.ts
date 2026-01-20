@@ -461,7 +461,7 @@ WRONG patterns:
 }
 \`\`\`
 
-**Rule:** Every derived metric must appear in the KPI table with a `*` in the metric name.
+**Rule:** Every derived metric must appear in the KPI table with a \`*\` in the metric name.
 
 ### Never Speculate
 - If data cannot be verified -> Use "-"

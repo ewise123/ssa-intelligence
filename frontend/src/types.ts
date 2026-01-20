@@ -1,4 +1,4 @@
-export type JobStatus = 'idle' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type JobStatus = 'idle' | 'queued' | 'running' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelled';
 
 export type ReportType = 'GENERIC' | 'INDUSTRIALS' | 'PE' | 'FS';
 

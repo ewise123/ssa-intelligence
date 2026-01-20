@@ -9,6 +9,7 @@ import { createSourceCatalog } from '../../services/source-resolver.js';
 import type { FoundationOutput } from '../../types/prompts.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
 import { getReportBlueprint } from '../../services/report-blueprints.js';
+import { deriveJobStatus } from './status-utils.js';
 
 // Map database fields to section keys
 const SECTION_FIELD_MAP = {
@@ -67,6 +68,8 @@ export async function getResearchDetail(req: Request, res: Response) {
         jobId: id
       });
     }
+
+    const effectiveStatus = deriveJobStatus({ status: job.status, subJobs: job.subJobs });
 
     // Build source catalog from foundation
     let sourceCatalog: import("../../services/source-resolver.js").SourceCatalogManager | null = null;
@@ -131,7 +134,7 @@ export async function getResearchDetail(req: Request, res: Response) {
 
     return res.json({
       id: job.id,
-      status: job.status,
+      status: effectiveStatus,
       metadata: {
         companyName: job.companyName,
         geography: job.geography,

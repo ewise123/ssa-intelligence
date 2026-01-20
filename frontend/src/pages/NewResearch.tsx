@@ -423,7 +423,7 @@ export const NewResearch: React.FC<NewResearchProps> = ({
 
   // Redirect when done
   useEffect(() => {
-    if (activeJob && activeJob.status === 'completed') {
+    if (activeJob && (activeJob.status === 'completed' || activeJob.status === 'completed_with_errors')) {
       const timer = setTimeout(() => {
         onNavigate(`/research/${activeJob.id}`);
       }, 1500); // Small delay to show "Complete" state
@@ -780,8 +780,21 @@ export const NewResearch: React.FC<NewResearchProps> = ({
       <div className="w-full md:w-1/3 space-y-6">
          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Loader2 className={`animate-spin text-brand-500 ${activeJob?.status === 'completed' ? 'hidden' : 'block'}`} size={18} />
-              {activeJob?.status === 'completed' ? 'Analysis Complete' : activeJob?.status === 'queued' ? 'Queued for processing' : 'Researching...'}
+              <Loader2
+                className={`animate-spin text-brand-500 ${
+                  activeJob?.status === 'completed' || activeJob?.status === 'completed_with_errors'
+                    ? 'hidden'
+                    : 'block'
+                }`}
+                size={18}
+              />
+              {activeJob?.status === 'completed'
+                ? 'Analysis Complete'
+                : activeJob?.status === 'completed_with_errors'
+                  ? 'Completed with errors'
+                  : activeJob?.status === 'queued'
+                    ? 'Queued for processing'
+                    : 'Researching...'}
             </h3>
             {activeJob?.status === 'queued' && (
               <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
@@ -843,7 +856,9 @@ export const NewResearch: React.FC<NewResearchProps> = ({
                 </div>
               )}
 
-              {activeJob?.currentAction && activeJob.status !== 'completed' && (
+              {activeJob?.currentAction &&
+                activeJob.status !== 'completed' &&
+                activeJob.status !== 'completed_with_errors' && (
                 <div className="flex items-start gap-2 text-blue-300 animate-pulse">
                    <span>&gt;</span>
                    <span>{activeJob.currentAction}</span>
@@ -864,6 +879,11 @@ export const NewResearch: React.FC<NewResearchProps> = ({
               {activeJob?.status === 'completed' && (
                 <div className="text-emerald-400 font-bold mt-4">
                    &gt; ALL TASKS COMPLETED. FINALIZING REPORT...
+                </div>
+              )}
+              {activeJob?.status === 'completed_with_errors' && (
+                <div className="text-amber-400 font-bold mt-4">
+                   &gt; COMPLETED WITH ERRORS. FINALIZING REPORT...
                 </div>
               )}
            </div>

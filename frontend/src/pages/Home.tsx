@@ -14,7 +14,11 @@ interface HomeProps {
 }
 
 export const Home: React.FC<HomeProps> = ({ jobs, reportBlueprints = [], onNavigate, onCancel, onDelete }) => {
-  const completedJobs = [...jobs.filter(j => j.status === 'completed' || j.status === 'cancelled')].sort(
+  const completedJobs = [...jobs.filter(j =>
+    j.status === 'completed' ||
+    j.status === 'completed_with_errors' ||
+    j.status === 'cancelled'
+  )].sort(
     (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
   );
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);

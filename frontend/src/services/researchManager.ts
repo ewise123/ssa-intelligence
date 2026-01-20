@@ -874,6 +874,13 @@ const getJobDetailApi = async (id: string) => {
   return (await fetchJson(`/research/${id}`)) as ApiResearchDetail;
 };
 
+const rerunJobApi = async (id: string, sections: SectionId[]) => {
+  return fetchJson(`/research/${id}/rerun`, {
+    method: 'POST',
+    body: JSON.stringify({ sections })
+  }) as Promise<{ success: boolean; jobId: string; status: string; rerunStages?: string[] }>;
+};
+
 const cancelJobApi = async (id: string) => {
   return fetchJson(`/research/${id}/cancel`, {
     method: 'POST'
@@ -1076,7 +1083,9 @@ export const useResearchManager = () => {
     listJobsApi()
       .then(async (items) => {
         setJobs(items.map(mapListItem));
-        const completed = items.filter((i) => i.status === 'completed');
+        const completed = items.filter((i) =>
+          i.status === 'completed' || i.status === 'completed_with_errors'
+        );
         for (const item of completed) {
           try {
             const detail = await getJobDetailApi(item.id);
@@ -1167,7 +1176,12 @@ export const useResearchManager = () => {
             return [next, ...prev.filter((j) => j.id !== jobId)];
           });
 
-          if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
+          if (
+            status.status === 'completed' ||
+            status.status === 'completed_with_errors' ||
+            status.status === 'failed' ||
+            status.status === 'cancelled'
+          ) {
             break;
           }
 
@@ -1212,6 +1226,44 @@ export const useResearchManager = () => {
     [],
   );
 
+  const rerunJob = useCallback(
+    async (jobId: string, sections: SectionId[]) => {
+      const response = await rerunJobApi(jobId, sections);
+      const rerunStages = response.rerunStages || sections;
+
+      setJobs((prev) =>
+        prev.map((job) => {
+          if (job.id !== jobId) return job;
+          const nextSections = { ...job.sections };
+
+          rerunStages.forEach((stage) => {
+            const sectionId = STAGE_TO_SECTION_ID[stage] || (stage as SectionId);
+            const existing = nextSections[sectionId];
+            if (!existing) return;
+            nextSections[sectionId] = {
+              ...existing,
+              status: SectionStatus.PENDING,
+              content: '',
+              confidence: 0,
+              sources: [],
+              lastError: undefined,
+            };
+          });
+
+          return {
+            ...job,
+            status: 'queued',
+            currentAction: 'Queued...',
+            sections: nextSections,
+          };
+        })
+      );
+
+      await runJob(jobId);
+    },
+    [runJob],
+  );
+
   const cancelJob = useCallback(async (jobId: string) => {
     try {
       await cancelJobApi(jobId);
@@ -1236,7 +1288,7 @@ export const useResearchManager = () => {
     activeJobsRef.current.delete(jobId);
   }, []);
 
-  return { jobs, createJob, runJob, cancelJob, deleteJob };
+  return { jobs, createJob, runJob, rerunJob, cancelJob, deleteJob };
 };
 
 export const useUserContext = () => {
