@@ -31,7 +31,7 @@ import { generateAppendix } from '../../prompts/appendix.js';
 import { generateThumbnailForJob } from './thumbnail.js';
 import { getReportBlueprint } from './report-blueprints.js';
 import { collectBlockedStages } from './dependency-utils.js';
-import { computeFinalStatus, computeTerminalProgress } from './orchestrator-utils.js';
+import { computeFinalStatus, computeOverallConfidence, computeTerminalProgress } from './orchestrator-utils.js';
 
 // Import validation schemas
 import {
@@ -1110,6 +1110,8 @@ export class ResearchOrchestrator {
           }
         });
       }
+
+      await this.updateOverallConfidence(jobId);
     }
   }
 
@@ -1207,15 +1209,13 @@ export class ResearchOrchestrator {
    */
   private async updateOverallConfidence(jobId: string) {
     const subJobs = await this.prisma.researchSubJob.findMany({
-      where: { researchId: jobId, status: 'completed' },
-      select: { confidence: true }
+      where: { researchId: jobId, status: { in: ['completed', 'failed'] } },
+      select: { confidence: true, status: true }
     });
 
-    const scores = subJobs
-      .map((s) => this.confidenceToScore(s.confidence))
-      .filter((n): n is number => n !== null && !Number.isNaN(n));
+    const { score, label } = computeOverallConfidence(subJobs);
 
-    if (!scores.length) {
+    if (score === null || label === null) {
       await this.tryUpdateJob(jobId, {
         overallConfidence: null,
         overallConfidenceScore: null
@@ -1223,28 +1223,10 @@ export class ResearchOrchestrator {
       return;
     }
 
-    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-    const label = this.scoreToLabel(avg);
-
     await this.tryUpdateJob(jobId, {
       overallConfidence: label,
-      overallConfidenceScore: avg
+      overallConfidenceScore: score
     });
-  }
-
-  private confidenceToScore(confidence?: string | null): number | null {
-    if (!confidence) return null;
-    const upper = confidence.toUpperCase();
-    if (upper === 'HIGH') return 0.9;
-    if (upper === 'MEDIUM') return 0.6;
-    if (upper === 'LOW') return 0.3;
-    return null;
-  }
-
-  private scoreToLabel(score: number): string {
-    if (score >= 0.75) return 'HIGH';
-    if (score >= 0.5) return 'MEDIUM';
-    return 'LOW';
   }
 
   private sanitizeExecSummary(output: any) {

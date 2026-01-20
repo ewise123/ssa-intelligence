@@ -3,6 +3,7 @@
  * Rerun specific research sections
  */
 
+import { Prisma } from '@prisma/client';
 import { Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
@@ -104,11 +105,11 @@ export async function rerunResearchSections(req: Request, res: Response) {
     );
     const progress = computeTerminalProgress(adjustedSubJobs);
 
-    const jobOutputResets: Record<string, null> = {};
+    const jobOutputResets: Record<string, Prisma.NullTypes.DbNull> = {};
     for (const stage of rerunStages) {
       const field = STAGE_OUTPUT_FIELDS[stage as StageId];
       if (field) {
-        jobOutputResets[field] = null;
+        jobOutputResets[field] = Prisma.DbNull;
       }
     }
 
@@ -121,7 +122,7 @@ export async function rerunResearchSections(req: Request, res: Response) {
           status: 'pending',
           attempts: 0,
           lastError: null,
-          output: null,
+          output: Prisma.DbNull,
           startedAt: null,
           completedAt: null,
           duration: null
