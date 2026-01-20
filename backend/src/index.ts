@@ -23,6 +23,7 @@ import { getResearchDetail } from './api/research/detail.js';
 import { listResearch } from './api/research/list.js';
 import { cancelResearchJob } from './api/research/cancel.js';
 import { deleteResearchJob } from './api/research/delete.js';
+import { rerunResearchSections } from './api/research/rerun.js';
 import { submitFeedback } from './api/feedback.js';
 import { exportResearchPdf } from './api/research/export-pdf.js';
 import { getResearchOrchestrator } from './services/orchestrator.js';
@@ -160,6 +161,7 @@ app.get('/api/research', ...applyLimiter(getLimiter), authMiddleware, listResear
 app.post('/api/research/:id/cancel', ...applyLimiter(writeLimiter), authMiddleware, cancelResearchJob);
 app.delete('/api/research/:id', ...applyLimiter(writeLimiter), authMiddleware, deleteResearchJob);
 app.get('/api/research/:id/export/pdf', ...applyLimiter(exportLimiter), authMiddleware, exportResearchPdf);
+app.post('/api/research/:id/rerun', ...applyLimiter(writeLimiter), authMiddleware, rerunResearchSections);
 app.post('/api/feedback', ...applyLimiter(writeLimiter), submitFeedback);
 app.get('/api/me', authMiddleware, getMe);
 app.get('/api/groups', authMiddleware, listGroups);
@@ -169,14 +171,6 @@ app.post('/api/admin/groups', authMiddleware, requireAdmin, createGroup);
 app.post('/api/admin/groups/:groupId/members', authMiddleware, requireAdmin, addGroupMember);
 app.delete('/api/admin/groups/:groupId/members/:userId', authMiddleware, requireAdmin, removeGroupMember);
 app.get('/api/report-blueprints', ...applyLimiter(getLimiter), authMiddleware, getReportBlueprints);
-
-// Regenerate specific sections (optional - for future implementation)
-app.post('/api/research/:id/regenerate', async (req, res) => {
-  res.status(501).json({
-    error: 'Not implemented',
-    message: 'Section regeneration feature coming soon'
-  });
-});
 
 // Dev-only auth echo to inspect forwarded headers
 app.get('/api/debug/auth', authMiddleware, (req, res) => {
