@@ -97,7 +97,7 @@ export const buildExportSections = (params: {
         ? section.field
         : STAGE_OUTPUT_FIELDS[section.id as StageId];
 
-    const jobData = field ? (job as Record<string, unknown>)[field] : undefined;
+    const jobData = typeof field === 'string' ? (job as Record<string, unknown>)[field] : undefined;
     const data = jobData ?? subJob.output ?? null;
 
     results.push({
