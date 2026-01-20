@@ -3,6 +3,8 @@ import { prisma } from '../../lib/prisma.js';
 import { chromium } from 'playwright';
 import { marked } from 'marked';
 import { formatSectionContent, sectionOrder } from '../../services/section-formatter.js';
+import { buildExportSections, isExportReady } from '../../services/export-utils.js';
+import { getReportBlueprint } from '../../services/report-blueprints.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
 
 const htmlTemplate = (params: { title: string; meta: string[]; body: string }) => `
@@ -50,7 +52,7 @@ export async function exportResearchPdf(req: Request, res: Response) {
       where: { AND: [{ id }, visibilityWhere] },
       include: {
         subJobs: {
-          select: { stage: true, status: true, lastError: true }
+          select: { stage: true, status: true, lastError: true, output: true }
         }
       }
     });
@@ -59,19 +61,25 @@ export async function exportResearchPdf(req: Request, res: Response) {
       return res.status(404).json({ error: 'Research job not found' });
     }
 
-    if (job.status !== 'completed' && job.status !== 'failed') {
+    if (!isExportReady(job.status)) {
       return res.status(400).json({ error: 'Report is not ready to export yet' });
     }
 
     const dateStr = new Date(job.createdAt).toISOString().slice(0, 10);
     const filename = `${job.companyName.replace(/\s+/g, '_')}-${dateStr}.pdf`;
 
+    const blueprint = getReportBlueprint(job.reportType || 'GENERIC');
+    const exportSections = buildExportSections({
+      job,
+      subJobs: job.subJobs,
+      blueprint,
+      fallbackOrder: sectionOrder
+    });
+
     // Build Markdown using the formatter (mirrors frontend)
     const chunks: string[] = [];
 
-    sectionOrder.forEach(({ id: sectionId, title, field }) => {
-      const data = job[field as keyof typeof job];
-      const status = job.subJobs.find((s) => s.stage === sectionId)?.status || 'unknown';
+    exportSections.forEach(({ id: sectionId, title, status, data }) => {
       chunks.push(`## ${title}`);
       chunks.push(`_Status: ${status}_`);
       const formatted = formatSectionContent(sectionId as any, data);
