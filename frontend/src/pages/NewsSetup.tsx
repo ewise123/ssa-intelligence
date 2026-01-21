@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, X, Building2, User, Tag, ChevronRight, Loader2, Save, Settings, Users, Briefcase, Sparkles } from 'lucide-react';
+import { Plus, Trash2, X, Building2, User, Tag, ChevronRight, Loader2, Save, Settings, Users, Briefcase, Sparkles, Mail } from 'lucide-react';
 import {
   useRevenueOwners,
   useNewsTags,
@@ -25,6 +25,7 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
     fetchOwners,
     getOwnerDetails,
     createOwner,
+    updateOwner,
     deleteOwner,
     addCompanyToOwner,
     removeCompanyFromOwner,
@@ -42,22 +43,28 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
 
   // Form states
   const [newOwnerName, setNewOwnerName] = useState('');
+  const [ownerEmail, setOwnerEmail] = useState('');
   const [companyInputs, setCompanyInputs] = useState<{ name: string; ticker: string; cik: string }[]>([]);
   const [personInputs, setPersonInputs] = useState<{ name: string; title: string }[]>([]);
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [showAddTag, setShowAddTag] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
 
   // Load owner details when selected
   useEffect(() => {
     if (selectedOwner) {
       setLoadingDetails(true);
       getOwnerDetails(selectedOwner.id)
-        .then(setOwnerDetails)
+        .then((details) => {
+          setOwnerDetails(details);
+          setOwnerEmail(details.email || '');
+        })
         .finally(() => setLoadingDetails(false));
     } else {
       setOwnerDetails(null);
+      setOwnerEmail('');
     }
   }, [selectedOwner, getOwnerDetails]);
 
@@ -81,6 +88,22 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete');
+    }
+  };
+
+  const handleSaveEmail = async () => {
+    if (!selectedOwner) return;
+    setSavingEmail(true);
+    try {
+      await updateOwner(selectedOwner.id, { email: ownerEmail.trim() || null });
+      // Update local state
+      if (ownerDetails) {
+        setOwnerDetails({ ...ownerDetails, email: ownerEmail.trim() || null });
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to save email');
+    } finally {
+      setSavingEmail(false);
     }
   };
 
@@ -351,7 +374,7 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
           ) : (
             <>
               <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-brand-50 to-violet-50">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 bg-gradient-to-br from-brand-500 to-violet-500 rounded-xl shadow-md">
                     <Briefcase size={20} className="text-white" />
                   </div>
@@ -363,6 +386,28 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                       Configure companies, people, and topics to track for news
                     </p>
                   </div>
+                </div>
+
+                {/* Email field */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="email"
+                      value={ownerEmail}
+                      onChange={(e) => setOwnerEmail(e.target.value)}
+                      placeholder="Email address for news delivery..."
+                      className="w-full pl-9 pr-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 outline-none transition-all bg-white"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSaveEmail}
+                    disabled={savingEmail || ownerEmail === (ownerDetails?.email || '')}
+                    className="px-4 py-2.5 bg-gradient-to-r from-brand-500 to-brand-600 text-white rounded-xl hover:from-brand-600 hover:to-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md text-sm font-medium flex items-center gap-2"
+                  >
+                    {savingEmail ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    Save
+                  </button>
                 </div>
               </div>
 

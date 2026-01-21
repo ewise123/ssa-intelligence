@@ -48,6 +48,7 @@ export interface TrackedPerson {
 export interface RevenueOwner {
   id: string;
   name: string;
+  email?: string | null;
   createdAt: string;
   updatedAt: string;
   companies?: TrackedCompany[];
@@ -83,13 +84,14 @@ export interface NewsArticle {
   priority: 'high' | 'medium' | 'low' | null;
   priorityScore: number | null; // 1-10 for sorting (hidden from UI)
   status: 'new_article' | 'update' | null;
-  isSent: boolean;              // Sent to client status
+  isSent: boolean;              // Sent to client status (legacy)
+  isArchived: boolean;          // Archived status
   matchType: 'exact' | 'contextual' | null;
   fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm' | null;
   company: TrackedCompany | null;
   person: TrackedPerson | null;
   tag: NewsTag | null;
-  revenueOwners: { id: string; name: string }[];
+  revenueOwners: { id: string; name: string; email: string | null }[];
 }
 
 export interface RefreshStep {
@@ -285,12 +287,12 @@ export const useRevenueOwners = () => {
     return owner;
   };
 
-  const updateOwner = async (id: string, name: string) => {
+  const updateOwner = async (id: string, data: { name?: string; email?: string | null }) => {
     const owner = await fetchJson(`/news/revenue-owners/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(data),
     });
-    setOwners(prev => prev.map(o => (o.id === id ? owner : o)));
+    setOwners(prev => prev.map(o => (o.id === id ? { ...o, ...owner } : o)));
     return owner;
   };
 
@@ -368,6 +370,7 @@ export interface ArticleFilters {
   tagId?: string;
   priority?: 'high' | 'medium' | 'low';
   isSent?: boolean;
+  isArchived?: boolean;
 }
 
 export const useNewsArticles = (filters?: ArticleFilters) => {
@@ -385,6 +388,7 @@ export const useNewsArticles = (filters?: ArticleFilters) => {
       if (filters?.personId) params.set('personId', filters.personId);
       if (filters?.tagId) params.set('tagId', filters.tagId);
       if (filters?.priority) params.set('priority', filters.priority);
+      if (filters?.isArchived !== undefined) params.set('isArchived', String(filters.isArchived));
 
       const queryString = params.toString();
       const data = await fetchJson(`/news/articles${queryString ? `?${queryString}` : ''}`);
@@ -396,7 +400,7 @@ export const useNewsArticles = (filters?: ArticleFilters) => {
     } finally {
       setLoading(false);
     }
-  }, [filters?.revenueOwnerId, filters?.companyId, filters?.personId, filters?.tagId, filters?.priority]);
+  }, [filters?.revenueOwnerId, filters?.companyId, filters?.personId, filters?.tagId, filters?.priority, filters?.isArchived]);
 
   useEffect(() => {
     fetchArticles();
@@ -495,4 +499,16 @@ export const toggleArticleSent = async (articleId: string, isSent?: boolean): Pr
     body: JSON.stringify({ isSent }),
   });
   return data.isSent;
+};
+
+// ============================================================================
+// Archive Article
+// ============================================================================
+
+export const archiveArticle = async (articleId: string, isArchived?: boolean): Promise<boolean> => {
+  const data = await fetchJson(`/news/articles/${articleId}/archive`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isArchived }),
+  });
+  return data.isArchived;
 };

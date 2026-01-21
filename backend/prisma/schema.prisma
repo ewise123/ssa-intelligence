@@ -362,7 +362,8 @@ model NewsArticle {
   matchType     MatchType?       @map("match_type")
   fetchLayer    FetchLayer?      @map("fetch_layer")
   rawContent    String?          @map("raw_content")
-  isSent        Boolean          @default(false) @map("is_sent") // Sent to client status
+  isSent        Boolean          @default(false) @map("is_sent") // Sent to client status (legacy)
+  isArchived    Boolean          @default(false) @map("is_archived") // Archived status
 
   // Primary source (for backward compatibility)
   sourceUrl    String           @unique @map("source_url")
@@ -389,6 +390,7 @@ model NewsArticle {
   @@index([companyId])
   @@index([tagId])
   @@index([isSent])
+  @@index([isArchived])
   @@map("news_articles")
 }
 

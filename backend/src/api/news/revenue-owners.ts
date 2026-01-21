@@ -60,6 +60,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     res.json({
       id: owner.id,
       name: owner.name,
+      email: owner.email,
       createdAt: owner.createdAt,
       updatedAt: owner.updatedAt,
       companies: owner.companies.map(c => c.company),
@@ -95,20 +96,30 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/news/revenue-owners/:id - Update revenue owner name
+// PUT /api/news/revenue-owners/:id - Update revenue owner name and/or email
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, email } = req.body;
 
-    if (!name || typeof name !== 'string') {
-      res.status(400).json({ error: 'Name is required' });
+    const updateData: { name?: string; email?: string | null } = {};
+
+    if (name && typeof name === 'string') {
+      updateData.name = name.trim();
+    }
+
+    if (email !== undefined) {
+      updateData.email = email ? email.trim() : null;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      res.status(400).json({ error: 'Name or email is required' });
       return;
     }
 
     const owner = await prisma.revenueOwner.update({
       where: { id },
-      data: { name: name.trim() },
+      data: updateData,
     });
 
     res.json(owner);

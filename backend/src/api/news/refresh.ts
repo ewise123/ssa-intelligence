@@ -62,20 +62,6 @@ router.post('/', async (req: Request, res: Response) => {
   ];
 
   try {
-    // Purge articles older than 30 days
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const purgeResult = await prisma.newsArticle.deleteMany({
-      where: {
-        publishedAt: { lt: thirtyDaysAgo },
-      },
-    });
-
-    if (purgeResult.count > 0) {
-      console.log(`[refresh] Purged ${purgeResult.count} articles older than 30 days`);
-    }
-
     // Get all revenue owners with their call diets
     const revenueOwners = await prisma.revenueOwner.findMany({
       include: {

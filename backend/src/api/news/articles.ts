@@ -20,6 +20,7 @@ router.get('/', async (req: Request, res: Response) => {
       tagId,
       priority,
       isSent,
+      isArchived,
       limit = '50',
       offset = '0',
     } = req.query;
@@ -59,6 +60,14 @@ router.get('/', async (req: Request, res: Response) => {
       where.isSent = isSent === 'true';
     }
 
+    // Filter by archived status (defaults to false if not specified)
+    if (isArchived !== undefined) {
+      where.isArchived = isArchived === 'true';
+    } else {
+      // Default: show non-archived articles
+      where.isArchived = false;
+    }
+
     const [articles, total] = await Promise.all([
       prisma.newsArticle.findMany({
         where,
@@ -77,7 +86,7 @@ router.get('/', async (req: Request, res: Response) => {
           revenueOwners: {
             include: {
               revenueOwner: {
-                select: { id: true, name: true },
+                select: { id: true, name: true, email: true },
               },
             },
           },
@@ -103,6 +112,7 @@ router.get('/', async (req: Request, res: Response) => {
       priorityScore: article.priorityScore,
       status: article.status,
       isSent: article.isSent,
+      isArchived: article.isArchived,
       company: article.company,
       person: article.person,
       tag: article.tag,
@@ -135,7 +145,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         revenueOwners: {
           include: {
             revenueOwner: {
-              select: { id: true, name: true },
+              select: { id: true, name: true, email: true },
             },
           },
         },
@@ -180,6 +190,33 @@ router.patch('/:id/sent', async (req: Request, res: Response) => {
     res.json({ success: true, isSent: updated.isSent });
   } catch (error) {
     console.error('Error updating article sent status:', error);
+    res.status(500).json({ error: 'Failed to update article' });
+  }
+});
+
+// PATCH /api/news/articles/:id/archive - Toggle or set isArchived status
+router.patch('/:id/archive', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { isArchived } = req.body;
+
+    const article = await prisma.newsArticle.findUnique({ where: { id } });
+    if (!article) {
+      res.status(404).json({ error: 'Article not found' });
+      return;
+    }
+
+    // If isArchived is provided, use it; otherwise toggle current value
+    const newIsArchived = typeof isArchived === 'boolean' ? isArchived : !article.isArchived;
+
+    const updated = await prisma.newsArticle.update({
+      where: { id },
+      data: { isArchived: newIsArchived },
+    });
+
+    res.json({ success: true, isArchived: updated.isArchived });
+  } catch (error) {
+    console.error('Error updating article archive status:', error);
     res.status(500).json({ error: 'Failed to update article' });
   }
 });

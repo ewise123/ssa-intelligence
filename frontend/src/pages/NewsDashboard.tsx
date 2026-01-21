@@ -26,8 +26,9 @@ import {
   Send,
   Sparkles,
   Link2,
-  Copy,
   Check,
+  Mail,
+  Archive,
 } from 'lucide-react';
 import {
   useNewsArticles,
@@ -38,6 +39,7 @@ import {
   useNewsSearch,
   NewsArticle,
   ArticleFilters,
+  archiveArticle,
   toggleArticleSent,
 } from '../services/newsManager';
 
@@ -116,18 +118,63 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
 
   const hasActiveFilters = Object.values(filters).some(Boolean);
 
-  // Handle article sent status toggle
-  const handleToggleSent = async (articleId: string, currentStatus: boolean) => {
+  // Handle sending email and marking as sent + archived
+  const handleSendEmail = async (article: NewsArticle) => {
+    // Get email recipients from revenue owners
+    const ownersWithEmail = article.revenueOwners.filter(ro => ro.email);
+    if (ownersWithEmail.length === 0) return;
+
+    const toEmail = ownersWithEmail[0]?.email || '';
+    const ccEmails = ownersWithEmail.slice(1).map(ro => ro.email).join(',');
+
+    // Build email content
+    const summary = article.longSummary || article.shortSummary || article.summary || '';
+    const whyItMatters = article.whyItMatters || '';
+    const tagText = article.tag ? article.tag.name : '';
+
+    // Build email body
+    const bodyParts = [];
+    if (summary) bodyParts.push(`Summary:\n${summary}`);
+    if (whyItMatters) bodyParts.push(`Why it Matters:\n${whyItMatters}`);
+    if (tagText) bodyParts.push(`Tags:\n${tagText}`);
+    bodyParts.push(`Link: ${article.sourceUrl}`);
+    const body = bodyParts.join('\n\n');
+
+    // Build mailto URL using encodeURIComponent (not URLSearchParams which uses + for spaces)
+    let mailtoUrl = `mailto:${encodeURIComponent(toEmail)}`;
+    const params = [];
+    if (ccEmails) params.push(`cc=${encodeURIComponent(ccEmails)}`);
+    params.push(`subject=${encodeURIComponent(article.headline)}`);
+    params.push(`body=${encodeURIComponent(body)}`);
+    mailtoUrl += '?' + params.join('&');
+
+    // Open email client
+    window.location.href = mailtoUrl;
+
+    // Mark as sent and archive the article
     try {
-      await toggleArticleSent(articleId, !currentStatus);
-      // Refresh articles to get updated status
+      await toggleArticleSent(article.id, true);
+      await archiveArticle(article.id, true);
       await fetchArticles();
-      // Update selected article if it's the one being toggled
-      if (selectedArticle && selectedArticle.id === articleId) {
-        setSelectedArticle({ ...selectedArticle, isSent: !currentStatus });
+      // Update selected article
+      if (selectedArticle && selectedArticle.id === article.id) {
+        setSelectedArticle({ ...selectedArticle, isSent: true, isArchived: true });
       }
     } catch (err) {
-      console.error('Failed to toggle sent status:', err);
+      console.error('Failed to update article:', err);
+    }
+  };
+
+  // Handle archiving without sending
+  const handleArchive = async (articleId: string) => {
+    try {
+      await archiveArticle(articleId, true);
+      await fetchArticles();
+      if (selectedArticle && selectedArticle.id === articleId) {
+        setSelectedArticle({ ...selectedArticle, isArchived: true });
+      }
+    } catch (err) {
+      console.error('Failed to archive article:', err);
     }
   };
 
@@ -374,15 +421,15 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Sent Status</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Archive Status</label>
               <select
-                value={filters.isSent === undefined ? '' : filters.isSent ? 'true' : 'false'}
-                onChange={(e) => setFilters({ ...filters, isSent: e.target.value === '' ? undefined : e.target.value === 'true' })}
+                value={filters.isArchived === undefined ? '' : filters.isArchived ? 'true' : 'false'}
+                onChange={(e) => setFilters({ ...filters, isArchived: e.target.value === '' ? undefined : e.target.value === 'true' })}
                 className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-300 transition-all bg-slate-50 hover:bg-white cursor-pointer"
               >
-                <option value="">All</option>
-                <option value="true">Sent</option>
-                <option value="false">Not Sent</option>
+                <option value="">Active Only</option>
+                <option value="true">Archived</option>
+                <option value="false">Active</option>
               </select>
             </div>
           </div>
@@ -499,7 +546,8 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
         <ArticleDetailModal
           article={selectedArticle}
           onClose={() => setSelectedArticle(null)}
-          onToggleSent={handleToggleSent}
+          onSendEmail={handleSendEmail}
+          onArchive={handleArchive}
         />
       )}
     </div>
@@ -806,6 +854,12 @@ const NewsCard: React.FC<{
               Sent
             </span>
           )}
+          {article.isArchived && !article.isSent && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-slate-400 to-slate-500 text-white rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm shadow-slate-500/25 border border-slate-400/50">
+              <Check size={9} />
+              Archived
+            </span>
+          )}
         </div>
         {article.sources && article.sources.length > 1 && (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-slate-100 to-slate-200 text-slate-600 rounded-full text-[10px] font-semibold border border-slate-200/80 shadow-sm">
@@ -868,36 +922,14 @@ const NewsCard: React.FC<{
 const ArticleDetailModal: React.FC<{
   article: NewsArticle;
   onClose: () => void;
-  onToggleSent: (articleId: string, currentStatus: boolean) => void;
-}> = ({ article, onClose, onToggleSent }) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopyToClipboard = async () => {
-    const summary = article.longSummary || article.shortSummary || article.summary || '';
-
-    // HTML version with hyperlinked text for email clients
-    const html = `<p><strong>${article.headline}</strong></p><p>${summary}</p><p><a href="${article.sourceUrl}">Link to Article</a></p>`;
-
-    // Plain text fallback
-    const plainText = `${article.headline}\n\n${summary}\n\nLink to Article: ${article.sourceUrl}`;
-
-    try {
-      // Try to copy as rich text (HTML) for email clients
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'text/html': new Blob([html], { type: 'text/html' }),
-          'text/plain': new Blob([plainText], { type: 'text/plain' }),
-        }),
-      ]);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback to plain text if ClipboardItem not supported
-      await navigator.clipboard.writeText(plainText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
+  onSendEmail: (article: NewsArticle) => void;
+  onArchive: (articleId: string) => void;
+}> = ({ article, onClose, onSendEmail, onArchive }) => {
+  // Get email recipients from revenue owners
+  const recipientEmails = article.revenueOwners
+    .filter(ro => ro.email)
+    .map(ro => ({ name: ro.name, email: ro.email }));
+  const hasRecipients = recipientEmails.length > 0;
 
   const priorityConfig: Record<string, { bg: string; text: string; border: string }> = {
     high: { bg: 'bg-gradient-to-r from-rose-500 to-rose-600', text: 'text-white', border: 'border-rose-400' },
@@ -1053,30 +1085,73 @@ const ArticleDetailModal: React.FC<{
           )}
         </div>
 
-        {/* Footer with Copy and Sent Status */}
-        <div className="flex items-center justify-between p-6 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-slate-100">
-          <button
-            onClick={handleCopyToClipboard}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all ${
-              copied
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 shadow-sm'
-            }`}
-          >
-            {copied ? <Check size={18} /> : <Copy size={18} />}
-            {copied ? 'Copied!' : 'Copy for Email'}
-          </button>
-          <button
-            onClick={() => onToggleSent(article.id, article.isSent)}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all ${
-              article.isSent
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30 hover:shadow-xl'
-                : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
-            }`}
-          >
-            <Send size={18} />
-            {article.isSent ? 'Sent to Revenue Owner' : 'Mark as Sent'}
-          </button>
+        {/* Footer with Recipients and Actions */}
+        <div className="p-6 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-slate-100 space-y-4">
+          {/* Status badges */}
+          <div className="flex items-center gap-2">
+            {article.isSent && (
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg text-sm font-medium">
+                <Send size={14} />
+                Sent
+              </span>
+            )}
+            {article.isArchived && !article.isSent && (
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-sm font-medium">
+                <Check size={14} />
+                Archived
+              </span>
+            )}
+          </div>
+
+          {/* Recipients display */}
+          {hasRecipients ? (
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Will be sent to
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {recipientEmails.map((recipient, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm">
+                    <Mail size={14} className="text-slate-400" />
+                    <span className="font-medium text-slate-700">{recipient.name}</span>
+                    <span className="text-slate-400">({recipient.email})</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-sm text-amber-700 flex items-center gap-2">
+                <AlertCircle size={16} />
+                No email addresses configured for revenue owners. Add emails in News Setup.
+              </p>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex items-center justify-between gap-3">
+            {!article.isArchived && (
+              <button
+                onClick={() => onArchive(article.id)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all bg-slate-200 text-slate-600 hover:bg-slate-300"
+              >
+                <Archive size={16} />
+                Archive
+              </button>
+            )}
+            <button
+              onClick={() => onSendEmail(article)}
+              disabled={!hasRecipients}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium transition-all ml-auto ${
+                !hasRecipients
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/30 hover:from-brand-600 hover:to-brand-700 hover:shadow-xl'
+              }`}
+            >
+              <Send size={18} />
+              {article.isSent ? 'Send Again' : 'Send Email'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
