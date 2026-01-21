@@ -39,6 +39,7 @@ Start here:
 - `docs/authentication.md`
 - `docs/RESEARCH-BRIEF-GUARDRAILS.md`
 - `docs/storage-overview.md`
+- `TODO.md`
 
 ## Changelog
 - `CHANGELOG.md`
