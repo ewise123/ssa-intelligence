@@ -139,6 +139,7 @@ export class ClaudeClient {
    * Parse JSON response from Claude
    */
   parseJSON<T>(response: ClaudeResponse, options: { allowRepair?: boolean } = {}): T {
+    const { allowRepair = false } = options;
     try {
       // Remove markdown code blocks if present
       let content = response.content.trim();
@@ -159,7 +160,7 @@ export class ClaudeClient {
       try {
         return JSON.parse(candidate) as T;
       } catch {
-        if (options.allowRepair === false) {
+        if (!allowRepair) {
           throw new Error('Invalid JSON response');
         }
         const repaired = jsonrepair(candidate);

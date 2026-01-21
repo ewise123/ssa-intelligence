@@ -7,6 +7,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { getResearchOrchestrator } from '../../services/orchestrator.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
+import { buildCancelResponse } from './cancel-utils.js';
 
 export async function cancelResearchJob(req: Request, res: Response) {
   try {
@@ -61,7 +62,7 @@ export async function cancelResearchJob(req: Request, res: Response) {
     const orchestrator = getResearchOrchestrator(prisma);
     orchestrator.processQueue(true).catch(console.error);
 
-    return res.json({ success: true, jobId: id, status: 'deleted' });
+    return res.json(buildCancelResponse(id));
   } catch (error) {
     console.error('Error cancelling research job:', error);
     return res.status(500).json({

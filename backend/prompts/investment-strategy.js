@@ -2,21 +2,32 @@
  * Report-Specific Section: Investment Strategy and Focus
  */
 
+import { appendReportTypeAddendum } from './report-type-addendums.js';
+
 export function buildInvestmentStrategyPrompt(input) {
   const { foundation, companyName } = input;
   const foundationJson = JSON.stringify(foundation, null, 2);
 
-  return `# Investment Strategy and Focus - Research Prompt
+  const basePrompt = `# Investment Strategy and Focus - Research Prompt
 
-You are a private equity research analyst preparing a concise strategy readout for ${companyName}. Focus on investment strategy, sector focus, and platform vs. add-on patterns. Keep analysis evidence-based and neutral.
+## CRITICAL INSTRUCTIONS
 
-## Input context (foundation)
+**Follow ALL rules in style-guide.md** - This is mandatory for formatting consistency.
+
+**Your mission:** Produce a concise investment strategy readout for **${companyName}**, focusing on strategy, sector focus, and platform vs add-on patterns.
+
+---
+
+## INPUT CONTEXT (From Foundation)
 \`\`\`json
 ${foundationJson}
 \`\`\`
 
-## Output requirements
-Return ONLY valid JSON matching this schema:
+---
+
+## OUTPUT REQUIREMENTS
+
+**You MUST output valid JSON matching this EXACT schema:**
 
 \`\`\`typescript
 interface InvestmentStrategyOutput {
@@ -30,8 +41,44 @@ interface InvestmentStrategyOutput {
 \`\`\`
 
 ## Guidance
-- Summarize the firm’s investment posture and how it differentiates.
+- Summarize the firm's investment posture and how it differentiates.
 - Use source-backed signals from the foundation catalog.
 - Avoid generic PE language; highlight observed patterns.
-`;
+
+## Example output (format only)
+\`\`\`json
+{
+  "confidence": { "level": "MEDIUM", "reason": "Source coverage is solid but limited detail on sector priorities." },
+  "strategy_summary": "Focuses on mid-market platforms in durable sectors with operational value creation and bolt-on M&A.",
+  "focus_areas": ["Operational improvement", "Buy-and-build", "Digital enablement"],
+  "sector_focus": ["Business services", "Healthcare", "Industrial tech"],
+  "platform_vs_addon_patterns": ["Platform-first in new sectors", "Add-ons to deepen regional scale"],
+  "sources_used": ["S1", "S3"]
+}
+\`\`\`
+
+## CRITICAL REMINDERS
+
+1. Follow style guide: All formatting rules apply
+2. Valid JSON only: No markdown, no headings, no prose outside JSON
+3. Source everything: No unsourced claims
+4. Geography focus: Emphasize the target geography throughout
+5. Exact schema match: Follow the TypeScript interface exactly
+
+---
+
+## Source rules (STRICT)
+1. **Source IDs must be S# only.** Reuse IDs from \`foundation.source_catalog\`; do **not** renumber existing sources.
+2. **If multiple sources apply,** pick the most authoritative for the claim and list all relevant S# in \`sources_used\`.
+3. **Never invent IDs or use non-S formats.** Only S# strings are valid.
+
+**Example:** \`"sources_used": ["S1","S3","S8"]\`.
+
+**Before outputting JSON, verify:**
+- [ ] Valid JSON syntax (no markdown)
+- [ ] \`sources_used\` only contains S# values
+
+**OUTPUT ONLY VALID JSON MATCHING THE SCHEMA.**`;
+
+  return appendReportTypeAddendum('investment_strategy', input.reportType, basePrompt);
 }

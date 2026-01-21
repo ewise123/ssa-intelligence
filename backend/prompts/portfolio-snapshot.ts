@@ -59,7 +59,7 @@ export interface PortfolioSnapshotOutput {
 }
 
 export function buildPortfolioSnapshotPrompt(input: PortfolioSnapshotInput): string {
-  const { foundation, companyName } = input;
+  const { foundation, companyName, geography } = input;
   const foundationJson = JSON.stringify(foundation, null, 2);
 
   const basePrompt = `# Portfolio Snapshot - Research Prompt
@@ -69,6 +69,8 @@ export function buildPortfolioSnapshotPrompt(input: PortfolioSnapshotInput): str
 **Follow ALL rules in style-guide.md** - This is mandatory for formatting consistency.
 
 **Your mission:** Generate a PE portfolio snapshot for **${companyName}**. Provide a concise overview of the current portfolio, grouped by sector or platform when possible.
+
+**Target geography:** ${geography}
 
 ---
 
@@ -103,6 +105,7 @@ interface PortfolioSnapshotOutput {
 - Include at least 4 portfolio companies with credible sources.
 - Note platform vs add-on where visible.
 - Keep the summary focused on portfolio composition patterns.
+- Emphasize the target geography (${geography}) in summary and company notes.
 
 ## Example output (format only)
 \`\`\`json
@@ -136,7 +139,7 @@ interface PortfolioSnapshotOutput {
 1. Follow style guide: All formatting rules apply
 2. Valid JSON only: No markdown, no headings, no prose outside JSON
 3. Source everything: No unsourced claims
-4. Geography focus: Emphasize the target geography throughout
+4. Geography focus: Emphasize the target geography (${geography}) throughout
 5. Exact schema match: Follow the TypeScript interface exactly
 
 ---

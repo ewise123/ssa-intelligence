@@ -6,6 +6,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
+import { filterJobsByDerivedStatus } from './list-utils.js';
 import { deriveJobStatus } from './status-utils.js';
 
 interface ListQueryParams {
@@ -32,58 +33,70 @@ export async function listResearch(req: Request, res: Response) {
     const sortBy = query.sortBy || 'createdAt';
     const sortOrder = query.sortOrder || 'desc';
 
+    const statusFilter = query.status;
+    const shouldFilterByDerivedStatus = Boolean(statusFilter);
+
     // Build where clause
     const visibilityWhere = buildVisibilityWhere(req.auth);
-    const where: any = query.status
-      ? { AND: [visibilityWhere, { status: query.status }] }
-      : visibilityWhere;
+    const where = visibilityWhere;
 
     // Fetch jobs
-    const [jobs, total] = await Promise.all([
-      prisma.researchJob.findMany({
-        where,
-        orderBy: { [sortBy]: sortOrder },
-        take: limit,
-        skip: offset,
-        select: {
-          id: true,
-          status: true,
-          companyName: true,
-          geography: true,
-          industry: true,
-          domain: true,
-          progress: true,
-          currentStage: true,
-          reportType: true,
-          visibilityScope: true,
-          selectedSections: true,
-          userAddedPrompt: true,
-          overallConfidence: true,
-          overallConfidenceScore: true,
-          promptTokens: true,
-          completionTokens: true,
-          costUsd: true,
-          createdAt: true,
-          updatedAt: true,
-          completedAt: true,
-          queuedAt: true,
-          thumbnailUrl: true,
-          // include sub-job status for effective status + generated sections
-          subJobs: {
-            select: { stage: true, status: true }
-          },
-          jobGroups: {
-            select: {
-              group: { select: { id: true, name: true, slug: true } }
-            }
+    const baseQuery = {
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      select: {
+        id: true,
+        status: true,
+        companyName: true,
+        geography: true,
+        industry: true,
+        domain: true,
+        progress: true,
+        currentStage: true,
+        reportType: true,
+        visibilityScope: true,
+        selectedSections: true,
+        userAddedPrompt: true,
+        overallConfidence: true,
+        overallConfidenceScore: true,
+        promptTokens: true,
+        completionTokens: true,
+        costUsd: true,
+        createdAt: true,
+        updatedAt: true,
+        completedAt: true,
+        queuedAt: true,
+        thumbnailUrl: true,
+        // include sub-job status for effective status + generated sections
+        subJobs: {
+          select: { stage: true, status: true }
+        },
+        jobGroups: {
+          select: {
+            group: { select: { id: true, name: true, slug: true } }
           }
         }
-      }),
-      prisma.researchJob.count({ where })
-    ]);
+      }
+    };
+
+    const jobs = shouldFilterByDerivedStatus
+      ? await prisma.researchJob.findMany(baseQuery)
+      : await prisma.researchJob.findMany({
+          ...baseQuery,
+          take: limit,
+          skip: offset
+        });
+
+    const filteredJobs = filterJobsByDerivedStatus(jobs, statusFilter);
+    const pagedJobs = shouldFilterByDerivedStatus
+      ? filteredJobs.slice(offset, offset + limit)
+      : filteredJobs;
+    const total = shouldFilterByDerivedStatus
+      ? filteredJobs.length
+      : await prisma.researchJob.count({ where });
 
     // Map to response format
-    const results = jobs.map(job => ({
+    const results = pagedJobs.map(job => ({
       id: job.id,
       status: deriveJobStatus({ status: job.status, subJobs: job.subJobs }),
       companyName: job.companyName,
