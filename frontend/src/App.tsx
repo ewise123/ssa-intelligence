@@ -4,6 +4,8 @@ import { Home } from './pages/Home';
 import { NewResearch } from './pages/NewResearch';
 import { ResearchDetail } from './pages/ResearchDetail';
 import { AdminUsers } from './pages/AdminUsers';
+import { NewsDashboard } from './pages/NewsDashboard';
+import { NewsSetup } from './pages/NewsSetup';
 import { useReportBlueprints, useResearchManager, useUserContext } from './services/researchManager';
 
 export default function App() {
@@ -60,6 +62,12 @@ export default function App() {
     }
     if (currentPath === '/admin') {
       return <AdminUsers isAdmin={userContext.user?.isAdmin} />;
+    }
+    if (currentPath === '/news') {
+      return <NewsDashboard onNavigate={navigate} />;
+    }
+    if (currentPath === '/news/setup') {
+      return <NewsSetup onNavigate={navigate} />;
     }
     if (currentPath.startsWith('/research/')) {
       return (

@@ -34,6 +34,16 @@ import { listUsers } from './api/admin/users.js';
 import { addGroupMember, createGroup, listAdminGroups, removeGroupMember } from './api/admin/groups.js';
 import { getReportBlueprints } from './api/report-blueprints.js';
 
+// News Intelligence routes
+import newsTagsRouter from './api/news/tags.js';
+import newsCompaniesRouter from './api/news/companies.js';
+import newsPeopleRouter from './api/news/people.js';
+import newsRevenueOwnersRouter from './api/news/revenue-owners.js';
+import newsArticlesRouter from './api/news/articles.js';
+import newsRefreshRouter from './api/news/refresh.js';
+import newsSearchRouter from './api/news/search.js';
+import newsExportRouter from './api/news/export.js';
+
 // ============================================================================
 // SERVER SETUP
 // ============================================================================
@@ -171,6 +181,18 @@ app.post('/api/admin/groups', authMiddleware, requireAdmin, createGroup);
 app.post('/api/admin/groups/:groupId/members', authMiddleware, requireAdmin, addGroupMember);
 app.delete('/api/admin/groups/:groupId/members/:userId', authMiddleware, requireAdmin, removeGroupMember);
 app.get('/api/report-blueprints', ...applyLimiter(getLimiter), authMiddleware, getReportBlueprints);
+
+// ============================================================================
+// NEWS INTELLIGENCE API (No auth for MVP)
+// ============================================================================
+app.use('/api/news/tags', newsTagsRouter);
+app.use('/api/news/companies', newsCompaniesRouter);
+app.use('/api/news/people', newsPeopleRouter);
+app.use('/api/news/revenue-owners', newsRevenueOwnersRouter);
+app.use('/api/news/articles', newsArticlesRouter);
+app.use('/api/news/refresh', newsRefreshRouter);
+app.use('/api/news/search', newsSearchRouter);
+app.use('/api/news/export', newsExportRouter);
 
 // Dev-only auth echo to inspect forwarded headers
 app.get('/api/debug/auth', authMiddleware, (req, res) => {
