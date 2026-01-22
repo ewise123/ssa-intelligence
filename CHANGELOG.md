@@ -12,6 +12,8 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Docs: add TODO tracker and link it from the README.
 - Docs: populate TODO with current backlog items.
 - UI: update app branding, sidebar labels/sections, and widen the left nav for the new title.
+- Feat: Add CRUD functionality to Admin page
+- Fix: decrement group member counts when deleting a user in the admin UI.
 
 ## Release process
 - When shipping a release, move the `[Unreleased]` bullets into a new section `## [X.Y.Z] - YYYY-MM-DD`.
