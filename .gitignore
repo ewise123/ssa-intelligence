@@ -30,6 +30,8 @@ Thumbs.db
 .idea/
 .vscode/
 .worktrees/
+.claude/settings.local.json
+
 # Nested Obsidian vault
 ssa-intelligence/
 ~$Mel's_Workflow_Inventory Copy.xlsx
