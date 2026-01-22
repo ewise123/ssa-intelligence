@@ -191,8 +191,8 @@ ${section2Json}
 **Priority: CRITICAL**
 
 **For EACH peer, search for:**
-- "[Peer name] 10-K" OR "[Peer name] annual report 2024"
-- "[Peer name] Q3 2024 earnings"
+- "[Peer name] 10-K" OR "[Peer name] latest annual report"
+- "[Peer name] most recent earnings"
 - "[Peer name] investor presentation"
 - "[Peer name] ${geography} revenue"
 

@@ -29,7 +29,7 @@ ${foundationJson}
 **Search for:**
 - "${companyName} company profile"
 - "${companyName} 10-K business description" OR "${companyName} annual report"
-- "${companyName} investor presentation 2024"
+- "${companyName} latest investor presentation"
 - "${companyName} about us" OR "${companyName} company overview"
 
 **Extract:**
@@ -52,7 +52,7 @@ ${foundationJson}
 - "${companyName} ${geography} facilities"
 - "${companyName} ${geography} locations" OR "${companyName} ${geography} operations"
 - "${companyName} operational footprint"
-- "${companyName} global locations 2024"
+- "${companyName} global locations"
 
 **Extract for ${geography}:**
 - **Core facilities:** Locations, size, products made
@@ -71,7 +71,7 @@ ${foundationJson}
 ### 3. Strategic Priorities (Priority: HIGH)
 
 **Search for:**
-- "${companyName} strategic priorities 2024"
+- "${companyName} strategic priorities"
 - "${companyName} earnings transcript strategic initiatives"
 - "${companyName} investor day presentation"
 - "${companyName} CEO letter shareholders"
@@ -88,7 +88,7 @@ ${foundationJson}
   - Capacity additions, market penetration, customer wins
 - **Management emphasis:** What leadership talks about most
 
-**Time focus:** Last 12-18 months of announcements and priorities
+**Time focus:** Use the time horizon provided in report inputs.
 
 ### 4. Key Leadership (Priority: MEDIUM)
 
@@ -103,7 +103,7 @@ ${foundationJson}
 - **Segment leaders:** Presidents/VPs of major business segments
 - **Regional leaders:** ${geography} country manager, regional president
   - Name, title, tenure, background
-- **Recent changes:** New hires, departures, reorganizations (last 12 months)
+- **Recent changes:** New hires, departures, reorganizations (within the time horizon)
 
 **Note:** Focus on leaders relevant to ${geography} operations or with P&L responsibility
 
@@ -138,7 +138,7 @@ interface Section3Output {
       location: string;       // City, ${geography}
       type: 'Manufacturing' | 'R&D' | 'Distribution' | 'Office' | 'Headquarters';
       description: string;    // 1-2 sentences on capabilities
-      employees?: number;
+      employees?: number | null;
       source: string;         // single S# (e.g., "S3")
     }>;
     regional_stats: {
@@ -193,7 +193,7 @@ interface Section3Output {
    - "${companyName} is a global provider of products and services across multiple end markets, with a portfolio spanning priority business lines (S1)."
 
 2. **Revenue/scale** (1 sentence)
-   - "The company generated $18.5B in revenue in FY2024 with 58,000 employees globally (S1)."
+   - "The company generated $18.5B in revenue in the latest fiscal year with 58,000 employees globally (S1)."
 
 3. **${geography} operations** (2-3 sentences - 75-80% FOCUS)
    - "**${geography} operations** represent 18% of global revenue with 12 facilities and 4,200 employees concentrated in priority business lines (S1, S3)."

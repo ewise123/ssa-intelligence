@@ -50,14 +50,14 @@ ${section2Json}
 **For public companies:**
 
 **Search for:**
-- "${companyName} 10-K 2024" OR "${companyName} 20-F 2024"
-- "${companyName} 10-Q Q3 2024"
+- "${companyName} latest 10-K" OR "${companyName} latest 20-F"
+- "${companyName} most recent 10-Q"
 - "${companyName} investor presentation segments"
 
 **Navigate to segment reporting sections in 10-K/10-Q**
 
 **Extract for EACH segment:**
-- Segment revenue (last 3 years + latest quarter)
+- Segment revenue (within the time horizon + latest quarter if available)
 - Operating income/EBITDA by segment
 - Operating margin by segment
 - Geographic revenue breakdown by segment

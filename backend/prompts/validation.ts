@@ -234,7 +234,7 @@ export const companyOverviewOutputSchema = z.object({
       name: z.string(),
       location: z.string(),
       type: z.enum(['Manufacturing', 'R&D', 'Distribution', 'Office', 'Headquarters']),
-      employees: z.number().optional(),
+      employees: z.number().nullable().optional(),
       capabilities: z.string().optional()
     })),
     regional_stats: z.union([z.string(), z.record(z.any())])

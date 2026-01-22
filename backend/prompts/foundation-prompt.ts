@@ -73,7 +73,7 @@ Follow this priority order for data gathering:
 #### 1. Company Filings (Priority: CRITICAL)
 **Search for:**
 - "**${companyName}** 10-K" OR "**${companyName}** 20-F" OR "**${companyName}** annual report"
-- "**${companyName}** 10-Q" OR "**${companyName}** 6-K" (last 4 quarters)
+- "**${companyName}** 10-Q" OR "**${companyName}** 6-K" (most recent quarters within the time horizon)
 - "**${companyName}** investor presentation" + current year
 - "**${companyName}** proxy statement DEF 14A"
 
@@ -99,9 +99,9 @@ Follow this priority order for data gathering:
 
 #### 2. Earnings Transcripts (Priority: CRITICAL)
 **Search for:**
-- "**${companyName}** earnings transcript Q4 2024"
-- "**${companyName}** earnings call Q3 2024"
-- "**${companyName}** quarterly results" + last 4 quarters
+- "**${companyName}** latest earnings transcript"
+- "**${companyName}** latest earnings call"
+- "**${companyName}** quarterly results" + time horizon
 
 **Extract:**
 - Management commentary on ${geography} performance
@@ -125,7 +125,7 @@ Follow this priority order for data gathering:
 #### 3. Analyst/Equity Research (Priority: HIGH)
 **Search for:**
 - "**${companyName}** ${geography} analyst report"
-- "**${companyName}** equity research" + last 12 months
+- "**${companyName}** equity research" + time horizon
 - "**${companyName}** investment thesis"
 - "**${companyName}** sector research"
 
@@ -160,7 +160,7 @@ Follow this priority order for data gathering:
 - Management changes
 - Competitive moves
 
-**Prioritize:** Last 12 months, ${geography}-specific news
+**Prioritize:** Within the time horizon, ${geography}-specific news
 
 ---
 
@@ -253,8 +253,8 @@ For EACH business segment the company operates:
 
 #### 10. Trends & Market Dynamics (Priority: HIGH)
 **Search for:**
-- "sector trends 2024"
-- "${geography} sector outlook 2024"
+- "recent sector trends"
+- "${geography} sector outlook"
 - "nearshoring trends ${geography}"
 - "digitalization trends"
 - "ESG sector companies"

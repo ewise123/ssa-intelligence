@@ -1011,7 +1011,7 @@ const mapJobFromStatus = (
 
   if (derivedStatus === 'queued') {
     currentAction = queuePosition && queuePosition > 1
-      ? `Queued behind ${queuePosition - 1} job(s)`
+      ? 'Queued behind other jobs (active jobs may be private)'
       : 'Queued...';
   } else if (derivedStatus === 'running') {
     currentAction = status.currentStage ? `Running ${status.currentStage}` : existing?.currentAction || '';
@@ -1150,8 +1150,8 @@ export const useResearchManager = () => {
       status: 'queued',
       progress: 0,
       currentAction: res.queuePosition && res.queuePosition > 1
-        ? `Queued behind ${res.queuePosition - 1} job(s)`
-        : 'Queued... ',
+        ? 'Queued behind other jobs (active jobs may be private)'
+        : 'Queued...',
       sections: buildEmptySections(),
     };
 

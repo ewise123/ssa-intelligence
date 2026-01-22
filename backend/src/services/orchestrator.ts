@@ -866,7 +866,23 @@ export class ResearchOrchestrator {
     const basePrompt = config.promptBuilder(input);
     const userPrompt = typeof job.userAddedPrompt === 'string' ? job.userAddedPrompt.trim() : '';
     const reportInputsText = this.formatReportInputs(job);
+    const timeHorizon = this.getReportInputValue(job, 'timeHorizon');
     const promptSections = [basePrompt];
+    if (timeHorizon) {
+      promptSections.push(
+        [
+          '---',
+          '',
+          '## TIME HORIZON (MANDATORY)',
+          '',
+          `Time horizon: ${timeHorizon}`,
+          'Use this time horizon as a strict rolling window ending today.',
+          'Treat any "latest" or "most recent" references as the most recent within the time horizon.',
+          'Do not anchor to fixed calendar years or date ranges outside the specified horizon.',
+          'If sources fall outside the time horizon, exclude them unless explicitly required by a user input.'
+        ].join('\n')
+      );
+    }
     if (reportInputsText) {
       promptSections.push(
         [
@@ -948,6 +964,28 @@ export class ResearchOrchestrator {
       .filter((line): line is string => Boolean(line));
 
     return lines.length ? lines.join('\n') : null;
+  }
+
+  private getReportInputValue(
+    job: { metadata: Prisma.JsonValue },
+    key: string
+  ): string | null {
+    if (!job.metadata || typeof job.metadata !== 'object' || Array.isArray(job.metadata)) {
+      return null;
+    }
+
+    const metadata = job.metadata as Record<string, unknown>;
+    const rawInputs = metadata.reportInputs;
+    if (!rawInputs || typeof rawInputs !== 'object' || Array.isArray(rawInputs)) {
+      return null;
+    }
+
+    const reportInputs = rawInputs as Record<string, unknown>;
+    if (!Object.prototype.hasOwnProperty.call(reportInputs, key)) {
+      return null;
+    }
+
+    return this.formatReportInputValue(reportInputs[key]);
   }
 
   private formatReportInputValue(value: unknown): string | null {
@@ -1366,7 +1404,7 @@ export class ResearchOrchestrator {
           'Net IRR (%)',
           'Active Portfolio Companies (Count)',
           'Typical Hold Period (years)',
-          'Recent Exits (Count, 12-24 months)'
+          'Recent Exits (Count, within time horizon)'
         ];
       case 'FS':
         return [

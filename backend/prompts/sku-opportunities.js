@@ -126,16 +126,16 @@ Reference these when mapping opportunities:
 
 **Search for problems in these sources:**
 
-1. **Earnings transcripts** (last 4 quarters)
-   - Search: "${companyName} earnings transcript Q4 2024"
+1. **Earnings transcripts** (most recent quarters within the time horizon)
+   - Search: "${companyName} latest earnings transcript"
    - Look for: Management discussion of challenges, headwinds, initiatives
 
 2. **10-K/10-Q Risk Factors**
-   - Search: "${companyName} 10-K 2024 risk factors"
+   - Search: "${companyName} latest 10-K risk factors"
    - Look for: Material operational or financial risks
 
 3. **Analyst reports**
-   - Search: "${companyName} analyst report 2024"
+   - Search: "${companyName} recent analyst report"
    - Look for: Operational concerns, competitive weaknesses
 
 4. **Section 5 Trends** (if provided)

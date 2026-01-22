@@ -129,7 +129,7 @@ const REQUIRED_KPIS_BY_REPORT_TYPE: Record<ReportTypeId, string[]> = {
     'Net IRR (%)',
     'Active Portfolio Companies (Count)',
     'Typical Hold Period (years)',
-    'Recent Exits (Count, 12-24 months)'
+    'Recent Exits (Count, within time horizon)'
   ],
   FS: [
     'Total Assets ($B)',
@@ -206,7 +206,7 @@ export function buildFinancialSnapshotPrompt(input: Section2Input): string {
 
 **Follow ALL rules in style-guide.md** - This is mandatory for formatting consistency.
 
-**Your mission:** Generate Section 2 (Financial Snapshot) with comprehensive current-year/LTM financial analysis for **${companyName}** in **${geography}**.
+**Your mission:** Generate Section 2 (Financial Snapshot) with comprehensive time-horizon financial analysis for **${companyName}** in **${geography}**.
 
 ---
 
@@ -224,20 +224,20 @@ ${foundationJson}
 
 ### Primary Research Focus
 
-**Search for current year/LTM financial metrics:**
+**Search for financial metrics within the time horizon (current year/LTM if within scope):**
 
 1. **Revenue Metrics (Priority: CRITICAL)**
-   - Search: "${companyName} revenue Q4 2024" OR "${companyName} 10-Q Q3 2024"
-   - Search: "${companyName} ${geography} revenue FY2024"
+   - Search: "${companyName} latest revenue" OR "${companyName} most recent 10-Q"
+   - Search: "${companyName} ${geography} revenue latest fiscal year"
    - Extract:
-     - Total company revenue (latest quarter, LTM, or FY)
+     - Total company revenue (latest quarter, LTM if within scope, or latest FY within the time horizon)
      - YoY growth rate (global and ${geography})
      - ${geography} revenue as % of total
      - Segment breakdown if available
 
 2. **Profitability Metrics (Priority: CRITICAL)**
    - Search: "${companyName} EBITDA margin" OR "${companyName} operating margin"
-   - Search: "${companyName} earnings release Q4 2024"
+   - Search: "${companyName} most recent earnings release"
    - Extract:
      - EBITDA margin (latest period)
      - Operating margin
@@ -257,7 +257,7 @@ ${foundationJson}
      - Calculate from: Current Assets, Current Liabilities, AR, Inventory, AP
 
 4. **Cash Flow Metrics (Priority: HIGH)**
-   - Search: "${companyName} cash flow statement 2024"
+   - Search: "${companyName} latest cash flow statement"
    - Extract:
      - Operating cash flow (latest period)
      - Free cash flow (OCF - CapEx)
@@ -272,7 +272,7 @@ ${foundationJson}
      - Working capital as % of revenue*
 
 6. **Industry Benchmarks (Priority: CRITICAL)**
-   - Search: "sector benchmarks 2024"
+   - Search: "latest sector benchmarks"
    - Search: "${companyName} peer comparison" OR "${companyName} vs competitors"
    - Search: "Damodaran industry averages" OR "S&P Capital IQ sector"
    - Extract:
@@ -364,7 +364,7 @@ ${reportTypeFocus}
 **Write 4-6 sentences covering:**
 
 1. **Revenue trajectory:** Global vs ${geography} trends
-   - Example: "**${geography} operations** generated {currency}X.XB revenue (X% of global) in FY2024, growing X% YoY vs X% globally (S1)."
+   - Example: "**${geography} operations** generated {currency}X.XB revenue (X% of global) in the latest fiscal year, growing X% YoY vs X% globally (S1)."
 
 2. **Profitability evolution:** EBITDA margin changes and drivers
    - Example: "EBITDA margin expanded 80bps to 18.3% driven by pricing actions and operational efficiency, outperforming industry average of 16.5% (S1, S7)."
@@ -456,7 +456,7 @@ WRONG patterns:
 {
   "metric": "Inventory Turns",
   "formula": "Cost of Sales / Average Inventory",
-  "calculation": "FY2024: $3,200M COGS / $762M avg inventory = 4.2x",
+  "calculation": "Latest FY: $3,200M COGS / $762M avg inventory = 4.2x",
   "source": "S1"
 }
 \`\`\`
@@ -499,7 +499,7 @@ WRONG patterns:
 **Source A (Preferred):**
 - Search: "Damodaran industry data"
 - Search: "S&P Capital IQ sector averages"
-- Search: "[Industry association] benchmarks 2024"
+- Search: "[Industry association] latest benchmarks"
 - True industry dataset from authoritative source
 
 **Source B (Fallback):**
@@ -543,7 +543,7 @@ WRONG patterns:
 {
   "confidence": {
     "level": "HIGH",
-    "reason": "Recent Q3 2024 10-Q with segment detail; geography metrics disclosed"
+    "reason": "Recent 10-Q with segment detail; geography metrics disclosed"
   }
 }
 \`\`\`
@@ -711,7 +711,7 @@ export function formatSection2ForDocument(output: Section2Output): string {
   markdown += `${output.summary}
 
 `;
-  markdown += `## 2.2 Current Year / LTM KPIs
+  markdown += `## 2.2 Time Horizon KPIs
 
 `;
   markdown += `Note: Monetary values shown in USD millions unless stated.

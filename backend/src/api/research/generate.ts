@@ -105,6 +105,24 @@ export async function generateResearch(req: Request, res: Response) {
       return res.status(400).json({ error: 'Missing report blueprint for reportType' });
     }
 
+    const requiredInputs = blueprint.inputs.filter(
+      (input) => input.required && input.id !== 'companyName'
+    );
+    const missingRequired = requiredInputs.filter((input) => {
+      if (!reportInputs) return true;
+      const value = reportInputs[input.id];
+      if (typeof value === 'string') return !value.trim();
+      if (Array.isArray(value)) return value.length === 0;
+      return value === null || value === undefined;
+    });
+    if (missingRequired.length) {
+      return res.status(400).json({
+        error: `Missing required report inputs: ${missingRequired
+          .map((input) => input.label)
+          .join(', ')}`
+      });
+    }
+
     const allowedSections = new Set(blueprint.sections.map((section) => section.id));
     const rawSelected = Array.isArray(body.selectedSections) ? body.selectedSections : [];
     const selectedSections = Array.from(

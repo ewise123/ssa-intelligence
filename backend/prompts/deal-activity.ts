@@ -67,7 +67,7 @@ export function buildDealActivityPrompt(input: DealActivityInput): string {
 
 **Follow ALL rules in style-guide.md** - This is mandatory for formatting consistency.
 
-**Your mission:** Summarize recent investments, add-ons, or exits for **${companyName}** (last 12-24 months where possible).
+**Your mission:** Summarize recent investments, add-ons, or exits for **${companyName}** (within the time horizon).
 
 ---
 
@@ -110,7 +110,7 @@ interface DealActivityOutput {
   "deals": [
     {
       "company": "Example Platform Co",
-      "date": "2024-08",
+      "date": "YYYY-MM",
       "deal_type": "Platform acquisition",
       "rationale": "Entry into healthcare services vertical.",
       "source": "S4"

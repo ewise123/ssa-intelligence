@@ -8,7 +8,7 @@ export function buildRecentNewsPrompt(input) {
 
 **Follow ALL rules in style-guide.md** - This is mandatory for formatting consistency.
 
-**Your mission:** Generate Section 8 (Recent News & Events) with 3-5 geography-focused news items from the last 12 months for **${companyName}** in **${geography}**.
+**Your mission:** Generate Section 8 (Recent News & Events) with 3-5 geography-focused news items within the specified time horizon for **${companyName}** in **${geography}**.
 
 ---
 
@@ -29,7 +29,7 @@ ${foundationJson}
 **Priority 1: Geography-Specific News (75-80% focus)**
 
 Search for:
-- "${companyName} ${geography} news 2024"
+- "${companyName} ${geography} news last [time horizon]"
 - "${companyName} ${geography} investment"
 - "${companyName} ${geography} expansion"
 - "${companyName} ${geography} facility"
@@ -56,7 +56,7 @@ Search for:
 **Priority 2: Global News with Regional Implications**
 
 Search for:
-- "${companyName} news 2024"
+- "${companyName} news last [time horizon]"
 - "${companyName} earnings announcement"
 - "${companyName} acquisition"
 - "${companyName} strategic announcement"
@@ -76,12 +76,12 @@ Search for:
 
 ## TIME PERIOD
 
-**Required:** Last 12 months (December 2023 - December 2024)
+**Required:** Use the provided time horizon as a rolling window ending today.
 
 **Priority ordering:**
-1. Last 3 months (September-December 2024) - Most relevant
-2. Last 6 months (June-December 2024) - Very relevant  
-3. Last 12 months (December 2023-December 2024) - Relevant
+1. Most recent items within the time horizon - Most relevant
+2. Mid-horizon items within the time horizon - Relevant
+3. Older items within the time horizon - Include only if material
 
 **Include date prominently** for each news item
 
@@ -99,7 +99,7 @@ interface Section8Output {
   };
   
   news_items: Array<{
-    date: string;              // "November 15, 2024" or "Q3 2024"
+    date: string;              // "November 15, 20XX" or "Q3 20XX"
     headline: string;          // English headline (original language in parentheses if needed)
     original_language?: string; // If non-English: "(Original: [headline])"
     source: string;            // "S#" format
@@ -127,9 +127,9 @@ interface Section8Output {
 **For each news item:**
 
 ### 1. Date
-- Exact date if available: "November 15, 2024"
-- Quarter if specific date unknown: "Q3 2024"
-- Month if day unknown: "November 2024"
+- Exact date if available: "November 15, 20XX"
+- Quarter if specific date unknown: "Q3 20XX"
+- Month if day unknown: "November 20XX"
 
 ### 2. Headline
 - Use English translation if original is non-English
@@ -236,13 +236,13 @@ interface Section8Output {
 
 **HIGH:**
 - Multiple recent Tier-1 sources covering ${geography}
-- Clear geography-specific news from last 3 months
+- Clear geography-specific news from the most recent portion of the time horizon
 - Company press releases with regional detail
 - 3+ highly relevant news items found
 
 **MEDIUM:**
 - Mix of Tier-1 and regional sources
-- Some geography-specific news from last 6 months
+- Some geography-specific news from the recent half of the time horizon
 - 3 relevant news items with some regional connection
 - Some inference required to connect to ${geography}
 
@@ -261,7 +261,7 @@ interface Section8Output {
 - [ ] Valid JSON syntax (no markdown)
 - [ ] Confidence assigned with reason
 - [ ] 3-5 news items selected (quality over quantity)
-- [ ] All news items from last 12 months
+- [ ] All news items within the time horizon
 - [ ] Dates specified for each item
 - [ ] Headlines concise and factual
 - [ ] Original language noted if non-English
@@ -280,7 +280,7 @@ interface Section8Output {
 
 1. **Follow style guide** for all formatting
 2. **75-80% geography focus** - prioritize regional news
-3. **Last 12 months only** - December 2023 to December 2024
+3. **Time horizon only** - No items outside the specified horizon
 4. **Quality over quantity** - 3-5 impactful items better than 7 mediocre ones
 5. **Source every item** with S# reference
 6. **Explain implications** - so what? why does this matter?
@@ -294,7 +294,7 @@ interface Section8Output {
 
 **Company:** ${companyName}  
 **Geography:** ${geography}  
-**Time Period:** Last 12 months (December 2023 - December 2024)
+**Time Period:** Use the specified time horizon
 **Foundation Context:** [Provided above]
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
@@ -330,7 +330,7 @@ export function validateSection8Output(output) {
     return true;
 }
 export function formatSection8ForDocument(output) {
-    let markdown = `# 8. Recent News & Events (Last 12 Months)\n\n`;
+    let markdown = `# 8. Recent News & Events\n\n`;
     markdown += `**Confidence: ${output.confidence.level}** – ${output.confidence.reason}\n\n`;
     for (const item of output.news_items) {
         markdown += `### ${item.date}\n\n`;

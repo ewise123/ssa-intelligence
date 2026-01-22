@@ -193,12 +193,12 @@ ${section4Json}
 **Priority: CRITICAL**
 
 **Search for:**
-- "sector trends 2024"
-- "${geography} sector outlook 2024"
-- "${geography} economic indicators 2024"
-- "global supply chain trends 2024"
+- "recent sector trends"
+- "${geography} sector outlook"
+- "${geography} economic indicators"
+- "recent global supply chain trends"
 - "automation trends"
-- "sustainability trends 2024"
+- "recent sustainability trends"
 
 **Extract trends in these categories:**
 
@@ -238,7 +238,7 @@ ${section4Json}
 **Priority: HIGH**
 
 **Search for:**
-- "{company segment} market trends 2024" (for each segment)
+- "{company segment} market trends" (for each segment)
 - "${geography} {segment} industry outlook"
 - "{company segment} technology trends"
 - "competitive dynamics {segment} ${geography}"
@@ -274,7 +274,7 @@ ${section4Json}
 **Priority: CRITICAL**
 
 **Search for:**
-- "${companyName} earnings transcript 2024" (last 4 quarters)
+- "${companyName} earnings transcripts" (most recent quarters within the time horizon)
 - "${companyName} ${geography} performance trends"
 - "${companyName} analyst commentary"
 - "${companyName} challenges" OR "${companyName} headwinds"
@@ -425,15 +425,15 @@ interface Section5Output {
 
 **Macro trend:**
 - Trend: "European PMI stabilizing"
-- Geography relevance: "**${geography}** production index improved to 48.5 in Q3 2024 from 42.1 in Q1, signaling demand stabilization for key sector customers (S15)."
+- Geography relevance: "**${geography}** production index improved to 48.5 in the most recent quarter from 42.1 in the prior quarter, signaling demand stabilization for key sector customers (S15)."
 
 **Micro trend:**
 - Trend: "Commercial aerospace aftermarket strengthening"
-- Geography relevance: "Lufthansa and other **${geography}** carriers increasing MRO spending by 15% in 2024; benefits Parker's **Stuttgart** aftermarket operations which serve European airline base (S18, S20)."
+- Geography relevance: "Major **${geography}** carriers increasing MRO spending by 15% in the most recent year; benefits Parker's **Stuttgart** aftermarket operations which serve the European airline base (S18, S20)."
 
 **Company trend:**
 - Trend: "Market share gains in ${geography} core segment"
-- Geography relevance: "**${companyName}** increased market share to 19% from 17% in **${geography}** core segment over last 18 months, primarily at expense of local specialists (S7, S12)."
+- Geography relevance: "**${companyName}** increased market share to 19% from 17% in **${geography}** core segment over the time horizon, primarily at expense of local specialists (S7, S12)."
 
 ---
 

@@ -22,9 +22,27 @@ const textareaInput = (input: Omit<BlueprintInput, 'type'>): BlueprintInput => (
   type: 'textarea'
 });
 
+const selectInput = (input: Omit<BlueprintInput, 'type'>): BlueprintInput => ({
+  ...input,
+  type: 'select'
+});
+
+const timeHorizonOptions: BlueprintInput['options'] = [
+  { value: 'Last 6 Months', label: 'Last 6 Months' },
+  { value: 'Last Year', label: 'Last Year' },
+  { value: 'Last 2 Years', label: 'Last 2 Years' },
+  { value: 'Last 3 Years', label: 'Last 3 Years' }
+];
+
 const baseInputs = (nameLabel: string): BlueprintInput[] => [
   textInput({ id: 'companyName', label: nameLabel, required: true }),
-  textInput({ id: 'timeHorizon', label: 'Time horizon', required: false, helperText: 'For example: last 12 months.' }),
+  selectInput({
+    id: 'timeHorizon',
+    label: 'Time horizon',
+    required: true,
+    options: timeHorizonOptions,
+    helperText: 'Required. Select the time horizon for this research.'
+  }),
   textareaInput({ id: 'meetingContext', label: 'Meeting context', required: false })
 ];
 
