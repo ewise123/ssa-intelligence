@@ -134,7 +134,8 @@ export const AdminUsers: React.FC<{ isAdmin?: boolean; currentUserId?: string }>
 
     setGroups((prev) => prev.map((g) => {
       if (g.id !== groupId) return g;
-      return { ...g, memberCount: (g.memberCount ?? 0) + (hasGroup ? -1 : 1) };
+      const newCount = Math.max(0, (g.memberCount ?? 0) + (hasGroup ? -1 : 1));
+      return { ...g, memberCount: newCount };
     }));
 
     try {
@@ -156,7 +157,8 @@ export const AdminUsers: React.FC<{ isAdmin?: boolean; currentUserId?: string }>
       }));
       setGroups((prev) => prev.map((g) => {
         if (g.id !== groupId) return g;
-        return { ...g, memberCount: (g.memberCount ?? 0) + (hasGroup ? 1 : -1) };
+        const newCount = Math.max(0, (g.memberCount ?? 0) + (hasGroup ? 1 : -1));
+        return { ...g, memberCount: newCount };
       }));
       setError(err instanceof Error ? err.message : 'Failed to update membership.');
     }
