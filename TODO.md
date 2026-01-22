@@ -23,3 +23,4 @@ Guidelines:
 - [ ] Improve confidence scoring to be more informative.
 
 ## Parking lot
+- [ ] Add scroll bar to user news feeds
