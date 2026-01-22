@@ -12,7 +12,7 @@ Guidelines:
 - [ ] Add company name normalization/alias handling (spelling normalizer).
 - [ ] Require Appendix section (non-toggleable in UI and API defaults).
 - [ ] Admin console improvements: user management + prompt editing.
-- [ ] Allow for individual users to run there own research and have their own research queues rather than having one universal queue.
+- [ ] Allow for individual users to run their own research and have their own research queues rather than having one universal queue.
 
 ## Bugs
 - [ ] Fix group member add UI glitch.
