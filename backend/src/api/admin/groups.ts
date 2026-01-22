@@ -127,3 +127,36 @@ export async function removeGroupMember(req: Request, res: Response) {
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
+
+export async function deleteGroup(req: Request, res: Response) {
+  if (!req.auth || !req.auth.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { groupId } = req.params;
+  if (!groupId) {
+    return res.status(400).json({ error: 'Group ID required' });
+  }
+
+  // Check if group exists
+  const existingGroup = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { id: true, name: true }
+  });
+
+  if (!existingGroup) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
+  try {
+    // Delete group (cascade deletes memberships handled by Prisma schema)
+    await prisma.group.delete({
+      where: { id: groupId }
+    });
+
+    return res.json({ success: true, id: groupId, name: existingGroup.name });
+  } catch (error) {
+    console.error('Failed to delete group:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}

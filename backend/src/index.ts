@@ -30,8 +30,8 @@ import { getResearchOrchestrator } from './services/orchestrator.js';
 import { authMiddleware, requireAdmin } from './middleware/auth.js';
 import { getMe } from './api/me.js';
 import { listGroups } from './api/groups/list.js';
-import { listUsers } from './api/admin/users.js';
-import { addGroupMember, createGroup, listAdminGroups, removeGroupMember } from './api/admin/groups.js';
+import { listUsers, getUser, updateUser, deleteUser } from './api/admin/users.js';
+import { addGroupMember, createGroup, listAdminGroups, removeGroupMember, deleteGroup } from './api/admin/groups.js';
 import { getReportBlueprints } from './api/report-blueprints.js';
 
 // News Intelligence routes
@@ -180,8 +180,12 @@ app.delete('/api/feedback/:id', ...applyLimiter(writeLimiter), authMiddleware, d
 app.get('/api/me', authMiddleware, getMe);
 app.get('/api/groups', authMiddleware, listGroups);
 app.get('/api/admin/users', authMiddleware, requireAdmin, listUsers);
+app.get('/api/admin/users/:id', authMiddleware, requireAdmin, getUser);
+app.patch('/api/admin/users/:id', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, updateUser);
+app.delete('/api/admin/users/:id', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, deleteUser);
 app.get('/api/admin/groups', authMiddleware, requireAdmin, listAdminGroups);
 app.post('/api/admin/groups', authMiddleware, requireAdmin, createGroup);
+app.delete('/api/admin/groups/:groupId', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, deleteGroup);
 app.post('/api/admin/groups/:groupId/members', authMiddleware, requireAdmin, addGroupMember);
 app.delete('/api/admin/groups/:groupId/members/:userId', authMiddleware, requireAdmin, removeGroupMember);
 app.get('/api/report-blueprints', ...applyLimiter(getLimiter), authMiddleware, getReportBlueprints);

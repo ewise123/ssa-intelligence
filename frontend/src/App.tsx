@@ -61,7 +61,7 @@ export default function App() {
       );
     }
     if (currentPath === '/admin') {
-      return <AdminUsers isAdmin={userContext.user?.isAdmin} />;
+      return <AdminUsers isAdmin={userContext.user?.isAdmin} currentUserId={userContext.user?.id} />;
     }
     if (currentPath === '/news') {
       return <NewsDashboard onNavigate={navigate} />;
