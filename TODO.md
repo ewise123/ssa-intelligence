@@ -13,6 +13,9 @@ Guidelines:
 - [x] Require Appendix section (non-toggleable in UI and API defaults).
 - [ ] Admin console improvements: user management + prompt editing.
 - [ ] Allow for individual users to run their own research and have their own research queues rather than having one universal queue.
+- [ ] Add scroll bar to user news feeds
+- [ ] Improve news search, filtering, prioritization
+- [ ] Add feedback feature for the news section
 
 ## Bugs
 - [ ] Fix group member add UI glitch.
@@ -24,4 +27,4 @@ Guidelines:
 - [ ] Improve confidence scoring to be more informative.
 
 ## Parking lot
-- [ ] Add scroll bar to user news feeds
+- [ ] 
