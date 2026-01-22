@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
   Bug,
@@ -123,6 +123,9 @@ export const BugTrackerModal: React.FC<BugTrackerModalProps> = ({
   const [savingNotes, setSavingNotes] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
+  // Ref to track auto-close timer for cleanup
+  const submitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Define fetchFeedback before it's used in useEffect
   const fetchFeedback = useCallback(async () => {
     setLoading(true);
@@ -151,6 +154,11 @@ export const BugTrackerModal: React.FC<BugTrackerModalProps> = ({
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
+      // Clear any pending auto-close timer
+      if (submitTimeoutRef.current) {
+        clearTimeout(submitTimeoutRef.current);
+        submitTimeoutRef.current = null;
+      }
       setActiveTab('submit');
       setType('bug');
       setTitle('');
@@ -176,6 +184,15 @@ export const BugTrackerModal: React.FC<BugTrackerModalProps> = ({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, submitting, onClose]);
 
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (submitTimeoutRef.current) {
+        clearTimeout(submitTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
@@ -200,7 +217,8 @@ export const BugTrackerModal: React.FC<BugTrackerModalProps> = ({
       setSubmitSuccess(true);
       setTitle('');
       setDescription('');
-      setTimeout(() => {
+      // Store timer ID for cleanup if modal is closed before timeout
+      submitTimeoutRef.current = setTimeout(() => {
         onClose();
       }, 1500);
     } catch (err) {

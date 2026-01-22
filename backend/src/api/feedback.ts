@@ -211,6 +211,11 @@ export async function updateFeedback(req: Request, res: Response) {
       }
     }
 
+    // Guard against empty update
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'Nothing to update. Provide status or resolutionNotes.' });
+    }
+
     // Perform update
     const updated = await prisma.feedback.update({
       where: { id },
