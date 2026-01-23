@@ -33,6 +33,7 @@ import { listGroups } from './api/groups/list.js';
 import { listUsers, getUser, updateUser, deleteUser, createUser } from './api/admin/users.js';
 import { addGroupMember, createGroup, listAdminGroups, removeGroupMember, deleteGroup } from './api/admin/groups.js';
 import { getReportBlueprints } from './api/report-blueprints.js';
+import { resolveCompany } from './api/company/resolve.js';
 
 // News Intelligence routes
 import newsTagsRouter from './api/news/tags.js';
@@ -190,6 +191,7 @@ app.delete('/api/admin/groups/:groupId', ...applyLimiter(writeLimiter), authMidd
 app.post('/api/admin/groups/:groupId/members', authMiddleware, requireAdmin, addGroupMember);
 app.delete('/api/admin/groups/:groupId/members/:userId', authMiddleware, requireAdmin, removeGroupMember);
 app.get('/api/report-blueprints', ...applyLimiter(getLimiter), authMiddleware, getReportBlueprints);
+app.post('/api/company/resolve', ...applyLimiter(writeLimiter), authMiddleware, resolveCompany);
 
 // ============================================================================
 // NEWS INTELLIGENCE API (No auth for MVP)

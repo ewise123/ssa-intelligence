@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, Sparkles, CheckCircle2, Circle, ArrowRight, BrainCircuit } from 'lucide-react';
 import { BlueprintInput, BlueprintSection, ReportBlueprint, ReportType, SectionId, SECTIONS_CONFIG, VisibilityScope } from '../types';
 import { enforceLockedSections, isSectionLocked } from '../utils/sections';
+import { resolveCompanyApi, CompanyResolveResponse } from '../services/researchManager';
+import { CompanyResolveModal } from '../components/CompanyResolveModal';
 
 interface NewResearchProps {
   createJob: (
@@ -143,6 +145,9 @@ export const NewResearch: React.FC<NewResearchProps> = ({
   const [visibilitySelection, setVisibilitySelection] = useState<string>('PRIVATE');
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [userPrompt, setUserPrompt] = useState('');
+  const [resolving, setResolving] = useState(false);
+  const [resolveResult, setResolveResult] = useState<CompanyResolveResponse | null>(null);
+  const [showResolveModal, setShowResolveModal] = useState(false);
 
   const activeJob = jobs.find(j => j.id === currentJobId);
   const availableGroups = userContext?.groups || [];
@@ -304,14 +309,92 @@ export const NewResearch: React.FC<NewResearchProps> = ({
     setReportInputs((prev) => ({ ...prev, [id]: value }));
   };
 
-  const handleDetailsNext = () => {
+  const handleCompanyResolve = async (): Promise<boolean> => {
+    const company = normalizeInput(formData.company);
+    if (!company || company.length < 2) return true;
+
+    setResolving(true);
+    try {
+      const result = await resolveCompanyApi(company, {
+        geography: formData.geo || undefined,
+        industry: formData.industry || undefined,
+        reportType: reportType ?? undefined
+      });
+
+      if (result.status === 'exact' || result.status === 'unknown') {
+        // Proceed normally - no modal needed
+        return true;
+      }
+
+      // Show modal for corrected or ambiguous
+      setResolveResult(result);
+      setShowResolveModal(true);
+      return false; // Wait for user to confirm via modal
+    } catch (err) {
+      console.warn('Company resolution failed:', err);
+      return true; // Fail gracefully, continue without resolution
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  const handleResolveConfirm = (selectedName: string) => {
+    // Update company name with selected value
+    const updatedFormData = { ...formData, company: selectedName };
+    setFormData(updatedFormData);
+    setShowResolveModal(false);
+    setResolveResult(null);
+
+    // Re-validate in case user edited other fields while modal was open
+    // We need to validate with the new company name directly since setState is async
+    const company = normalizeInput(selectedName);
+    if (!company || company.length < 2 || !hasMeaningfulChars(company)) {
+      setError('Please enter a valid company name (letters or numbers required).');
+      return;
+    }
+
+    const missingRequired = reportInputFields.filter((input) => input.required).find((input) => {
+      const value = reportInputs[input.id];
+      return !value || !value.trim();
+    });
+    if (missingRequired) {
+      setError(`Please provide ${missingRequired.label}.`);
+      return;
+    }
+
+    if (!selectedSections.length) {
+      setError('Select at least one section to generate.');
+      return;
+    }
+
+    if (visibilityScope === 'GROUP' && selectedGroupIds.length === 0) {
+      setError('Select at least one group for shared access.');
+      return;
+    }
+
+    setError(null);
+    setWizardStep('context');
+  };
+
+  const handleResolveCancel = () => {
+    setShowResolveModal(false);
+    setResolveResult(null);
+  };
+
+  const handleDetailsNext = async () => {
     const stepError = validateDetailsStep();
     if (stepError) {
       setError(stepError);
       return;
     }
     setError(null);
-    setWizardStep('context');
+
+    // Resolve company name before proceeding
+    const canProceed = await handleCompanyResolve();
+    if (canProceed) {
+      setWizardStep('context');
+    }
+    // If not, the modal will be shown and user will confirm
   };
 
   const handleContextNext = () => {
@@ -605,14 +688,23 @@ export const NewResearch: React.FC<NewResearchProps> = ({
                   type="button"
                   onClick={() => setWizardStep('reportType')}
                   className="text-sm text-slate-500 hover:text-slate-700"
+                  disabled={resolving}
                 >
                   Back
                 </button>
                 <button
                   type="submit"
-                  className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+                  disabled={resolving}
+                  className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Continue
+                  {resolving ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    'Continue'
+                  )}
                 </button>
               </div>
             </div>
@@ -776,6 +868,17 @@ export const NewResearch: React.FC<NewResearchProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {showResolveModal && resolveResult && (
+          <CompanyResolveModal
+            isOpen={showResolveModal}
+            input={formData.company}
+            suggestions={resolveResult.suggestions}
+            status={resolveResult.status as 'corrected' | 'ambiguous'}
+            onConfirm={handleResolveConfirm}
+            onCancel={handleResolveCancel}
+          />
         )}
       </div>
     );

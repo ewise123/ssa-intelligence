@@ -1357,3 +1357,38 @@ export const useReportBlueprints = () => {
 
   return { blueprints, version, loading };
 };
+
+// ============================================================================
+// COMPANY RESOLUTION API
+// ============================================================================
+
+export type CompanySuggestion = {
+  canonicalName: string;
+  displayName: string;
+  description: string;
+  domain?: string;
+  industry?: string;
+  matchScore: number;
+};
+
+export type CompanyResolveResponse = {
+  status: 'exact' | 'corrected' | 'ambiguous' | 'unknown';
+  input: string;
+  suggestions: CompanySuggestion[];
+  confidence: number;
+};
+
+export const resolveCompanyApi = async (
+  input: string,
+  context?: { geography?: string; industry?: string; reportType?: string }
+): Promise<CompanyResolveResponse> => {
+  const res = await fetch(`${API_BASE}/company/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input, context })
+  });
+  if (!res.ok) {
+    throw new Error('Failed to resolve company');
+  }
+  return res.json();
+};

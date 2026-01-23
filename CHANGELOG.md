@@ -5,6 +5,7 @@ All notable changes to this repository will be documented in this file.
 The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
+- Feat: add company name resolution with typo correction and disambiguation modal.
 - Feat: add bug tracker modal with status management (submit, list, update, delete feedback).
 - Docs: add prompting system guide and align existing documentation with current code.
 - Docs: add oauth2-proxy auth summary and remove the legacy oauth2-proxy reference doc.
