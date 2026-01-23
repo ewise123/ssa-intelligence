@@ -14,6 +14,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - UI: update app branding, sidebar labels/sections, and widen the left nav for the new title.
 - Feat: Add CRUD functionality to Admin page
 - Fix: decrement group member counts when deleting a user in the admin UI.
+- Feat: add "Add User" functionality to Admin page with email domain validation.
 
 ## Release process
 - When shipping a release, move the `[Unreleased]` bullets into a new section `## [X.Y.Z] - YYYY-MM-DD`.
