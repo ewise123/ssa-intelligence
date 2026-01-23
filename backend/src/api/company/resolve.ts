@@ -88,9 +88,15 @@ export const resolveCompany: RequestHandler = async (req, res) => {
       }>;
     }>(response, { allowRepair: true });
 
+    // Validate status is one of the expected values
+    const VALID_STATUSES = ['exact', 'corrected', 'ambiguous', 'unknown'] as const;
+    const parsedStatus = VALID_STATUSES.includes(result.status as any)
+      ? result.status
+      : 'unknown';
+
     // Build response
     const resolveResponse: CompanyResolveResponse = {
-      status: result.status || 'unknown',
+      status: parsedStatus,
       input: trimmedInput,
       suggestions: (result.suggestions || []).slice(0, 5).map((s) => ({
         canonicalName: s.canonicalName || '',
@@ -121,26 +127,31 @@ export const resolveCompany: RequestHandler = async (req, res) => {
 // HELPERS
 // ============================================================================
 
+function escapeForPrompt(str: string): string {
+  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 function buildResolvePrompt(
   input: string,
   context?: { geography?: string; industry?: string; reportType?: string }
 ): string {
+  const escapedInput = escapeForPrompt(input);
   const contextLines: string[] = [];
   if (context?.geography) {
-    contextLines.push(`Geography hint: ${context.geography}`);
+    contextLines.push(`Geography hint: ${escapeForPrompt(context.geography)}`);
   }
   if (context?.industry) {
-    contextLines.push(`Industry hint: ${context.industry}`);
+    contextLines.push(`Industry hint: ${escapeForPrompt(context.industry)}`);
   }
   if (context?.reportType) {
-    contextLines.push(`Report type: ${context.reportType}`);
+    contextLines.push(`Report type: ${escapeForPrompt(context.reportType)}`);
   }
 
   const contextSection = contextLines.length > 0 ? contextLines.join('\n') + '\n' : '';
 
   return `You are a company name resolver. Analyze the input and determine if it matches known companies.
 
-Input: "${input}"
+Input: "${escapedInput}"
 ${contextSection}
 Return JSON:
 {
