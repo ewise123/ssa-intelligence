@@ -1177,7 +1177,12 @@ export class ResearchOrchestrator {
     }
 
     if (current.status !== status) {
-      await this.tryUpdateJob(jobId, { status });
+      // Set completedAt when job reaches a terminal state
+      const isTerminal = ['completed', 'completed_with_errors', 'failed', 'cancelled'].includes(status);
+      await this.tryUpdateJob(jobId, {
+        status,
+        ...(isTerminal ? { completedAt: new Date() } : {})
+      });
     }
 
     if (status === 'cancelled') {

@@ -22,7 +22,7 @@ interface KPIs {
   completedJobs: number;
   failedJobs: number;
   successRate: number;
-  avgDurationMs: number;
+  avgDurationMinutes: number;
   avgCostUsd: number;
   totalCostUsd: number;
   totalCostYtd: number;
@@ -117,11 +117,6 @@ export const AdminMetrics: React.FC<AdminMetricsProps> = ({ isAdmin }) => {
 
       const data = await res.json();
       setMetrics(data);
-
-      // Set default year if not selected
-      if (!selectedYear && data.filterOptions.years.length > 0) {
-        setSelectedYear(data.filterOptions.years[0]);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -138,10 +133,10 @@ export const AdminMetrics: React.FC<AdminMetricsProps> = ({ isAdmin }) => {
     }).format(value);
   };
 
-  const formatDuration = (ms: number) => {
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-    return `${(ms / 60000).toFixed(1)}m`;
+  const formatDuration = (minutes: number) => {
+    if (minutes < 1) return `${Math.round(minutes * 60)}s`;
+    if (minutes < 60) return `${minutes.toFixed(1)} min`;
+    return `${(minutes / 60).toFixed(1)} hr`;
   };
 
   const formatPercent = (value: number) => {
@@ -156,15 +151,19 @@ export const AdminMetrics: React.FC<AdminMetricsProps> = ({ isAdmin }) => {
   const chartData = useMemo(() => {
     if (!metrics?.monthlyTrends) return [];
     return metrics.monthlyTrends.map((trend) => {
-      const [, monthStr] = trend.month.split('-');
+      const [yearStr, monthStr] = trend.month.split('-');
       const monthIndex = parseInt(monthStr, 10) - 1;
+      // If "All Years" is selected, show "Jan 25" format, otherwise just "Jan"
+      const label = selectedYear
+        ? monthNames[monthIndex]
+        : `${monthNames[monthIndex]} '${yearStr.slice(2)}`;
       return {
         ...trend,
-        monthLabel: monthNames[monthIndex] || trend.month,
+        monthLabel: label || trend.month,
         successRatePct: trend.successRate * 100,
       };
     });
-  }, [metrics?.monthlyTrends, monthNames]);
+  }, [metrics?.monthlyTrends, monthNames, selectedYear]);
 
   if (!isAdmin) {
     return (
@@ -277,7 +276,7 @@ export const AdminMetrics: React.FC<AdminMetricsProps> = ({ isAdmin }) => {
         />
         <KPICard
           title="Avg Duration"
-          value={formatDuration(metrics.kpis.avgDurationMs)}
+          value={formatDuration(metrics.kpis.avgDurationMinutes)}
           icon={<Clock className="w-5 h-5" />}
           color="purple"
         />

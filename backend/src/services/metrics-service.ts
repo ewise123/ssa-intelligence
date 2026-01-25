@@ -26,7 +26,7 @@ export interface KPIs {
   completedJobs: number;
   failedJobs: number;
   successRate: number; // completed / (completed + failed), excludes cancelled
-  avgDurationMs: number;
+  avgDurationMinutes: number;
   avgCostUsd: number;
   totalCostUsd: number;
   totalCostYtd: number;
@@ -155,7 +155,7 @@ export class MetricsService {
       completedJobs,
       failedJobs,
       successRate,
-      avgDurationMs: avgDuration,
+      avgDurationMinutes: avgDuration / 60000, // Convert ms to minutes
       avgCostUsd: aggregations._avg.costUsd || 0,
       totalCostUsd: aggregations._sum.costUsd || 0,
       totalCostYtd: ytdCost,
@@ -222,17 +222,19 @@ export class MetricsService {
    * Get monthly trends
    */
   private async getMonthlyTrends(filters: MetricsFilters): Promise<MonthlyTrend[]> {
-    const year = filters.year || new Date().getFullYear();
-    const startDate = new Date(year, 0, 1);
-    const endDate = new Date(year + 1, 0, 1);
+    // Build date filter based on whether year is specified
+    let dateFilter: { gte?: Date; lt?: Date } | undefined;
 
-    // Get all jobs for the year (using createdAt as time dimension)
+    if (filters.year) {
+      const startDate = new Date(filters.year, 0, 1);
+      const endDate = new Date(filters.year + 1, 0, 1);
+      dateFilter = { gte: startDate, lt: endDate };
+    }
+
+    // Get all jobs (using createdAt as time dimension)
     const jobs = await this.prisma.researchJob.findMany({
       where: {
-        createdAt: {
-          gte: startDate,
-          lt: endDate,
-        },
+        ...(dateFilter ? { createdAt: dateFilter } : {}),
         ...this.buildGroupAndTypeFilters(filters),
       },
       select: {
@@ -253,16 +255,18 @@ export class MetricsService {
       durations: number[];
     }>();
 
-    // Initialize all months
-    for (let m = 0; m < 12; m++) {
-      const monthKey = `${year}-${String(m + 1).padStart(2, '0')}`;
-      monthlyMap.set(monthKey, {
-        total: 0,
-        completed: 0,
-        failed: 0,
-        cost: 0,
-        durations: [],
-      });
+    // If a specific year is selected, initialize all 12 months
+    if (filters.year) {
+      for (let m = 0; m < 12; m++) {
+        const monthKey = `${filters.year}-${String(m + 1).padStart(2, '0')}`;
+        monthlyMap.set(monthKey, {
+          total: 0,
+          completed: 0,
+          failed: 0,
+          cost: 0,
+          durations: [],
+        });
+      }
     }
 
     // Populate with actual data
@@ -270,8 +274,18 @@ export class MetricsService {
       const jobDate = job.createdAt;
       if (!jobDate) continue;
       const monthKey = `${jobDate.getFullYear()}-${String(jobDate.getMonth() + 1).padStart(2, '0')}`;
-      const monthData = monthlyMap.get(monthKey);
-      if (!monthData) continue;
+
+      if (!monthlyMap.has(monthKey)) {
+        monthlyMap.set(monthKey, {
+          total: 0,
+          completed: 0,
+          failed: 0,
+          cost: 0,
+          durations: [],
+        });
+      }
+
+      const monthData = monthlyMap.get(monthKey)!;
 
       monthData.total++;
       if (job.status === 'completed' || job.status === 'completed_with_errors') {
