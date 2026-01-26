@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Home, FileText, PanelLeftClose, PanelLeftOpen, Newspaper, Settings } from 'lucide-react';
+import { Home, FileText, PanelLeftClose, PanelLeftOpen, Newspaper, Settings, BarChart3, DollarSign, Users } from 'lucide-react';
 import { BugTrackerModal } from './BugTrackerModal';
 
 interface LayoutProps {
@@ -193,14 +193,45 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, activePath
           </button>
 
           {isAdmin && (
-            <button 
-              onClick={() => onNavigate('/admin')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activePath === '/admin' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${isCollapsed ? 'justify-center px-2' : ''}`}
-              title={isCollapsed ? "Admin" : undefined}
-            >
-              <FileText size={18} className="flex-shrink-0" />
-              {!isCollapsed && <span className="whitespace-nowrap">Admin</span>}
-            </button>
+            <>
+              {!isCollapsed && (
+                <div className="pt-4 pb-2">
+                  <span className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Admin</span>
+                </div>
+              )}
+              <button
+                onClick={() => onNavigate('/admin')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activePath === '/admin' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${isCollapsed ? 'justify-center px-2' : ''}`}
+                title={isCollapsed ? "Users & Groups" : undefined}
+              >
+                <Users size={18} className="flex-shrink-0" />
+                {!isCollapsed && <span className="whitespace-nowrap">Users & Groups</span>}
+              </button>
+              <button
+                onClick={() => onNavigate('/admin/metrics')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activePath === '/admin/metrics' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${isCollapsed ? 'justify-center px-2' : ''}`}
+                title={isCollapsed ? "Metrics" : undefined}
+              >
+                <BarChart3 size={18} className="flex-shrink-0" />
+                {!isCollapsed && <span className="whitespace-nowrap">Metrics</span>}
+              </button>
+              <button
+                onClick={() => onNavigate('/admin/pricing')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activePath === '/admin/pricing' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${isCollapsed ? 'justify-center px-2' : ''}`}
+                title={isCollapsed ? "Pricing" : undefined}
+              >
+                <DollarSign size={18} className="flex-shrink-0" />
+                {!isCollapsed && <span className="whitespace-nowrap">Pricing</span>}
+              </button>
+              <button
+                onClick={() => onNavigate('/admin/prompts')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activePath === '/admin/prompts' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${isCollapsed ? 'justify-center px-2' : ''}`}
+                title={isCollapsed ? "Prompt Library" : undefined}
+              >
+                <FileText size={18} className="flex-shrink-0" />
+                {!isCollapsed && <span className="whitespace-nowrap">Prompt Library</span>}
+              </button>
+            </>
           )}
         </nav>
 
@@ -239,6 +270,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, activePath
               {activePath === '/new' && 'Initiate New Analysis'}
               {activePath.startsWith('/research') && 'Research Report'}
               {activePath === '/admin' && 'User & Group Management'}
+              {activePath === '/admin/metrics' && 'Metrics Dashboard'}
+              {activePath === '/admin/pricing' && 'Pricing Management'}
+              {activePath === '/admin/prompts' && 'Prompt Library'}
               {activePath === '/news' && 'News Intelligence'}
               {activePath === '/news/setup' && 'News Setup'}
             </h1>

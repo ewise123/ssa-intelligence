@@ -32,6 +32,9 @@ import { getMe } from './api/me.js';
 import { listGroups } from './api/groups/list.js';
 import { listUsers, getUser, updateUser, deleteUser, createUser } from './api/admin/users.js';
 import { addGroupMember, createGroup, listAdminGroups, removeGroupMember, deleteGroup } from './api/admin/groups.js';
+import { getMetrics } from './api/admin/metrics.js';
+import { listPricingRates, createPricingRate, updatePricingRate, deletePricingRate } from './api/admin/pricing.js';
+import * as promptsApi from './api/admin/prompts.js';
 import { getReportBlueprints } from './api/report-blueprints.js';
 import { resolveCompany } from './api/company/resolve.js';
 
@@ -190,6 +193,24 @@ app.post('/api/admin/groups', authMiddleware, requireAdmin, createGroup);
 app.delete('/api/admin/groups/:groupId', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, deleteGroup);
 app.post('/api/admin/groups/:groupId/members', authMiddleware, requireAdmin, addGroupMember);
 app.delete('/api/admin/groups/:groupId/members/:userId', authMiddleware, requireAdmin, removeGroupMember);
+app.get('/api/admin/metrics', ...applyLimiter(getLimiter), authMiddleware, requireAdmin, getMetrics);
+app.get('/api/admin/pricing', ...applyLimiter(getLimiter), authMiddleware, requireAdmin, listPricingRates);
+app.post('/api/admin/pricing', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, createPricingRate);
+app.patch('/api/admin/pricing/:id', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, updatePricingRate);
+app.delete('/api/admin/pricing/:id', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, deletePricingRate);
+
+// Admin prompt library routes
+app.get('/api/admin/prompts', ...applyLimiter(getLimiter), authMiddleware, requireAdmin, promptsApi.listPrompts);
+app.get('/api/admin/prompts/test/:id', ...applyLimiter(getLimiter), authMiddleware, requireAdmin, promptsApi.getTestRun);
+app.get('/api/admin/prompts/:sectionId/versions', ...applyLimiter(getLimiter), authMiddleware, requireAdmin, promptsApi.listVersions);
+app.get('/api/admin/prompts/:sectionId', ...applyLimiter(getLimiter), authMiddleware, requireAdmin, promptsApi.getPrompt);
+app.post('/api/admin/prompts', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, promptsApi.createPrompt);
+app.patch('/api/admin/prompts/:id', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, promptsApi.updatePrompt);
+app.delete('/api/admin/prompts/:id', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, promptsApi.deletePrompt);
+app.post('/api/admin/prompts/:id/publish', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, promptsApi.publishPrompt);
+app.post('/api/admin/prompts/:id/revert/:version', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, promptsApi.revertPrompt);
+app.post('/api/admin/prompts/test', ...applyLimiter(writeLimiter), authMiddleware, requireAdmin, promptsApi.testPrompt);
+
 app.get('/api/report-blueprints', ...applyLimiter(getLimiter), authMiddleware, getReportBlueprints);
 app.post('/api/company/resolve', ...applyLimiter(writeLimiter), authMiddleware, resolveCompany);
 

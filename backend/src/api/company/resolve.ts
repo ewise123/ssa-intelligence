@@ -5,6 +5,8 @@
 
 import type { RequestHandler } from 'express';
 import { getClaudeClient } from '../../services/claude-client.js';
+import { getCostTrackingService } from '../../services/cost-tracking.js';
+import { prisma } from '../../lib/prisma.js';
 
 // ============================================================================
 // TYPES
@@ -12,6 +14,7 @@ import { getClaudeClient } from '../../services/claude-client.js';
 
 interface CompanyResolveRequest {
   input: string;
+  draftId?: string; // Client-generated ID for pre-job cost linkage
   context?: {
     geography?: string;
     industry?: string;
@@ -42,7 +45,7 @@ interface CompanyResolveResponse {
 export const resolveCompany: RequestHandler = async (req, res) => {
   try {
     const body = req.body as CompanyResolveRequest;
-    const { input, context } = body;
+    const { input, context, draftId } = body;
 
     // Validate input
     if (!input || typeof input !== 'string') {
@@ -73,6 +76,26 @@ export const resolveCompany: RequestHandler = async (req, res) => {
       claude.execute(prompt),
       timeoutPromise
     ]);
+
+    // Record cost event for this API call
+    try {
+      const costTrackingService = getCostTrackingService(prisma);
+      const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
+      await costTrackingService.recordCostEvent({
+        draftId: draftId || null,
+        stage: 'company_resolution',
+        provider: 'anthropic',
+        model,
+        usage: {
+          inputTokens: response.usage?.inputTokens || 0,
+          outputTokens: response.usage?.outputTokens || 0,
+        },
+        metadata: { companyInput: trimmedInput },
+      });
+    } catch (costError) {
+      // Log but don't fail the request if cost tracking fails
+      console.error('Failed to record cost event for company resolution:', costError);
+    }
 
     // Parse the response
     const result = claude.parseJSON<{

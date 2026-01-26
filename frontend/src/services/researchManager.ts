@@ -828,6 +828,7 @@ const createJobApi = async (payload: {
   groupIds?: string[];
   blueprintVersion?: string;
   reportInputs?: Record<string, string>;
+  draftId?: string;
 }) => {
   const body = {
     companyName: payload.companyName,
@@ -841,7 +842,8 @@ const createJobApi = async (payload: {
     selectedSections: payload.selectedSections,
     userAddedPrompt: payload.userAddedPrompt,
     visibilityScope: payload.visibilityScope,
-    groupIds: payload.groupIds
+    groupIds: payload.groupIds,
+    draftId: payload.draftId
   };
 
   const res = await fetch(
@@ -1128,6 +1130,7 @@ export const useResearchManager = () => {
       userAddedPrompt?: string;
       blueprintVersion?: string;
       reportInputs?: Record<string, string>;
+      draftId?: string;
     }
   ) => {
     const res = await createJobApi({
@@ -1141,7 +1144,8 @@ export const useResearchManager = () => {
       groupIds: options?.groupIds,
       userAddedPrompt: options?.userAddedPrompt,
       blueprintVersion: options?.blueprintVersion,
-      reportInputs: options?.reportInputs
+      reportInputs: options?.reportInputs,
+      draftId: options?.draftId
     });
     const job: ResearchJob = {
       id: res.jobId,
@@ -1380,12 +1384,13 @@ export type CompanyResolveResponse = {
 
 export const resolveCompanyApi = async (
   input: string,
-  context?: { geography?: string; industry?: string; reportType?: string }
+  context?: { geography?: string; industry?: string; reportType?: string },
+  draftId?: string
 ): Promise<CompanyResolveResponse> => {
   const res = await fetch(`${API_BASE}/company/resolve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ input, context })
+    body: JSON.stringify({ input, context, draftId })
   });
   if (!res.ok) {
     throw new Error('Failed to resolve company');

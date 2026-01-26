@@ -5,6 +5,15 @@ import { enforceLockedSections, isSectionLocked } from '../utils/sections';
 import { resolveCompanyApi, CompanyResolveResponse } from '../services/researchManager';
 import { CompanyResolveModal } from '../components/CompanyResolveModal';
 
+// Generate a simple UUID for draft tracking
+const generateDraftId = (): string => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 interface NewResearchProps {
   createJob: (
     name: string,
@@ -19,6 +28,7 @@ interface NewResearchProps {
       userAddedPrompt?: string;
       blueprintVersion?: string;
       reportInputs?: Record<string, string>;
+      draftId?: string;
     }
   ) => Promise<string>;
   runJob: (id: string, companyName?: string) => Promise<void>;
@@ -148,6 +158,7 @@ export const NewResearch: React.FC<NewResearchProps> = ({
   const [resolving, setResolving] = useState(false);
   const [resolveResult, setResolveResult] = useState<CompanyResolveResponse | null>(null);
   const [showResolveModal, setShowResolveModal] = useState(false);
+  const [draftId] = useState(() => generateDraftId()); // Generate once per form session
 
   const activeJob = jobs.find(j => j.id === currentJobId);
   const availableGroups = userContext?.groups || [];
@@ -319,7 +330,7 @@ export const NewResearch: React.FC<NewResearchProps> = ({
         geography: formData.geo || undefined,
         industry: formData.industry || undefined,
         reportType: reportType ?? undefined
-      });
+      }, draftId);
 
       if (result.status === 'exact' || result.status === 'unknown') {
         // Proceed normally - no modal needed
@@ -488,7 +499,8 @@ export const NewResearch: React.FC<NewResearchProps> = ({
         groupIds: visibilityScope === 'GROUP' ? selectedGroupIds : [],
         userAddedPrompt: userPrompt.trim() || undefined,
         blueprintVersion: reportBlueprintVersion || undefined,
-        reportInputs
+        reportInputs,
+        draftId
       });
       setCurrentJobId(id);
       setStep('processing');

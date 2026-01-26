@@ -32,6 +32,7 @@ import { generateThumbnailForJob } from './thumbnail.js';
 import { getReportBlueprint } from './report-blueprints.js';
 import { collectBlockedStages } from './dependency-utils.js';
 import { computeFinalStatus, computeOverallConfidence, computeTerminalProgress } from './orchestrator-utils.js';
+import { getCostTrackingService, CostTrackingService } from './cost-tracking.js';
 
 // Import validation schemas
 import {
@@ -342,18 +343,15 @@ export const STAGE_CONFIGS: Record<StageId, StageConfig> = {
 export class ResearchOrchestrator {
   private prisma: PrismaClient;
   private claudeClient: ClaudeClient;
+  private costTrackingService: CostTrackingService;
   private queueLockId = BigInt(937451); // arbitrary global lock id
   private queueLoopRunning = false;
   private queueWatchdogStarted = false;
-  private modelPricing: Record<string, { prompt: number; completion: number }> = {
-    // USD per 1M tokens (set to 0 by default; adjust if pricing changes)
-    'claude-sonnet-4-5': { prompt: 3, completion: 15 },
-    default: { prompt: 0, completion: 0 }
-  };
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
     this.claudeClient = getClaudeClient();
+    this.costTrackingService = getCostTrackingService(prisma);
     this.startQueueWatchdog();
   }
 
@@ -378,6 +376,7 @@ export class ResearchOrchestrator {
     userAddedPrompt?: string;
     visibilityScope?: 'PRIVATE' | 'GROUP' | 'GENERAL';
     groupIds?: string[];
+    draftId?: string; // Client-generated ID for pre-job cost linkage
   }) {
     const requestedSections = Array.isArray(input.selectedSections) ? input.selectedSections : [];
     const normalizedSections = requestedSections
@@ -453,6 +452,14 @@ export class ResearchOrchestrator {
         })),
         skipDuplicates: true
       });
+    }
+
+    // Link pre-job cost events (company resolution, etc.) to this job
+    if (input.draftId) {
+      const linkedCount = await this.costTrackingService.linkDraftCosts(input.draftId, job.id);
+      if (linkedCount > 0) {
+        console.log(`[cost-tracking] Linked ${linkedCount} pre-job cost event(s) to job ${job.id}`);
+      }
     }
 
     // Kick off queue processor in background (force restart to avoid stale flag)
@@ -1170,7 +1177,12 @@ export class ResearchOrchestrator {
     }
 
     if (current.status !== status) {
-      await this.tryUpdateJob(jobId, { status });
+      // Set completedAt when job reaches a terminal state
+      const isTerminal = ['completed', 'completed_with_errors', 'failed', 'cancelled'].includes(status);
+      await this.tryUpdateJob(jobId, {
+        status,
+        ...(isTerminal ? { completedAt: new Date() } : {})
+      });
     }
 
     if (status === 'cancelled') {
@@ -1674,14 +1686,38 @@ export class ResearchOrchestrator {
   private async recordTokenUsage(jobId: string, stageId: StageId, response: ClaudeResponse) {
     const inputTokens = response.usage?.inputTokens || 0;
     const outputTokens = response.usage?.outputTokens || 0;
+    const cacheReadTokens = (response.usage as any)?.cacheReadInputTokens || 0;
+    const cacheWriteTokens = (response.usage as any)?.cacheCreationInputTokens || 0;
     const model = typeof this.claudeClient.getModelName === 'function'
       ? this.claudeClient.getModelName()
       : process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
+    const provider = 'anthropic';
 
-    const pricing = this.modelPricing[model] || this.modelPricing.default;
-    const costUsd = ((inputTokens * pricing.prompt) + (outputTokens * pricing.completion)) / 1_000_000;
+    // Get pricing and calculate cost
+    const pricing = await this.costTrackingService.getPricing(provider, model);
+    const costUsd = this.costTrackingService.calculateCost(
+      { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens },
+      pricing
+    );
+
+    // Get sub-job ID for cost event linkage
+    const subJob = await this.prisma.researchSubJob.findFirst({
+      where: { researchId: jobId, stage: stageId },
+      select: { id: true }
+    });
 
     try {
+      // Create cost event for granular tracking
+      await this.costTrackingService.recordCostEvent({
+        jobId,
+        subJobId: subJob?.id || null,
+        stage: stageId,
+        provider,
+        model,
+        usage: { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens },
+      });
+
+      // Continue updating aggregate totals on ResearchJob and ResearchSubJob
       await this.prisma.$transaction([
         this.prisma.researchSubJob.updateMany({
           where: { researchId: jobId, stage: stageId },

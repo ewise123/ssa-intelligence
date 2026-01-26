@@ -66,6 +66,9 @@ model ResearchJob {
   costUsd           Float     @default(0)
   thumbnailUrl      String?
 
+  // Cost events relation
+  costEvents        CostEvent[]
+
   // Timestamps
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -73,6 +76,7 @@ model ResearchJob {
   
   @@index([userId, status])
   @@index([createdAt])
+  @@index([completedAt])
   @@index([status])
   @@index([status, queuedAt])
   @@index([normalizedDomain])
@@ -459,4 +463,130 @@ model NewsConfig {
   value String
 
   @@map("news_config")
+}
+
+// ============================================================================
+// PROMPT LIBRARY MODELS
+// ============================================================================
+
+// Admin-editable prompt overrides
+model Prompt {
+  id            String       @id @default(cuid())
+  sectionId     String       // 'foundation', 'exec_summary', etc.
+  reportType    ReportType?  // null = base prompt, or specific type for addendum
+
+  name          String       // Human-readable name
+  description   String?      // Admin notes
+  content       String       @db.Text
+
+  status        PromptStatus @default(draft)
+  version       Int          @default(1)
+
+  createdBy     String?
+  updatedBy     String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  publishedAt   DateTime?
+
+  @@unique([sectionId, reportType, version])
+  @@index([sectionId, reportType, status])
+  @@map("prompts")
+}
+
+// Version history for prompts
+model PromptVersion {
+  id            String   @id @default(cuid())
+  sectionId     String
+  reportType    ReportType?
+  version       Int
+  content       String   @db.Text
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  @@unique([sectionId, reportType, version])
+  @@index([sectionId, reportType])
+  @@map("prompt_versions")
+}
+
+// Prompt test execution tracking
+model PromptTestRun {
+  id            String    @id @default(cuid())
+  sectionId     String
+  reportType    ReportType?
+  promptContent String    @db.Text
+
+  companyName   String
+  geography     String
+
+  status        String    // 'running' | 'completed' | 'failed'
+  output        Json?
+  error         String?
+
+  inputTokens   Int       @default(0)
+  outputTokens  Int       @default(0)
+  costUsd       Float     @default(0)
+  durationMs    Int?
+
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  @@index([sectionId])
+  @@map("prompt_test_runs")
+}
+
+enum PromptStatus {
+  draft
+  published
+  archived
+}
+
+// ============================================================================
+// COST TRACKING & METRICS MODELS
+// ============================================================================
+
+// Admin-editable pricing rates for LLM API calls
+model PricingRate {
+  id              String    @id @default(cuid())
+  provider        String    // "anthropic"
+  model           String    // "claude-sonnet-4-5"
+  inputRate       Float     // USD per 1M tokens
+  outputRate      Float     // USD per 1M tokens
+  cacheReadRate   Float     @default(0) // USD per 1M tokens (cache hits)
+  cacheWriteRate  Float     @default(0) // USD per 1M tokens (cache writes)
+  effectiveFrom   DateTime  @default(now())
+  effectiveTo     DateTime? // null = currently active
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([provider, model, effectiveFrom])
+  @@index([provider, model])
+  @@index([effectiveFrom])
+  @@map("pricing_rates")
+}
+
+// Granular cost tracking per API call
+model CostEvent {
+  id               String       @id @default(cuid())
+  jobId            String?      // null for pre-job costs
+  subJobId         String?      // null for non-stage costs
+  draftId          String?      // client-generated ID for pre-job linkage
+  stage            String       // "company_resolution", "domain_inference", "foundation", etc.
+  provider         String       // "anthropic"
+  model            String       // "claude-sonnet-4-5"
+  inputTokens      Int          @default(0)
+  outputTokens     Int          @default(0)
+  cacheReadTokens  Int          @default(0)
+  cacheWriteTokens Int          @default(0)
+  costUsd          Float        @default(0)
+  metadata         Json         @default("{}")
+  createdAt        DateTime     @default(now())
+
+  job              ResearchJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([jobId])
+  @@index([draftId])
+  @@index([stage])
+  @@index([createdAt])
+  @@map("cost_events")
 }

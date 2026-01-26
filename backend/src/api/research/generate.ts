@@ -25,6 +25,7 @@ interface GenerateRequestBody {
   userAddedPrompt?: string;
   visibilityScope?: string;
   groupIds?: string[];
+  draftId?: string; // Client-generated ID for pre-job cost linkage
 }
 
 // Normalize and validate user-provided text inputs to avoid empty/garbage jobs
@@ -262,7 +263,8 @@ export async function generateResearch(req: Request, res: Response) {
       selectedSections,
       userAddedPrompt: typeof body.userAddedPrompt === 'string' ? body.userAddedPrompt.trim() : undefined,
       visibilityScope,
-      groupIds
+      groupIds,
+      draftId: typeof body.draftId === 'string' ? body.draftId.trim() : undefined,
     });
 
     const queuePosition = await orchestrator.getQueuePosition(job.id);
