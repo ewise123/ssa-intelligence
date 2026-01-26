@@ -47,6 +47,7 @@ import newsArticlesRouter from './api/news/articles.js';
 import newsRefreshRouter from './api/news/refresh.js';
 import newsSearchRouter from './api/news/search.js';
 import newsExportRouter from './api/news/export.js';
+import { initNewsScheduler } from './services/news-scheduler.js';
 
 // ============================================================================
 // SERVER SETUP
@@ -317,6 +318,9 @@ app.listen(PORT, () => {
 ║                                                                ║
 ╚════════════════════════════════════════════════════════════════╝
   `);
+
+  // Initialize news scheduler for daily refresh at midnight EST
+  initNewsScheduler();
 });
 
 // Graceful shutdown

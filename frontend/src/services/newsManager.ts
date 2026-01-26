@@ -38,6 +38,7 @@ export interface TrackedPerson {
   id: string;
   name: string;
   title: string | null;
+  companyAffiliation: string | null;
   createdAt: string;
   _count?: {
     callDiets: number;
@@ -302,10 +303,10 @@ export const useRevenueOwners = () => {
   };
 
   // Call Diet management
-  const addCompanyToOwner = async (ownerId: string, companyName: string, ticker?: string, cik?: string) => {
+  const addCompanyToOwner = async (ownerId: string, companyName: string, ticker?: string) => {
     await fetchJson(`/news/revenue-owners/${ownerId}/companies`, {
       method: 'POST',
-      body: JSON.stringify({ name: companyName, ticker, cik }),
+      body: JSON.stringify({ name: companyName, ticker }),
     });
   };
 
@@ -315,10 +316,10 @@ export const useRevenueOwners = () => {
     });
   };
 
-  const addPersonToOwner = async (ownerId: string, personName: string, title?: string) => {
+  const addPersonToOwner = async (ownerId: string, personName: string, companyAffiliation?: string) => {
     await fetchJson(`/news/revenue-owners/${ownerId}/people`, {
       method: 'POST',
-      body: JSON.stringify({ name: personName, title }),
+      body: JSON.stringify({ name: personName, companyAffiliation }),
     });
   };
 

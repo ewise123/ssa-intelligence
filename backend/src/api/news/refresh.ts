@@ -11,33 +11,77 @@ import { ArticlePriority, ArticleStatus, MatchType, FetchLayer } from '@prisma/c
 
 const router = Router();
 
-// In-memory state for refresh status
-let refreshState = {
-  isRefreshing: false,
-  lastRefreshedAt: null as Date | null,
-  lastError: null as string | null,
-  articlesFound: 0,
-  coverageGaps: [] as { company: string; note: string }[],
-  progress: 0,
-  progressMessage: '',
-  currentStep: '' as string,
-  steps: [] as { step: string; status: 'pending' | 'in_progress' | 'completed' | 'error'; detail?: string }[],
-  stats: null as {
+// Refresh status interface
+interface RefreshState {
+  isRefreshing: boolean;
+  lastRefreshedAt: string | null;
+  lastError: string | null;
+  articlesFound: number;
+  coverageGaps: { company: string; note: string }[];
+  progress: number;
+  progressMessage: string;
+  currentStep: string;
+  steps: { step: string; status: 'pending' | 'in_progress' | 'completed' | 'error'; detail?: string }[];
+  stats: {
     layer1Articles: number;
     layer2Articles: number;
     totalRaw: number;
     afterDedup: number;
     afterProcessing: number;
-  } | null,
+  } | null;
+}
+
+const DEFAULT_STATE: RefreshState = {
+  isRefreshing: false,
+  lastRefreshedAt: null,
+  lastError: null,
+  articlesFound: 0,
+  coverageGaps: [],
+  progress: 0,
+  progressMessage: '',
+  currentStep: '',
+  steps: [],
+  stats: null,
 };
 
+// Database-backed refresh status (works across multiple instances)
+async function getRefreshState(): Promise<RefreshState> {
+  try {
+    const config = await prisma.newsConfig.findUnique({
+      where: { key: 'refresh_status' },
+    });
+    if (config) {
+      return JSON.parse(config.value);
+    }
+  } catch (err) {
+    console.error('[refresh] Error reading refresh state:', err);
+  }
+  return { ...DEFAULT_STATE };
+}
+
+async function setRefreshState(state: RefreshState): Promise<void> {
+  try {
+    await prisma.newsConfig.upsert({
+      where: { key: 'refresh_status' },
+      create: { key: 'refresh_status', value: JSON.stringify(state) },
+      update: { value: JSON.stringify(state) },
+    });
+  } catch (err) {
+    console.error('[refresh] Error saving refresh state:', err);
+  }
+}
+
 // GET /api/news/refresh/status - Get current refresh status
-router.get('/status', (req: Request, res: Response) => {
-  res.json(refreshState);
+router.get('/status', async (req: Request, res: Response) => {
+  const state = await getRefreshState();
+  res.json(state);
 });
 
 // POST /api/news/refresh - Trigger news fetch
 router.post('/', async (req: Request, res: Response) => {
+  // Check current state from database
+  let refreshState = await getRefreshState();
+
   // Prevent concurrent refreshes
   if (refreshState.isRefreshing) {
     res.status(409).json({
@@ -47,19 +91,23 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  refreshState.isRefreshing = true;
-  refreshState.lastError = null;
-  refreshState.progress = 0;
-  refreshState.progressMessage = 'Starting...';
-  refreshState.currentStep = 'init';
-  refreshState.steps = [
-    { step: 'Loading revenue owners', status: 'in_progress' },
-    { step: 'Layer 1: RSS feeds & APIs', status: 'pending' },
-    { step: 'Layer 2: AI web search', status: 'pending' },
-    { step: 'Combining & deduplicating', status: 'pending' },
-    { step: 'AI processing & categorization', status: 'pending' },
-    { step: 'Saving to database', status: 'pending' },
-  ];
+  // Initialize refresh state
+  refreshState = {
+    ...DEFAULT_STATE,
+    isRefreshing: true,
+    progress: 0,
+    progressMessage: 'Starting...',
+    currentStep: 'init',
+    steps: [
+      { step: 'Loading revenue owners', status: 'in_progress' },
+      { step: 'Layer 1: RSS feeds & APIs', status: 'pending' },
+      { step: 'Layer 2: AI web search', status: 'pending' },
+      { step: 'Combining & deduplicating', status: 'pending' },
+      { step: 'AI processing & categorization', status: 'pending' },
+      { step: 'Saving to database', status: 'pending' },
+    ],
+  };
+  await setRefreshState(refreshState);
 
   try {
     // Get all revenue owners with their call diets
@@ -80,11 +128,12 @@ router.post('/', async (req: Request, res: Response) => {
     // If no revenue owners, nothing to fetch
     if (revenueOwners.length === 0) {
       refreshState.isRefreshing = false;
-      refreshState.lastRefreshedAt = new Date();
+      refreshState.lastRefreshedAt = new Date().toISOString();
       refreshState.articlesFound = 0;
       refreshState.coverageGaps = [];
       refreshState.progress = 100;
       refreshState.progressMessage = 'Complete';
+      await setRefreshState(refreshState);
 
       res.json({
         success: true,
@@ -95,14 +144,13 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    // Format call diets for the hybrid fetcher (now includes ticker and cik)
+    // Format call diets for the hybrid fetcher
     const callDiets: CallDietInput[] = revenueOwners.map(ro => ({
       revenueOwnerId: ro.id,
       revenueOwnerName: ro.name,
       companies: ro.companies.map(c => ({
         name: c.company.name,
         ticker: c.company.ticker || undefined,
-        cik: c.company.cik || undefined,
       })),
       people: ro.people.map(p => ({
         name: p.person.name,
@@ -114,10 +162,11 @@ router.post('/', async (req: Request, res: Response) => {
     // Mark revenue owners step complete
     refreshState.steps[0].status = 'completed';
     refreshState.steps[0].detail = `${revenueOwners.length} owner(s), ${callDiets.reduce((sum, cd) => sum + cd.companies.length, 0)} companies`;
+    await setRefreshState(refreshState);
 
     console.log('[refresh] Starting hybrid news fetch for', callDiets.length, 'revenue owners');
 
-    // Progress callback with step tracking
+    // Progress callback with step tracking - saves to database
     const onProgress = async (progress: number, message: string, stepUpdate?: { index: number; status: 'in_progress' | 'completed' | 'error'; detail?: string }) => {
       refreshState.progress = progress;
       refreshState.progressMessage = message;
@@ -128,6 +177,7 @@ router.post('/', async (req: Request, res: Response) => {
           refreshState.steps[stepUpdate.index].detail = stepUpdate.detail;
         }
       }
+      await setRefreshState(refreshState);
     };
 
     // Fetch news via hybrid approach
@@ -135,13 +185,20 @@ router.post('/', async (req: Request, res: Response) => {
 
     console.log('[refresh] Got', result.articles.length, 'articles');
 
+    // Filter out tag-only articles (must have a company or person match)
+    const filteredArticles = result.articles.filter(
+      article => article.company || article.person
+    );
+    console.log('[refresh] After filtering tag-only:', filteredArticles.length, 'articles');
+
     // Save articles to database
     refreshState.steps[5].status = 'in_progress';
     refreshState.progress = 92;
-    refreshState.progressMessage = `Saving ${result.articles.length} articles to database...`;
+    refreshState.progressMessage = `Saving ${filteredArticles.length} articles to database...`;
+    await setRefreshState(refreshState);
 
     let savedCount = 0;
-    for (const article of result.articles) {
+    for (const article of filteredArticles) {
       try {
         // Find matching company
         let companyId: string | null = null;
@@ -265,12 +322,13 @@ router.post('/', async (req: Request, res: Response) => {
     refreshState.steps[5].status = 'completed';
     refreshState.steps[5].detail = `${savedCount} articles saved`;
     refreshState.isRefreshing = false;
-    refreshState.lastRefreshedAt = new Date();
+    refreshState.lastRefreshedAt = new Date().toISOString();
     refreshState.articlesFound = savedCount;
     refreshState.coverageGaps = result.coverageGaps;
     refreshState.progress = 100;
     refreshState.progressMessage = 'Complete';
     refreshState.stats = result.stats || null;
+    await setRefreshState(refreshState);
 
     res.json({
       success: true,
@@ -285,6 +343,7 @@ router.post('/', async (req: Request, res: Response) => {
     refreshState.lastError = error instanceof Error ? error.message : 'Unknown error';
     refreshState.progress = 0;
     refreshState.progressMessage = 'Failed';
+    await setRefreshState(refreshState);
 
     res.status(500).json({
       success: false,

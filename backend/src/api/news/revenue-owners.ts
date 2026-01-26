@@ -254,7 +254,7 @@ router.delete('/:id/companies/:companyId', async (req: Request, res: Response) =
 router.post('/:id/people', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { personId, name, title } = req.body;
+    const { personId, name, companyAffiliation } = req.body;
 
     // Verify owner exists
     const owner = await prisma.revenueOwner.findUnique({ where: { id } });
@@ -273,7 +273,7 @@ router.post('/:id/people', async (req: Request, res: Response) => {
 
       if (!person) {
         person = await prisma.trackedPerson.create({
-          data: { name: name.trim(), title: title?.trim() || null },
+          data: { name: name.trim(), companyAffiliation: companyAffiliation?.trim() || null },
         });
       }
 

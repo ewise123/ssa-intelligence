@@ -796,8 +796,7 @@ const NewsCarousel: React.FC<{
       {!collapsed && (
         <div
           ref={scrollContainerRef}
-          className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide px-1"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          className="flex gap-4 overflow-x-auto pb-4 px-1"
         >
           {articles.map((article) => (
             <NewsCard
