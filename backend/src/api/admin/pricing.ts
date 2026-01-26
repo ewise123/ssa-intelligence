@@ -59,37 +59,36 @@ export const createPricingRate: RequestHandler = async (req, res) => {
     if (typeof outputRate !== 'number' || outputRate < 0) {
       return res.status(400).json({ error: 'outputRate must be a non-negative number' });
     }
+    if (typeof cacheReadRate !== 'number' || cacheReadRate < 0) {
+      return res.status(400).json({ error: 'cacheReadRate must be a non-negative number' });
+    }
+    if (typeof cacheWriteRate !== 'number' || cacheWriteRate < 0) {
+      return res.status(400).json({ error: 'cacheWriteRate must be a non-negative number' });
+    }
 
     const now = new Date();
 
-    // Find current active rate for this provider/model and set its effectiveTo
-    const currentActive = await prisma.pricingRate.findFirst({
-      where: {
-        provider,
-        model,
-        effectiveTo: null,
-      },
-    });
-
-    if (currentActive) {
-      await prisma.pricingRate.update({
-        where: { id: currentActive.id },
+    // Atomically deactivate current rate and create new one to prevent race conditions
+    const rate = await prisma.$transaction(async (tx) => {
+      // Deactivate any current active rates for this provider/model
+      await tx.pricingRate.updateMany({
+        where: { provider, model, effectiveTo: null },
         data: { effectiveTo: now },
       });
-    }
 
-    // Create new rate
-    const rate = await prisma.pricingRate.create({
-      data: {
-        provider,
-        model,
-        inputRate,
-        outputRate,
-        cacheReadRate,
-        cacheWriteRate,
-        effectiveFrom: now,
-        effectiveTo: null,
-      },
+      // Create new active rate
+      return tx.pricingRate.create({
+        data: {
+          provider,
+          model,
+          inputRate,
+          outputRate,
+          cacheReadRate,
+          cacheWriteRate,
+          effectiveFrom: now,
+          effectiveTo: null,
+        },
+      });
     });
 
     // Clear pricing cache

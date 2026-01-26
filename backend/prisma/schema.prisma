@@ -503,6 +503,7 @@ model PromptVersion {
   createdBy     String?
   createdAt     DateTime @default(now())
 
+  @@unique([sectionId, reportType, version])
   @@index([sectionId, reportType])
   @@map("prompt_versions")
 }

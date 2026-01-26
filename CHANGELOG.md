@@ -8,7 +8,12 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - UI: disable prompt Test button (work in progress).
 - Fix: prevent draft saves from archiving published prompts (caused fallback to code defaults).
 - Fix: prevent revert from archiving published prompts (caused fallback to code defaults).
-- Fix: resolvePrompt now falls back to base overrides for report-type runs.
+- Fix: resolvePrompt now composes base + addendum for report-type DB overrides.
+- Fix: add validation for cacheReadRate/cacheWriteRate in pricing API.
+- Fix: wrap pricing rate swap in transaction to prevent race conditions.
+- Fix: prevent future-dated pricing rates from being applied.
+- Fix: YTD cost now respects all filters (group, reportType, etc.).
+- Fix: add NULLS NOT DISTINCT to prompt unique constraints (PostgreSQL 15+).
 - Feat: add company name resolution with typo correction and disambiguation modal.
 - Feat: add bug tracker modal with status management (submit, list, update, delete feedback).
 - Docs: add prompting system guide and align existing documentation with current code.

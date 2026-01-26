@@ -285,38 +285,30 @@ export function getCodeAddendumContent(sectionId: SectionId, reportType: ReportT
 
 /**
  * Resolve a prompt with database overlay support
- * Priority:
- *   1. Published report-type-specific DB override (if reportType provided)
- *   2. Published base DB override (reportType = null)
- *   3. Code-based prompt (fallback)
+ * Composition: Base prompt (DB or code) + Addendum (DB or code) when reportType specified
+ *
+ * Priority for base:
+ *   1. Published base DB override (reportType = null)
+ *   2. Code-based prompt (fallback)
+ *
+ * Priority for addendum (when reportType specified):
+ *   1. Published report-type-specific DB override
+ *   2. Code-based addendum (fallback)
  */
 export async function resolvePrompt(
   sectionId: SectionId,
   reportType?: ReportTypeId,
   client: PrismaClient = prisma
 ): Promise<ResolvedPrompt> {
-  // If reportType is specified, first try to find a report-type-specific override
-  if (reportType) {
-    const reportTypePrompt = await client.prompt.findFirst({
-      where: {
-        sectionId,
-        reportType,
-        status: 'published'
-      },
-      orderBy: { version: 'desc' }
-    });
+  // Fetch report-type addendum override if reportType specified
+  const reportTypePrompt = reportType
+    ? await client.prompt.findFirst({
+        where: { sectionId, reportType, status: 'published' },
+        orderBy: { version: 'desc' }
+      })
+    : null;
 
-    if (reportTypePrompt) {
-      return {
-        content: reportTypePrompt.content,
-        source: 'database',
-        version: reportTypePrompt.version,
-        publishedAt: reportTypePrompt.publishedAt || undefined
-      };
-    }
-  }
-
-  // Try to find a published base override (reportType = null)
+  // Fetch base override (reportType = null)
   const basePrompt = await client.prompt.findFirst({
     where: {
       sectionId,
@@ -326,45 +318,37 @@ export async function resolvePrompt(
     orderBy: { version: 'desc' }
   });
 
-  if (basePrompt) {
-    // If we have a base override and a reportType was requested, append the code addendum
-    if (reportType && sectionId !== 'appendix') {
-      const addendum = getCodeAddendumContent(sectionId, reportType);
-      if (addendum) {
-        return {
-          content: `${basePrompt.content}\n\n---\n\n${addendum}`,
-          source: 'database',
-          version: basePrompt.version,
-          publishedAt: basePrompt.publishedAt || undefined
-        };
-      }
-    }
+  // Determine base content (DB override or code fallback)
+  const baseContent = basePrompt ? basePrompt.content : getCodePromptContent(sectionId);
+  let source: ResolvedPrompt['source'] = basePrompt ? 'database' : 'code';
+  let version = basePrompt?.version;
+  let publishedAt = basePrompt?.publishedAt || undefined;
 
-    return {
-      content: basePrompt.content,
-      source: 'database',
-      version: basePrompt.version,
-      publishedAt: basePrompt.publishedAt || undefined
-    };
-  }
-
-  // Fall back to code-based prompt
-  const codeContent = getCodePromptContent(sectionId);
-
-  // If report type specified, append the addendum
+  // If reportType specified, compose base + addendum
   if (reportType && sectionId !== 'appendix') {
-    const addendum = getCodeAddendumContent(sectionId, reportType);
+    // Use DB addendum if available, otherwise code addendum
+    const addendum = reportTypePrompt?.content ?? getCodeAddendumContent(sectionId, reportType);
     if (addendum) {
+      // If we have a report-type DB override, use its metadata
+      if (reportTypePrompt) {
+        source = 'database';
+        version = reportTypePrompt.version;
+        publishedAt = reportTypePrompt.publishedAt || publishedAt;
+      }
       return {
-        content: `${codeContent}\n\n---\n\n${addendum}`,
-        source: 'code'
+        content: `${baseContent}\n\n---\n\n${addendum}`,
+        source,
+        version,
+        publishedAt
       };
     }
   }
 
   return {
-    content: codeContent,
-    source: 'code'
+    content: baseContent,
+    source,
+    version,
+    publishedAt
   };
 }
 

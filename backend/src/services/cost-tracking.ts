@@ -81,14 +81,17 @@ export class CostTrackingService {
     const normalizedModel = this.normalizeModelName(model);
 
     try {
-      // Find active pricing rate (effectiveTo is null or in future)
+      const now = new Date();
+
+      // Find active pricing rate (effectiveFrom <= now, effectiveTo is null or in future)
       const rate = await this.prisma.pricingRate.findFirst({
         where: {
           provider,
           model: normalizedModel,
+          effectiveFrom: { lte: now },
           OR: [
             { effectiveTo: null },
-            { effectiveTo: { gt: new Date() } }
+            { effectiveTo: { gt: now } }
           ]
         },
         orderBy: { effectiveFrom: 'desc' }
@@ -113,9 +116,10 @@ export class CostTrackingService {
           where: {
             provider,
             model: baseModel,
+            effectiveFrom: { lte: now },
             OR: [
               { effectiveTo: null },
-              { effectiveTo: { gt: new Date() } }
+              { effectiveTo: { gt: now } }
             ]
           },
           orderBy: { effectiveFrom: 'desc' }

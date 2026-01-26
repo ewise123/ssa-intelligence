@@ -164,14 +164,17 @@ export class MetricsService {
 
   /**
    * Get YTD cost (from Jan 1 of current or specified year)
+   * Respects all filters (group, reportType, industry, geography, visibility, user)
    */
   private async getYtdCost(filters: MetricsFilters): Promise<number> {
     const year = filters.year || new Date().getFullYear();
     const yearStart = new Date(year, 0, 1);
     const yearEnd = new Date(year + 1, 0, 1);
 
+    const whereClause = this.buildWhereClause(filters);
     const result = await this.prisma.researchJob.aggregate({
       where: {
+        ...whereClause,
         createdAt: {
           gte: yearStart,
           lt: yearEnd,
