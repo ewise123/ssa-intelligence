@@ -5,6 +5,14 @@ All notable changes to this repository will be documented in this file.
 The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
+- Feat: News Intelligence improvements - time period selection, Deep Dive enhancements, status filters.
+- Feat: Add render.yaml for Render deployment with PostgreSQL.
+- Fix: Make sent and archived article states mutually exclusive.
+- Fix: Sent filter now correctly shows sent articles.
+- Fix: Remove unused priority fields from news articles.
+- UI: Add "All" option to news status filter.
+- UI: Add revenue owner selection for Deep Dive search results.
+- UI: Update email format to use "Link:" consistently.
 - Fix: increase company name resolver timeout from 5s to 15s to prevent premature timeouts.
 - UI: disable prompt Test button (work in progress).
 - Fix: prevent draft saves from archiving published prompts (caused fallback to code defaults).

@@ -6,7 +6,6 @@
 
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
-import { ArticlePriority } from '@prisma/client';
 
 const router = Router();
 
@@ -18,7 +17,6 @@ router.get('/', async (req: Request, res: Response) => {
       companyId,
       personId,
       tagId,
-      priority,
       isSent,
       isArchived,
       limit = '50',
@@ -50,29 +48,25 @@ router.get('/', async (req: Request, res: Response) => {
       where.tagId = tagId as string;
     }
 
-    // Filter by priority
-    if (priority && ['high', 'medium', 'low'].includes(priority as string)) {
-      where.priority = priority as ArticlePriority;
-    }
-
     // Filter by sent status
     if (isSent !== undefined) {
       where.isSent = isSent === 'true';
     }
 
-    // Filter by archived status (defaults to false if not specified)
+    // Filter by archived status
+    // Sent and Archived are mutually exclusive
+    // - If isArchived is explicitly passed, use it
+    // - If isSent is passed (without isArchived), show sent articles regardless of archive status
+    // - If neither passed, show all articles (no filter = "All" status)
     if (isArchived !== undefined) {
       where.isArchived = isArchived === 'true';
-    } else {
-      // Default: show non-archived articles
-      where.isArchived = false;
     }
+    // No default filter - "All" shows everything
 
     const [articles, total] = await Promise.all([
       prisma.newsArticle.findMany({
         where,
         orderBy: [
-          { priorityScore: 'desc' }, // Sort by priorityScore (highest first)
           { publishedAt: 'desc' },
           { fetchedAt: 'desc' },
         ],
@@ -108,8 +102,6 @@ router.get('/', async (req: Request, res: Response) => {
       sources: article.sources, // All sources for merged stories
       publishedAt: article.publishedAt,
       fetchedAt: article.fetchedAt,
-      priority: article.priority,
-      priorityScore: article.priorityScore,
       status: article.status,
       isSent: article.isSent,
       isArchived: article.isArchived,
@@ -168,6 +160,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // PATCH /api/news/articles/:id/sent - Toggle isSent status
+// Sent and Archived are mutually exclusive - sending un-archives
 router.patch('/:id/sent', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -182,9 +175,13 @@ router.patch('/:id/sent', async (req: Request, res: Response) => {
     // If isSent is provided, use it; otherwise toggle current value
     const newIsSent = typeof isSent === 'boolean' ? isSent : !article.isSent;
 
+    // Sent and Archived are mutually exclusive
     const updated = await prisma.newsArticle.update({
       where: { id },
-      data: { isSent: newIsSent },
+      data: {
+        isSent: newIsSent,
+        isArchived: newIsSent ? false : article.isArchived, // Un-archive if marking as sent
+      },
     });
 
     res.json({ success: true, isSent: updated.isSent });
@@ -195,6 +192,7 @@ router.patch('/:id/sent', async (req: Request, res: Response) => {
 });
 
 // PATCH /api/news/articles/:id/archive - Toggle or set isArchived status
+// Sent and Archived are mutually exclusive - archiving un-sends
 router.patch('/:id/archive', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -209,15 +207,65 @@ router.patch('/:id/archive', async (req: Request, res: Response) => {
     // If isArchived is provided, use it; otherwise toggle current value
     const newIsArchived = typeof isArchived === 'boolean' ? isArchived : !article.isArchived;
 
+    // Sent and Archived are mutually exclusive
     const updated = await prisma.newsArticle.update({
       where: { id },
-      data: { isArchived: newIsArchived },
+      data: {
+        isArchived: newIsArchived,
+        isSent: newIsArchived ? false : article.isSent, // Un-send if archiving
+      },
     });
 
     res.json({ success: true, isArchived: updated.isArchived });
   } catch (error) {
     console.error('Error updating article archive status:', error);
     res.status(500).json({ error: 'Failed to update article' });
+  }
+});
+
+// POST /api/news/articles/bulk-archive - Archive multiple articles
+// Sent and Archived are mutually exclusive - archiving un-sends
+router.post('/bulk-archive', async (req: Request, res: Response) => {
+  try {
+    const { articleIds } = req.body;
+
+    if (!Array.isArray(articleIds) || articleIds.length === 0) {
+      res.status(400).json({ error: 'articleIds must be a non-empty array' });
+      return;
+    }
+
+    const result = await prisma.newsArticle.updateMany({
+      where: { id: { in: articleIds } },
+      data: { isArchived: true, isSent: false },
+    });
+
+    res.json({ success: true, count: result.count });
+  } catch (error) {
+    console.error('Error bulk archiving articles:', error);
+    res.status(500).json({ error: 'Failed to archive articles' });
+  }
+});
+
+// POST /api/news/articles/bulk-send - Mark multiple articles as sent
+// Sent and Archived are mutually exclusive - sending un-archives
+router.post('/bulk-send', async (req: Request, res: Response) => {
+  try {
+    const { articleIds } = req.body;
+
+    if (!Array.isArray(articleIds) || articleIds.length === 0) {
+      res.status(400).json({ error: 'articleIds must be a non-empty array' });
+      return;
+    }
+
+    const result = await prisma.newsArticle.updateMany({
+      where: { id: { in: articleIds } },
+      data: { isSent: true, isArchived: false },
+    });
+
+    res.json({ success: true, count: result.count });
+  } catch (error) {
+    console.error('Error bulk sending articles:', error);
+    res.status(500).json({ error: 'Failed to send articles' });
   }
 });
 

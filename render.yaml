@@ -1,0 +1,52 @@
+# Render Blueprint - SSA Intelligence
+# https://render.com/docs/blueprint-spec
+#
+# To deploy:
+# 1. Push this file to your repository
+# 2. Go to Render Dashboard > Blueprints > New Blueprint Instance
+# 3. Connect your repository
+# 4. Set the required environment variables marked as sync: false
+#
+# Required manual setup after deployment:
+# - Set CORS_ORIGIN to your Render app URL (e.g., https://ssa-intelligence.onrender.com)
+# - Set ANTHROPIC_API_KEY with your API key from https://console.anthropic.com/
+
+services:
+  # Main Web Service (Backend + Frontend)
+  - type: web
+    name: ssa-intelligence
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard  # Standard plan needed for Playwright/PDF export (more memory)
+    healthCheckPath: /health
+    # Run database migrations before each deploy
+    preDeployCommand: cd /app/backend && npx prisma migrate deploy
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ssa-intelligence-db
+          property: connectionString
+      - key: CORS_ORIGIN
+        sync: false  # REQUIRED: Set to your Render URL (e.g., https://ssa-intelligence.onrender.com)
+      - key: ANTHROPIC_API_KEY
+        sync: false  # REQUIRED: Your Anthropic API key
+      - key: JWT_SECRET
+        generateValue: true
+      - key: LOG_LEVEL
+        value: warn
+      - key: DEBUG
+        value: false
+      - key: MAX_CONCURRENT_JOBS
+        value: 3
+      - key: CLAUDE_CACHE_ENABLED
+        value: false
+
+databases:
+  - name: ssa-intelligence-db
+    plan: starter  # Use 'standard' for production workloads
+    databaseName: ssa_intelligence
+    postgresMajorVersion: 15

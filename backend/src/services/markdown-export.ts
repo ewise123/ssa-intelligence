@@ -9,11 +9,10 @@ interface ExportOptions {
   revenueOwnerId: string;
   dateFrom?: Date;
   dateTo?: Date;
-  priorityFilter?: ('high' | 'medium' | 'low')[];
 }
 
 export async function generateNewsDigestMarkdown(options: ExportOptions): Promise<string> {
-  const { revenueOwnerId, dateFrom, dateTo, priorityFilter } = options;
+  const { revenueOwnerId, dateFrom, dateTo } = options;
 
   // Fetch revenue owner
   const owner = await prisma.revenueOwner.findUnique({
@@ -36,9 +35,6 @@ export async function generateNewsDigestMarkdown(options: ExportOptions): Promis
         gte: dateFrom || defaultDateFrom,
         lte: dateTo || new Date(),
       },
-      ...(priorityFilter && priorityFilter.length > 0 && {
-        priority: { in: priorityFilter },
-      }),
     },
     include: {
       company: true,
@@ -46,14 +42,9 @@ export async function generateNewsDigestMarkdown(options: ExportOptions): Promis
       tag: true,
     },
     orderBy: [
-      { priority: 'asc' },
       { publishedAt: 'desc' },
     ],
   });
-
-  const highPriority = articles.filter(a => a.priority === 'high');
-  const mediumPriority = articles.filter(a => a.priority === 'medium');
-  const lowPriority = articles.filter(a => a.priority === 'low');
 
   const formatArticle = (article: typeof articles[0]): string => {
     const lines: string[] = [];
@@ -120,32 +111,15 @@ export async function generateNewsDigestMarkdown(options: ExportOptions): Promis
   sections.push('## Summary');
   sections.push('');
   sections.push(`- **Total Articles:** ${articles.length}`);
-  sections.push(`- **High Priority:** ${highPriority.length}`);
-  sections.push(`- **Medium Priority:** ${mediumPriority.length}`);
-  sections.push(`- **Low Priority:** ${lowPriority.length}`);
   sections.push('');
   sections.push('---');
   sections.push('');
 
-  // High priority articles
-  if (highPriority.length > 0) {
-    sections.push('## High Priority');
+  // All articles
+  if (articles.length > 0) {
+    sections.push('## Articles');
     sections.push('');
-    sections.push(...highPriority.map(formatArticle));
-  }
-
-  // Medium priority articles
-  if (mediumPriority.length > 0) {
-    sections.push('## Medium Priority');
-    sections.push('');
-    sections.push(...mediumPriority.map(formatArticle));
-  }
-
-  // Low priority articles
-  if (lowPriority.length > 0) {
-    sections.push('## Low Priority');
-    sections.push('');
-    sections.push(...lowPriority.map(formatArticle));
+    sections.push(...articles.map(formatArticle));
   }
 
   // Footer
