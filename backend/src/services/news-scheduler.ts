@@ -6,7 +6,7 @@
 import * as cron from 'node-cron';
 import { prisma } from '../lib/prisma.js';
 import { fetchNewsHybrid, CallDietInput } from './news-fetcher.js';
-import { ArticlePriority, ArticleStatus, MatchType, FetchLayer } from '@prisma/client';
+import { ArticleStatus, MatchType, FetchLayer } from '@prisma/client';
 
 // Cron expression for midnight EST (5 AM UTC during standard time, 4 AM UTC during daylight saving)
 // Using 5 AM UTC as a reasonable approximation
@@ -120,8 +120,6 @@ async function runNewsRefresh(): Promise<void> {
             companyId,
             personId,
             tagId: tag?.id || null,
-            priority: article.priority as ArticlePriority,
-            priorityScore: article.priorityScore,
             status: ArticleStatus.new_article,
             matchType,
             fetchLayer,
@@ -131,7 +129,6 @@ async function runNewsRefresh(): Promise<void> {
             longSummary: article.longSummary,
             summary: article.summary,
             whyItMatters: article.whyItMatters,
-            priorityScore: article.priorityScore,
             status: ArticleStatus.update,
           },
         });

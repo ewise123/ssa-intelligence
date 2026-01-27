@@ -7,7 +7,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { fetchNewsHybrid, CallDietInput } from '../../services/news-fetcher.js';
-import { ArticlePriority, ArticleStatus, MatchType, FetchLayer } from '@prisma/client';
+import { ArticleStatus, MatchType, FetchLayer } from '@prisma/client';
 
 const router = Router();
 
@@ -79,6 +79,10 @@ router.get('/status', async (req: Request, res: Response) => {
 
 // POST /api/news/refresh - Trigger news fetch
 router.post('/', async (req: Request, res: Response) => {
+  // Extract days parameter (default to 1 day)
+  const { days = 1 } = req.body || {};
+  const daysNum = Math.min(Math.max(Number(days) || 1, 1), 30); // Clamp between 1-30
+
   // Check current state from database
   let refreshState = await getRefreshState();
 
@@ -181,7 +185,7 @@ router.post('/', async (req: Request, res: Response) => {
     };
 
     // Fetch news via hybrid approach
-    const result = await fetchNewsHybrid(callDiets, onProgress);
+    const result = await fetchNewsHybrid(callDiets, onProgress, daysNum);
 
     console.log('[refresh] Got', result.articles.length, 'articles');
 
@@ -246,8 +250,6 @@ router.post('/', async (req: Request, res: Response) => {
             companyId,
             personId,
             tagId: tag?.id || null,
-            priority: article.priority as ArticlePriority,
-            priorityScore: article.priorityScore,
             status: ArticleStatus.new_article,
             matchType,
             fetchLayer,
@@ -257,7 +259,6 @@ router.post('/', async (req: Request, res: Response) => {
             longSummary: article.longSummary,
             summary: article.summary,
             whyItMatters: article.whyItMatters,
-            priorityScore: article.priorityScore,
             status: ArticleStatus.update,
           },
         });

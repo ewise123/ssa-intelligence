@@ -300,15 +300,17 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 // ============================================================================
 
 app.listen(PORT, () => {
+  const env = process.env.NODE_ENV || 'development';
+  const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.CORS_ORIGIN || `http://localhost:${PORT}`;
   console.log(`
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
-║   SSA Intelligence Research API                                     ║
+║   SSA Intelligence Research API                                ║
 ║                                                                ║
 ║   Status:      Running                                         ║
-║   Environment: ${process.env.NODE_ENV || 'development'}                                    ║
-║   Port:        ${PORT}                                            ║
-║   URL:         http://localhost:${PORT}                          ║
+║   Environment: ${env.padEnd(44)}║
+║   Port:        ${String(PORT).padEnd(44)}║
+║   URL:         ${baseUrl.padEnd(44)}║
 ║                                                                ║
 ║   API Endpoints:                                               ║
 ║   - POST   /api/research/generate                              ║

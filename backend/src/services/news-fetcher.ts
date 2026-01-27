@@ -44,8 +44,6 @@ export interface ProcessedArticle {
   company: string | null;
   person: string | null;
   category: string;
-  priority: 'high' | 'medium' | 'low';
-  priorityScore: number;        // 1-10 for sorting (hidden from UI)
   status: 'new_article' | 'update';
   matchType: 'exact' | 'contextual';
   fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm';
@@ -80,7 +78,8 @@ export type ProgressCallback = (progress: number, message: string, stepUpdate?: 
  */
 export async function fetchNewsHybrid(
   callDiets: CallDietInput[],
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  days: number = 1
 ): Promise<FetchResult> {
   if (callDiets.length === 0) {
     return { articles: [], coverageGaps: [] };
@@ -162,7 +161,8 @@ export async function fetchNewsHybrid(
     // Layer 2: Claude web search (runs independently for ALL companies/people)
     fetchLayer2Contextual(
       companies.map((c) => c.name),
-      people.slice(0, 10).map((p) => p.name) // Top 10 people
+      people.slice(0, 10).map((p) => p.name), // Top 10 people
+      days
     ),
   ]);
 
@@ -232,17 +232,19 @@ export async function fetchNewsHybrid(
 
 /**
  * Layer 2: Claude web search for comprehensive discovery
- * Searches for news in the last 24 hours for ALL companies and people
+ * Searches for news in the specified time period for ALL companies and people
  */
 async function fetchLayer2Contextual(
   companies: string[],
-  people: string[]
+  people: string[],
+  days: number = 1
 ): Promise<RawArticle[]> {
   if (companies.length === 0 && people.length === 0) {
     return [];
   }
 
-  const searchPrompt = `You are a news intelligence analyst. Search for recent news (last 24 hours only) about these companies and people. This is an INDEPENDENT search to complement RSS feeds - search comprehensively.
+  const timeDescription = days === 1 ? 'last 24 hours' : `last ${days} days`;
+  const searchPrompt = `You are a news intelligence analyst. Search for recent news (${timeDescription} only) about these companies and people. This is an INDEPENDENT search to complement RSS feeds - search comprehensively.
 
 ${companies.length > 0 ? `## Companies to Search
 ${companies.map((c) => `- ${c}`).join('\n')}` : ''}
@@ -262,7 +264,7 @@ For each company/person, search broadly - include:
 - Executive speaking engagements, quotes, or interviews
 
 IMPORTANT:
-- Only include articles published within the last 24 hours
+- Only include articles published within the ${timeDescription}
 - Prioritize high-quality sources (Reuters, WSJ, Bloomberg, etc.)
 - Include actionable business news useful for consultants
 
@@ -284,6 +286,8 @@ Return maximum 25 results, prioritizing the most actionable and relevant news.`;
 
   try {
     console.log('[layer2] Starting Claude web search...');
+    console.log('[layer2] Searching for companies:', companies.join(', '));
+    console.log('[layer2] Searching for people:', people.join(', '));
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -302,24 +306,36 @@ Return maximum 25 results, prioritizing the most actionable and relevant news.`;
       ],
     });
 
+    console.log('[layer2] Response received, content blocks:', response.content.length);
+    console.log('[layer2] Content types:', response.content.map(c => c.type).join(', '));
+
     // Get the last text block
     const textBlocks = response.content.filter((c) => c.type === 'text');
+    console.log('[layer2] Text blocks found:', textBlocks.length);
+
     const textContent = textBlocks[textBlocks.length - 1];
 
     if (!textContent || textContent.type !== 'text') {
       console.error('[layer2] No text response from Claude');
+      console.error('[layer2] Full response content:', JSON.stringify(response.content, null, 2));
       return [];
     }
+
+    console.log('[layer2] Text response length:', textContent.text.length);
+    console.log('[layer2] Text preview:', textContent.text.substring(0, 500));
 
     // Parse JSON from response
     const jsonMatch = textContent.text.match(/\{[\s\S]*"results"[\s\S]*\}/);
     if (!jsonMatch) {
       console.error('[layer2] Could not find JSON in response');
+      console.error('[layer2] Full text:', textContent.text);
       return [];
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
     const results = parsed.results || [];
+
+    console.log('[layer2] Parsed results count:', results.length);
 
     return results.map((r: any) => ({
       headline: r.headline || '',
@@ -331,13 +347,17 @@ Return maximum 25 results, prioritizing the most actionable and relevant news.`;
     }));
   } catch (error) {
     console.error('[layer2] Error in contextual search:', error);
+    if (error instanceof Error) {
+      console.error('[layer2] Error message:', error.message);
+      console.error('[layer2] Error stack:', error.stack);
+    }
     return [];
   }
 }
 
 /**
  * Process raw articles with LLM for filtering, categorization, and summarization
- * Focuses on consultant-client engagement usefulness for priority scoring
+ * Focuses on consultant-client engagement usefulness
  */
 async function processArticlesWithLLM(
   rawArticles: RawArticle[],
@@ -389,6 +409,8 @@ ${callDiets.map((cd) => `- ${cd.revenueOwnerName}: tracks ${cd.companies.map((c)
    - Opinion pieces without new factual information
    - Historical references without current relevance
    - Speculation without substantive basis
+   - **IMPORTANT: Analyst ratings, upgrades, or downgrades where the tracked company is the ANALYST (not the subject)** - e.g., if tracking "Morgan Stanley" and they downgrade another company's stock, EXCLUDE this because Morgan Stanley is just the analyst, not the subject of the news
+   - Articles where the tracked company is providing analysis, ratings, or commentary about OTHER companies
 
    **KEEP only articles that are definitively ABOUT a tracked company/person as the main subject and cover:**
    - Mergers, acquisitions, divestitures, strategic partnerships
@@ -480,8 +502,6 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
           company: null,
           person: null,
           category: 'News',
-          priority: 'high' as const,
-          priorityScore: 10,
           status: 'new_article' as const,
           matchType: 'contextual' as const,
           fetchLayer: a.fetchLayer,
@@ -563,8 +583,6 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
         company: a.company || null,
         person: a.person || null,
         category: a.category || 'News',
-        priority: 'high' as const,  // All filtered articles are high priority
-        priorityScore: 10,
         status: a.status || 'new_article',
         matchType: a.matchType || 'contextual',
         fetchLayer: a.fetchLayer || original?.fetchLayer || 'layer2_llm',
@@ -594,8 +612,6 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
         company: null,
         person: null,
         category: 'News',
-        priority: 'high' as const,
-        priorityScore: 10,
         status: 'new_article' as const,
         matchType: 'contextual' as const,
         fetchLayer: a.fetchLayer,
@@ -886,31 +902,60 @@ If you're unsure whether an article is a duplicate, EXCLUDE it (don't include in
 export { fetchNewsHybrid as fetchNewsForCallDiets };
 
 /**
- * Ad-hoc search for specific company/person
- * Searches within the last 24 hours
+ * Deep Dive search for specific company/person
+ * Uses the same strict filtering as the main refresh
  */
 export async function searchNews(params: {
   company?: string;
   person?: string;
   topics?: string[]; // Kept for compatibility but not used
+  days?: number;
 }): Promise<FetchResult> {
-  const { company, person } = params;
+  const { company, person, days = 1 } = params;
 
   if (!company && !person) {
     return { articles: [], coverageGaps: [] };
   }
 
-  const searchPrompt = `You are a news intelligence analyst helping consultants prepare for client engagements. Search for recent news (last 24 hours only) about:
+  const timeDescription = days === 1 ? 'last 24 hours' : `last ${days} days`;
+  const entityName = company || person;
+  const entityType = company ? 'company' : 'person';
+
+  const searchPrompt = `You are a news intelligence analyst helping consultants prepare for client engagements. Search for recent news (${timeDescription} only) about:
 
 ${company ? `Company: ${company}` : ''}
 ${person ? `Person: ${person}` : ''}
 
+## STRICT Filtering Rules - EXCLUDE these types of articles:
+- Articles where ${entityName} is mentioned only tangentially or for context
+- Articles about a different entity with a similar name
+- General industry news without specific focus on ${entityName}
+- Generic press releases with no substantive news
+- Routine product updates without strategic significance
+- Event sponsorship or award/recognition announcements
+- Minor personnel changes (non-executive level)
+- Rehashed information from prior announcements
+- Promotional content disguised as news
+- Opinion pieces without new factual information
+- Historical references without current relevance
+- Speculation without substantive basis
+${company ? `- **CRITICAL: Analyst ratings, upgrades, or downgrades where ${company} is the ANALYST (not the subject)** - e.g., if ${company} downgrades another company's stock, EXCLUDE this because ${company} is just the analyst providing the rating, not the subject of the news
+- Articles where ${company} is providing analysis, ratings, commentary, or research about OTHER companies` : ''}
+
+## KEEP only articles that are definitively ABOUT ${entityName} as the main subject and cover:
+- Mergers, acquisitions, divestitures, strategic partnerships
+- C-suite appointments/departures, board changes
+- Earnings releases, significant revenue/profit changes
+- Major contract wins/losses, facility changes
+- PE/VC investments, debt refinancing, IPOs
+- Market share changes, competitive threats
+- Technology implementations, workforce restructuring
+
 ## Instructions
-1. Search for relevant news articles from the last 24 hours only
-2. Filter out routine/generic content - when in doubt, EXCLUDE it
-3. Categorize by topic
-4. Generate both short (1-2 sentences) and long (3-5 sentences) summaries
-5. Explain why it matters for client engagement
+1. Search comprehensively but filter strictly - when in doubt, EXCLUDE
+2. The article must be primarily ABOUT ${entityName}, not just mentioning them
+3. Generate both short (1-2 sentences) and long (3-5 sentences) summaries
+4. Explain why it matters for client engagement
 
 ## Output Format
 Return ONLY valid JSON (no markdown, no backticks):
@@ -937,7 +982,7 @@ Return ONLY valid JSON (no markdown, no backticks):
   "coverageGaps": []
 }
 
-Return ALL relevant articles, sorted by recency (most recent first).`;
+Return only HIGH-QUALITY, RELEVANT articles where ${entityName} is the PRIMARY subject.`;
 
   console.log(`[search] Ad-hoc search for company="${company}", person="${person}"`);
 

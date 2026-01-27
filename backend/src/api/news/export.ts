@@ -14,20 +14,16 @@ const router = Router();
 router.get('/pdf/:ownerId', async (req: Request, res: Response) => {
   try {
     const { ownerId } = req.params;
-    const { from, to, priority } = req.query;
+    const { from, to } = req.query;
 
     // Parse query parameters
     const dateFrom = from ? new Date(from as string) : undefined;
     const dateTo = to ? new Date(to as string) : undefined;
-    const priorityFilter = priority
-      ? (priority as string).split(',') as ('high' | 'medium' | 'low')[]
-      : undefined;
 
     const pdf = await generateNewsDigestPDF({
       revenueOwnerId: ownerId,
       dateFrom,
       dateTo,
-      priorityFilter,
     });
 
     const filename = `news-digest-${new Date().toISOString().split('T')[0]}.pdf`;
@@ -51,20 +47,16 @@ router.get('/pdf/:ownerId', async (req: Request, res: Response) => {
 router.get('/markdown/:ownerId', async (req: Request, res: Response) => {
   try {
     const { ownerId } = req.params;
-    const { from, to, priority } = req.query;
+    const { from, to } = req.query;
 
     // Parse query parameters
     const dateFrom = from ? new Date(from as string) : undefined;
     const dateTo = to ? new Date(to as string) : undefined;
-    const priorityFilter = priority
-      ? (priority as string).split(',') as ('high' | 'medium' | 'low')[]
-      : undefined;
 
     const markdown = await generateNewsDigestMarkdown({
       revenueOwnerId: ownerId,
       dateFrom,
       dateTo,
-      priorityFilter,
     });
 
     const filename = `news-digest-${new Date().toISOString().split('T')[0]}.md`;
