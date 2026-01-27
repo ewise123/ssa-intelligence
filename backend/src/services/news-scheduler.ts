@@ -26,7 +26,7 @@ async function runAutoArchive(): Promise<void> {
 
     const result = await prisma.newsArticle.updateMany({
       where: {
-        createdAt: { lt: cutoffDate },
+        fetchedAt: { lt: cutoffDate },
         isSent: false,
         isArchived: false,
       },
