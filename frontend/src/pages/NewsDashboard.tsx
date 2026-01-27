@@ -50,8 +50,8 @@ interface NewsDashboardProps {
 }
 
 export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
-  // Filters state - default to showing new (non-archived) articles
-  const [filters, setFilters] = useState<ArticleFilters>({ isArchived: false });
+  // Filters state - default to showing new (not sent and not archived) articles
+  const [filters, setFilters] = useState<ArticleFilters>({ isSent: false, isArchived: false });
   const [showFilters, setShowFilters] = useState(false);
 
   // Deep dive search state
@@ -115,6 +115,38 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
     }, 1000);
     return () => clearInterval(interval);
   }, [refreshing, status.isRefreshing, fetchStatus]);
+
+  // Generate and download .eml file with HTML content for clickable links
+  const generateEmlFile = (
+    to: string,
+    cc: string,
+    subject: string,
+    htmlBody: string
+  ): void => {
+    // Build headers - X-Unsent: 1 tells Outlook to treat as draft (can be sent)
+    const headers = [
+      `To: ${to}`,
+      cc ? `Cc: ${cc}` : null,
+      `Subject: ${subject}`,
+      'X-Unsent: 1',
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=UTF-8',
+    ].filter(Boolean).join('\r\n');
+
+    // EML format requires blank line between headers and body
+    const emlContent = headers + '\r\n\r\n' + htmlBody;
+
+    // Trigger download
+    const blob = new Blob([emlContent], { type: 'message/rfc822' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${subject.substring(0, 50).replace(/[^a-z0-9]/gi, '_')}.eml`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const handleRefresh = async () => {
     try {
@@ -242,31 +274,33 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
     if (recipients.length === 0) return;
 
     const toEmail = recipients[0]?.email || '';
-    const ccEmails = recipients.slice(1).map(ro => ro.email).join(',');
+    const ccEmails = recipients.slice(1).map(ro => ro.email).filter(Boolean).join(', ');
 
     // Build email content
     const summary = article.longSummary || article.shortSummary || article.summary || '';
     const whyItMatters = article.whyItMatters || '';
     const tagText = article.tag ? article.tag.name : '';
 
-    // Build email body
-    const bodyParts = [];
-    if (summary) bodyParts.push(`Summary:\n${summary}`);
-    if (whyItMatters) bodyParts.push(`Why it Matters:\n${whyItMatters}`);
-    if (tagText) bodyParts.push(`Tags:\n${tagText}`);
-    bodyParts.push(`Link: ${article.sourceUrl}`);
-    const body = bodyParts.join('\n\n');
+    // Build HTML email body with clickable link
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <h2 style="color: #003399; margin-bottom: 16px;">${article.headline}</h2>
+  ${summary ? `<div style="margin-bottom: 16px;"><strong>Summary:</strong><br/>${summary.replace(/\n/g, '<br/>')}</div>` : ''}
+  ${whyItMatters ? `<div style="margin-bottom: 16px;"><strong>Why it Matters:</strong><br/>${whyItMatters.replace(/\n/g, '<br/>')}</div>` : ''}
+  ${tagText ? `<div style="margin-bottom: 16px;"><strong>Tags:</strong> ${tagText}</div>` : ''}
+  <div style="margin-top: 20px;">
+    <a href="${article.sourceUrl}" style="color: #003399; font-weight: bold;">Read More</a>
+  </div>
+</body>
+</html>`.trim();
 
-    // Build mailto URL using encodeURIComponent (not URLSearchParams which uses + for spaces)
-    let mailtoUrl = `mailto:${encodeURIComponent(toEmail)}`;
-    const params = [];
-    if (ccEmails) params.push(`cc=${encodeURIComponent(ccEmails)}`);
-    params.push(`subject=${encodeURIComponent(article.headline)}`);
-    params.push(`body=${encodeURIComponent(body)}`);
-    mailtoUrl += '?' + params.join('&');
-
-    // Open email client
-    window.location.href = mailtoUrl;
+    // Generate and download .eml file
+    generateEmlFile(toEmail, ccEmails, article.headline, htmlBody);
 
     // Mark as sent (but don't archive - they are mutually exclusive)
     try {
@@ -365,59 +399,40 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
     const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const subject = `SSAMI News Digest - ${today}`;
 
-    // Build email body with all selected stories
-    const bodyParts: string[] = [];
-    bodyParts.push(`News Digest - ${today}`);
-    bodyParts.push('');
-    bodyParts.push('='.repeat(50));
-
-    selectedArticles.forEach((article, index) => {
-      bodyParts.push('');
-      bodyParts.push(`${index + 1}. ${article.headline}`);
-      bodyParts.push('-'.repeat(40));
-
+    // Build HTML email body with clickable links
+    const articleHtml = selectedArticles.map((article, index) => {
       const summary = article.longSummary || article.shortSummary || article.summary || '';
-      if (summary) {
-        bodyParts.push('');
-        bodyParts.push(`Summary: ${summary}`);
-      }
+      return `
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #e2e8f0;">
+          <h3 style="color: #003399; margin: 0 0 12px 0;">${index + 1}. ${article.headline}</h3>
+          ${summary ? `<div style="margin-bottom: 8px;"><strong>Summary:</strong><br/>${summary.replace(/\n/g, '<br/>')}</div>` : ''}
+          ${article.whyItMatters ? `<div style="margin-bottom: 8px;"><strong>Why it Matters:</strong><br/>${article.whyItMatters.replace(/\n/g, '<br/>')}</div>` : ''}
+          ${article.company ? `<div><strong>Company:</strong> ${article.company.name}</div>` : ''}
+          ${article.person ? `<div><strong>Person:</strong> ${article.person.name}</div>` : ''}
+          ${article.tag ? `<div><strong>Topic:</strong> ${article.tag.name}</div>` : ''}
+          <div style="margin-top: 12px;">
+            <a href="${article.sourceUrl}" style="color: #003399; font-weight: bold;">Read More</a>
+          </div>
+        </div>
+      `;
+    }).join('');
 
-      if (article.whyItMatters) {
-        bodyParts.push('');
-        bodyParts.push(`Why it Matters: ${article.whyItMatters}`);
-      }
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <h1 style="color: #003399; border-bottom: 2px solid #003399; padding-bottom: 12px;">News Digest - ${today}</h1>
+  ${articleHtml}
+</body>
+</html>`.trim();
 
-      if (article.company) {
-        bodyParts.push(`Company: ${article.company.name}`);
-      }
-      if (article.person) {
-        bodyParts.push(`Person: ${article.person.name}`);
-      }
-      if (article.tag) {
-        bodyParts.push(`Topic: ${article.tag.name}`);
-      }
-
-      bodyParts.push('');
-      bodyParts.push(`Link: ${article.sourceUrl}`);
-      bodyParts.push('');
-      bodyParts.push('='.repeat(50));
-    });
-
-    const body = bodyParts.join('\n');
-
-    // Build mailto URL
+    // Generate and download .eml file
     const toEmail = ownersWithEmail[0]?.email || '';
-    const ccEmails = ownersWithEmail.slice(1).map(ro => ro.email).join(',');
-
-    let mailtoUrl = `mailto:${encodeURIComponent(toEmail)}`;
-    const params = [];
-    if (ccEmails) params.push(`cc=${encodeURIComponent(ccEmails)}`);
-    params.push(`subject=${encodeURIComponent(subject)}`);
-    params.push(`body=${encodeURIComponent(body)}`);
-    mailtoUrl += '?' + params.join('&');
-
-    // Open email client
-    window.location.href = mailtoUrl;
+    const ccEmails = ownersWithEmail.slice(1).map(ro => ro.email).filter(Boolean).join(', ');
+    generateEmlFile(toEmail, ccEmails, subject, htmlBody);
 
     // Mark all selected as sent and archive them
     try {
@@ -457,59 +472,40 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
     const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const subject = `SSAMI News Digest - ${today}`;
 
-    // Build email body with all selected stories
-    const bodyParts: string[] = [];
-    bodyParts.push(`News Digest - ${today}`);
-    bodyParts.push('');
-    bodyParts.push('='.repeat(50));
-
-    selectedArticles.forEach((article, index) => {
-      bodyParts.push('');
-      bodyParts.push(`${index + 1}. ${article.headline}`);
-      bodyParts.push('-'.repeat(40));
-
+    // Build HTML email body with clickable links
+    const articleHtml = selectedArticles.map((article, index) => {
       const summary = article.longSummary || article.shortSummary || article.summary || '';
-      if (summary) {
-        bodyParts.push('');
-        bodyParts.push(`Summary: ${summary}`);
-      }
+      return `
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #e2e8f0;">
+          <h3 style="color: #003399; margin: 0 0 12px 0;">${index + 1}. ${article.headline}</h3>
+          ${summary ? `<div style="margin-bottom: 8px;"><strong>Summary:</strong><br/>${summary.replace(/\n/g, '<br/>')}</div>` : ''}
+          ${article.whyItMatters ? `<div style="margin-bottom: 8px;"><strong>Why it Matters:</strong><br/>${article.whyItMatters.replace(/\n/g, '<br/>')}</div>` : ''}
+          ${article.company ? `<div><strong>Company:</strong> ${article.company.name}</div>` : ''}
+          ${article.person ? `<div><strong>Person:</strong> ${article.person.name}</div>` : ''}
+          ${article.tag ? `<div><strong>Topic:</strong> ${article.tag.name}</div>` : ''}
+          <div style="margin-top: 12px;">
+            <a href="${article.sourceUrl}" style="color: #003399; font-weight: bold;">Read More</a>
+          </div>
+        </div>
+      `;
+    }).join('');
 
-      if (article.whyItMatters) {
-        bodyParts.push('');
-        bodyParts.push(`Why it Matters: ${article.whyItMatters}`);
-      }
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <h1 style="color: #003399; border-bottom: 2px solid #003399; padding-bottom: 12px;">News Digest - ${today}</h1>
+  ${articleHtml}
+</body>
+</html>`.trim();
 
-      if (article.company) {
-        bodyParts.push(`Company: ${article.company.name}`);
-      }
-      if (article.person) {
-        bodyParts.push(`Person: ${article.person.name}`);
-      }
-      if (article.tag) {
-        bodyParts.push(`Topic: ${article.tag.name}`);
-      }
-
-      bodyParts.push('');
-      bodyParts.push(`Link: ${article.sourceUrl}`);
-      bodyParts.push('');
-      bodyParts.push('='.repeat(50));
-    });
-
-    const body = bodyParts.join('\n');
-
-    // Build mailto URL
+    // Generate and download .eml file
     const toEmail = ownersWithEmail[0]?.email || '';
-    const ccEmails = ownersWithEmail.slice(1).map(ro => ro.email).join(',');
-
-    let mailtoUrl = `mailto:${encodeURIComponent(toEmail)}`;
-    const params = [];
-    if (ccEmails) params.push(`cc=${encodeURIComponent(ccEmails)}`);
-    params.push(`subject=${encodeURIComponent(subject)}`);
-    params.push(`body=${encodeURIComponent(body)}`);
-    mailtoUrl += '?' + params.join('&');
-
-    // Open email client
-    window.location.href = mailtoUrl;
+    const ccEmails = ownersWithEmail.slice(1).map(ro => ro.email).filter(Boolean).join(', ');
+    generateEmlFile(toEmail, ccEmails, subject, htmlBody);
 
     // Mark all selected as sent and archive them
     try {
@@ -632,14 +628,16 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
       </div>
 
       {/* Deep Dive Search Panel - Always visible */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+      <div className="bg-gradient-to-br from-brand-50 via-white to-brand-50/50 border-2 border-brand-200 rounded-2xl p-5 shadow-md hover:shadow-lg transition-all ring-1 ring-brand-100/50">
         <div className="flex items-center mb-4">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-brand-100 rounded-lg">
-              <Search size={16} className="text-brand-600" />
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-brand-500 to-brand-600 rounded-xl shadow-sm">
+              <Search size={18} className="text-white" />
             </div>
-            <h3 className="font-semibold text-slate-800">Deep Dive</h3>
-            <span className="text-xs text-slate-400">Search any company or person</span>
+            <h3 className="font-semibold text-slate-800 text-lg">Deep Dive</h3>
+            <span className="text-xs text-brand-600 font-medium bg-brand-100 px-2 py-0.5 rounded-full">
+              Search any company or person
+            </span>
           </div>
         </div>
           <div className="flex flex-col sm:flex-row gap-3">
@@ -781,7 +779,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
                 value={
                   filters.isSent === true ? 'sent' :
                   filters.isArchived === true ? 'archived' :
-                  filters.isArchived === false ? 'new' :
+                  (filters.isSent === false && filters.isArchived === false) ? 'new' :
                   'all'
                 }
                 onChange={(e) => {
@@ -789,7 +787,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
                   if (value === 'all') {
                     setFilters({ ...filters, isSent: undefined, isArchived: undefined });
                   } else if (value === 'new') {
-                    setFilters({ ...filters, isSent: undefined, isArchived: false });
+                    setFilters({ ...filters, isSent: false, isArchived: false });
                   } else if (value === 'sent') {
                     setFilters({ ...filters, isSent: true, isArchived: undefined });
                   } else if (value === 'archived') {

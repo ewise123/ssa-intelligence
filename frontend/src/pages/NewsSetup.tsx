@@ -32,8 +32,10 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
     deleteOwner,
     addCompanyToOwner,
     removeCompanyFromOwner,
+    bulkRemoveCompaniesFromOwner,
     addPersonToOwner,
     removePersonFromOwner,
+    bulkRemovePeopleFromOwner,
     addTagToOwner,
     removeTagFromOwner,
   } = useRevenueOwners();
@@ -76,14 +78,21 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
   const [resolveStatus, setResolveStatus] = useState<'corrected' | 'ambiguous'>('corrected');
   const [resolving, setResolving] = useState(false);
 
+  // Bulk selection state
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(new Set());
+  const [selectedPeopleIds, setSelectedPeopleIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   // Load owner details when selected
   useEffect(() => {
     if (selectedOwner) {
       setLoadingDetails(true);
-      // Collapse all sections when switching owners
+      // Collapse all sections and clear selections when switching owners
       setCompaniesExpanded(false);
       setPeopleExpanded(false);
       setTopicsExpanded(false);
+      setSelectedCompanyIds(new Set());
+      setSelectedPeopleIds(new Set());
       getOwnerDetails(selectedOwner.id)
         .then((details) => {
           setOwnerDetails(details);
@@ -93,6 +102,8 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
     } else {
       setOwnerDetails(null);
       setOwnerEmail('');
+      setSelectedCompanyIds(new Set());
+      setSelectedPeopleIds(new Set());
     }
   }, [selectedOwner, getOwnerDetails]);
 
@@ -316,6 +327,90 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
       setOwnerDetails(updated);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update tag');
+    }
+  };
+
+  // Toggle company selection
+  const toggleCompanySelection = (companyId: string) => {
+    setSelectedCompanyIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(companyId)) {
+        newSet.delete(companyId);
+      } else {
+        newSet.add(companyId);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle all companies selection
+  const toggleAllCompanies = () => {
+    if (!ownerDetails?.companies) return;
+    if (selectedCompanyIds.size === ownerDetails.companies.length) {
+      setSelectedCompanyIds(new Set());
+    } else {
+      setSelectedCompanyIds(new Set(ownerDetails.companies.map(c => c.id)));
+    }
+  };
+
+  // Toggle person selection
+  const togglePersonSelection = (personId: string) => {
+    setSelectedPeopleIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(personId)) {
+        newSet.delete(personId);
+      } else {
+        newSet.add(personId);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle all people selection
+  const toggleAllPeople = () => {
+    if (!ownerDetails?.people) return;
+    if (selectedPeopleIds.size === ownerDetails.people.length) {
+      setSelectedPeopleIds(new Set());
+    } else {
+      setSelectedPeopleIds(new Set(ownerDetails.people.map(p => p.id)));
+    }
+  };
+
+  // Bulk delete companies
+  const handleBulkDeleteCompanies = async () => {
+    if (!selectedOwner || selectedCompanyIds.size === 0) return;
+    if (!confirm(`Are you sure you want to remove ${selectedCompanyIds.size} company(ies)?`)) return;
+
+    setBulkDeleting(true);
+    try {
+      await bulkRemoveCompaniesFromOwner(selectedOwner.id, Array.from(selectedCompanyIds));
+      setSelectedCompanyIds(new Set());
+      const updated = await getOwnerDetails(selectedOwner.id);
+      setOwnerDetails(updated);
+      fetchOwners();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete companies');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  // Bulk delete people
+  const handleBulkDeletePeople = async () => {
+    if (!selectedOwner || selectedPeopleIds.size === 0) return;
+    if (!confirm(`Are you sure you want to remove ${selectedPeopleIds.size} person(s)?`)) return;
+
+    setBulkDeleting(true);
+    try {
+      await bulkRemovePeopleFromOwner(selectedOwner.id, Array.from(selectedPeopleIds));
+      setSelectedPeopleIds(new Set());
+      const updated = await getOwnerDetails(selectedOwner.id);
+      setOwnerDetails(updated);
+      fetchOwners();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete people');
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -589,14 +684,44 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                       ) : (ownerDetails?.companies?.length || 0) > 0 && (
                         <div className="bg-white/80 rounded-xl border border-blue-100 overflow-hidden">
                           <div className="flex items-center justify-between px-4 py-2 bg-blue-50/50 border-b border-blue-100">
-                            <button
-                              onClick={() => setCompanySortAsc(!companySortAsc)}
-                              className="flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors"
-                            >
-                              Name
-                              <ChevronDown size={14} className={`transition-transform ${companySortAsc ? '' : 'rotate-180'}`} />
-                            </button>
-                            <span></span>
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={toggleAllCompanies}
+                                className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                  selectedCompanyIds.size === ownerDetails?.companies?.length && selectedCompanyIds.size > 0
+                                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 border-blue-500'
+                                    : selectedCompanyIds.size > 0
+                                    ? 'bg-blue-200 border-blue-400'
+                                    : 'border-slate-300 hover:border-blue-400'
+                                }`}
+                              >
+                                {selectedCompanyIds.size === ownerDetails?.companies?.length && selectedCompanyIds.size > 0 && (
+                                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                                {selectedCompanyIds.size > 0 && selectedCompanyIds.size < (ownerDetails?.companies?.length || 0) && (
+                                  <div className="w-2 h-0.5 bg-blue-600 rounded"></div>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => setCompanySortAsc(!companySortAsc)}
+                                className="flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors"
+                              >
+                                Name
+                                <ChevronDown size={14} className={`transition-transform ${companySortAsc ? '' : 'rotate-180'}`} />
+                              </button>
+                            </div>
+                            {selectedCompanyIds.size > 0 && (
+                              <button
+                                onClick={handleBulkDeleteCompanies}
+                                disabled={bulkDeleting}
+                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-50"
+                              >
+                                <Trash2 size={12} />
+                                Delete ({selectedCompanyIds.size})
+                              </button>
+                            )}
                           </div>
                           <div className="divide-y divide-blue-50">
                             {[...(ownerDetails?.companies || [])].sort((a, b) =>
@@ -604,9 +729,27 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                             ).map((company) => (
                               <div
                                 key={company.id}
-                                className="flex items-center justify-between px-4 py-2.5 hover:bg-blue-50/50 transition-colors"
+                                className={`flex items-center justify-between px-4 py-2.5 hover:bg-blue-50/50 transition-colors ${
+                                  selectedCompanyIds.has(company.id) ? 'bg-blue-50/80' : ''
+                                }`}
                               >
-                                <span className="text-slate-700 font-medium">{company.name}</span>
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={() => toggleCompanySelection(company.id)}
+                                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                      selectedCompanyIds.has(company.id)
+                                        ? 'bg-gradient-to-r from-blue-500 to-cyan-500 border-blue-500'
+                                        : 'border-slate-300 hover:border-blue-400'
+                                    }`}
+                                  >
+                                    {selectedCompanyIds.has(company.id) && (
+                                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                  <span className="text-slate-700 font-medium">{company.name}</span>
+                                </div>
                                 <button
                                   onClick={() => handleRemoveCompany(company.id)}
                                   className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
@@ -709,40 +852,70 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                         <p className="text-sm text-slate-500 italic">No people added yet</p>
                       ) : (ownerDetails?.people?.length || 0) > 0 && (
                         <div className="bg-white/80 rounded-xl border border-pink-100 overflow-hidden">
-                          <div className="grid grid-cols-[1fr,1fr,40px] px-4 py-2 bg-pink-50/50 border-b border-pink-100">
-                            <button
-                              onClick={() => {
-                                if (peopleSortColumn === 'name') {
-                                  setPeopleSortAsc(!peopleSortAsc);
-                                } else {
-                                  setPeopleSortColumn('name');
-                                  setPeopleSortAsc(true);
-                                }
-                              }}
-                              className="flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors"
-                            >
-                              Name
-                              {peopleSortColumn === 'name' && (
-                                <ChevronDown size={14} className={`transition-transform ${peopleSortAsc ? '' : 'rotate-180'}`} />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (peopleSortColumn === 'company') {
-                                  setPeopleSortAsc(!peopleSortAsc);
-                                } else {
-                                  setPeopleSortColumn('company');
-                                  setPeopleSortAsc(true);
-                                }
-                              }}
-                              className="flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors"
-                            >
-                              Company
-                              {peopleSortColumn === 'company' && (
-                                <ChevronDown size={14} className={`transition-transform ${peopleSortAsc ? '' : 'rotate-180'}`} />
-                              )}
-                            </button>
-                            <span></span>
+                          <div className="flex items-center justify-between px-4 py-2 bg-pink-50/50 border-b border-pink-100">
+                            <div className="flex items-center gap-3 flex-1">
+                              <button
+                                onClick={toggleAllPeople}
+                                className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                  selectedPeopleIds.size === ownerDetails?.people?.length && selectedPeopleIds.size > 0
+                                    ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500'
+                                    : selectedPeopleIds.size > 0
+                                    ? 'bg-pink-200 border-pink-400'
+                                    : 'border-slate-300 hover:border-pink-400'
+                                }`}
+                              >
+                                {selectedPeopleIds.size === ownerDetails?.people?.length && selectedPeopleIds.size > 0 && (
+                                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                                {selectedPeopleIds.size > 0 && selectedPeopleIds.size < (ownerDetails?.people?.length || 0) && (
+                                  <div className="w-2 h-0.5 bg-pink-600 rounded"></div>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (peopleSortColumn === 'name') {
+                                    setPeopleSortAsc(!peopleSortAsc);
+                                  } else {
+                                    setPeopleSortColumn('name');
+                                    setPeopleSortAsc(true);
+                                  }
+                                }}
+                                className="flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors"
+                              >
+                                Name
+                                {peopleSortColumn === 'name' && (
+                                  <ChevronDown size={14} className={`transition-transform ${peopleSortAsc ? '' : 'rotate-180'}`} />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (peopleSortColumn === 'company') {
+                                    setPeopleSortAsc(!peopleSortAsc);
+                                  } else {
+                                    setPeopleSortColumn('company');
+                                    setPeopleSortAsc(true);
+                                  }
+                                }}
+                                className="flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors ml-auto"
+                              >
+                                Company
+                                {peopleSortColumn === 'company' && (
+                                  <ChevronDown size={14} className={`transition-transform ${peopleSortAsc ? '' : 'rotate-180'}`} />
+                                )}
+                              </button>
+                            </div>
+                            {selectedPeopleIds.size > 0 && (
+                              <button
+                                onClick={handleBulkDeletePeople}
+                                disabled={bulkDeleting}
+                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-50 ml-3"
+                              >
+                                <Trash2 size={12} />
+                                Delete ({selectedPeopleIds.size})
+                              </button>
+                            )}
                           </div>
                           <div className="divide-y divide-pink-50">
                             {[...(ownerDetails?.people || [])].sort((a, b) => {
@@ -752,8 +925,24 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                             }).map((person) => (
                               <div
                                 key={person.id}
-                                className="grid grid-cols-[1fr,1fr,40px] items-center px-4 py-2.5 hover:bg-pink-50/50 transition-colors"
+                                className={`grid grid-cols-[auto,1fr,1fr,40px] items-center gap-3 px-4 py-2.5 hover:bg-pink-50/50 transition-colors ${
+                                  selectedPeopleIds.has(person.id) ? 'bg-pink-50/80' : ''
+                                }`}
                               >
+                                <button
+                                  onClick={() => togglePersonSelection(person.id)}
+                                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                    selectedPeopleIds.has(person.id)
+                                      ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500'
+                                      : 'border-slate-300 hover:border-pink-400'
+                                  }`}
+                                >
+                                  {selectedPeopleIds.has(person.id) && (
+                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </button>
                                 <span className="text-slate-700 font-medium">{person.name}</span>
                                 <span className="text-slate-500 text-sm">{person.companyAffiliation || '—'}</span>
                                 <button

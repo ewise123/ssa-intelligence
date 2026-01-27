@@ -246,6 +246,31 @@ router.delete('/:id/companies/:companyId', async (req: Request, res: Response) =
   }
 });
 
+// POST /api/news/revenue-owners/:id/companies/bulk-delete - Remove multiple companies from Call Diet
+router.post('/:id/companies/bulk-delete', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { companyIds } = req.body;
+
+    if (!Array.isArray(companyIds) || companyIds.length === 0) {
+      res.status(400).json({ error: 'companyIds must be a non-empty array' });
+      return;
+    }
+
+    const result = await prisma.callDietCompany.deleteMany({
+      where: {
+        revenueOwnerId: id,
+        companyId: { in: companyIds },
+      },
+    });
+
+    res.json({ success: true, count: result.count });
+  } catch (error) {
+    console.error('Error bulk removing companies from call diet:', error);
+    res.status(500).json({ error: 'Failed to remove companies' });
+  }
+});
+
 // ============================================================================
 // Call Diet Management - People
 // ============================================================================
@@ -325,6 +350,31 @@ router.delete('/:id/people/:personId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error removing person from call diet:', error);
     res.status(500).json({ error: 'Failed to remove person' });
+  }
+});
+
+// POST /api/news/revenue-owners/:id/people/bulk-delete - Remove multiple people from Call Diet
+router.post('/:id/people/bulk-delete', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { personIds } = req.body;
+
+    if (!Array.isArray(personIds) || personIds.length === 0) {
+      res.status(400).json({ error: 'personIds must be a non-empty array' });
+      return;
+    }
+
+    const result = await prisma.callDietPerson.deleteMany({
+      where: {
+        revenueOwnerId: id,
+        personId: { in: personIds },
+      },
+    });
+
+    res.json({ success: true, count: result.count });
+  } catch (error) {
+    console.error('Error bulk removing people from call diet:', error);
+    res.status(500).json({ error: 'Failed to remove people' });
   }
 });
 
