@@ -192,11 +192,24 @@ async function runNewsRefresh(): Promise<void> {
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[scheduler] Completed: ${savedCount} articles saved in ${duration}s`);
 
-    // Update last refresh timestamp in config
+    // Update the refresh_status record (same key used by manual refresh)
+    // This ensures the frontend shows the correct "last refreshed" timestamp
+    const refreshStatus = {
+      isRefreshing: false,
+      lastRefreshedAt: new Date().toISOString(),
+      lastError: null,
+      articlesFound: savedCount,
+      coverageGaps: [],
+      progress: 100,
+      progressMessage: 'Complete (scheduled)',
+      currentStep: 'done',
+      steps: [],
+      stats: null,
+    };
     await prisma.newsConfig.upsert({
-      where: { key: 'last_scheduled_refresh' },
-      create: { key: 'last_scheduled_refresh', value: new Date().toISOString() },
-      update: { value: new Date().toISOString() },
+      where: { key: 'refresh_status' },
+      create: { key: 'refresh_status', value: JSON.stringify(refreshStatus) },
+      update: { value: JSON.stringify(refreshStatus) },
     });
 
   } catch (error) {
