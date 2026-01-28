@@ -5,7 +5,7 @@ All notable changes to this repository will be documented in this file.
 The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
 
 ## [Unreleased]
-- Refactor: consolidate FoundationOutput interface from individual prompt files into shared types.ts.
+- Refactor: consolidate FoundationOutput interface from individual prompt files into shared types.js.
 - UI: add Insurance sections to Admin Prompt Library with shared FS & Insurance group.
 - Feat: News Intelligence improvements - time period selection, Deep Dive enhancements, status filters.
 - Feat: Add render.yaml for Render deployment with PostgreSQL.
