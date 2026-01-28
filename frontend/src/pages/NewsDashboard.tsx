@@ -1,9 +1,9 @@
 /**
  * News Dashboard Page
- * Carousel-based layout with Top Stories + per-revenue-owner carousels
+ * Grid-based layout with collapsible per-revenue-owner sections
  */
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   RefreshCw,
   Filter,
@@ -14,7 +14,6 @@ import {
   User,
   Tag,
   AlertCircle,
-  ChevronLeft,
   ChevronRight,
   ChevronDown,
   ChevronUp,
@@ -24,11 +23,11 @@ import {
   CheckCircle2,
   Circle,
   Send,
-  Sparkles,
   Link2,
   Check,
   Mail,
   Archive,
+  Sparkles,
 } from 'lucide-react';
 import {
   useNewsArticles,
@@ -41,25 +40,53 @@ import {
   ArticleFilters,
   archiveArticle,
   toggleArticleSent,
+  bulkArchiveArticles,
+  bulkSendArticles,
 } from '../services/newsManager';
+import { resolveCompanyApi, CompanySuggestion } from '../services/researchManager';
 
 interface NewsDashboardProps {
   onNavigate: (path: string) => void;
 }
 
 export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
-  // Filters state
-  const [filters, setFilters] = useState<ArticleFilters>({});
+  // Filters state - default to showing new (not sent and not archived) articles
+  const [filters, setFilters] = useState<ArticleFilters>({ isSent: false, isArchived: false });
   const [showFilters, setShowFilters] = useState(false);
 
-  // Ad-hoc search state
-  const [showSearch, setShowSearch] = useState(false);
+  // Deep dive search state
   const [searchCompany, setSearchCompany] = useState('');
   const [searchPerson, setSearchPerson] = useState('');
+  const [searchDays, setSearchDays] = useState(1);
+
+  // Company resolution state
+  const [resolving, setResolving] = useState(false);
+  const [resolveModalOpen, setResolveModalOpen] = useState(false);
+  const [resolveSuggestions, setResolveSuggestions] = useState<CompanySuggestion[]>([]);
+  const [resolveStatus, setResolveStatus] = useState<'exact' | 'corrected' | 'ambiguous' | 'unknown'>('unknown');
+  const [resolveInput, setResolveInput] = useState('');
+
+  // Deep dive search progress popup
+  const [showSearchProgress, setShowSearchProgress] = useState(false);
+  const [searchStep, setSearchStep] = useState<'verifying' | 'searching' | 'complete' | 'error'>('verifying');
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchResultCount, setSearchResultCount] = useState(0);
+
+  // Time period for search/refresh
+  const [refreshDays, setRefreshDays] = useState(1);
+  const timePeriodOptions = [
+    { value: 1, label: '1 Day' },
+    { value: 3, label: '3 Days' },
+    { value: 7, label: '1 Week' },
+    { value: 14, label: '2 Weeks' },
+    { value: 30, label: '1 Month' },
+  ];
 
   // Selected article for detail modal
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
 
+  // Bulk selection state
+  const [selectedArticleIds, setSelectedArticleIds] = useState<Set<string>>(new Set());
 
   // Progress popup state
   const [showProgressPopup, setShowProgressPopup] = useState(false);
@@ -72,26 +99,59 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
   const { status, refreshing, refresh, fetchStatus } = useNewsRefresh();
   const { results: searchResults, searching, search, clearResults } = useNewsSearch();
 
-  // Show progress popup when refresh starts
+  // Show progress popup when refresh starts (local or detected from backend)
   useEffect(() => {
-    if (refreshing) {
+    if (refreshing || status.isRefreshing) {
       setShowProgressPopup(true);
     }
-  }, [refreshing]);
+  }, [refreshing, status.isRefreshing]);
 
-  // Poll status while refreshing
+  // Poll status while refreshing - use BOTH local state AND backend state
+  // This handles cases where the initial POST request times out but backend keeps running
   useEffect(() => {
-    if (!refreshing) return;
+    if (!refreshing && !status.isRefreshing) return;
     const interval = setInterval(() => {
       fetchStatus();
     }, 1000);
     return () => clearInterval(interval);
-  }, [refreshing, fetchStatus]);
+  }, [refreshing, status.isRefreshing, fetchStatus]);
+
+  // Generate and download .eml file with HTML content for clickable links
+  const generateEmlFile = (
+    to: string,
+    cc: string,
+    subject: string,
+    htmlBody: string
+  ): void => {
+    // Build headers - X-Unsent: 1 tells Outlook to treat as draft (can be sent)
+    const headers = [
+      `To: ${to}`,
+      cc ? `Cc: ${cc}` : null,
+      `Subject: ${subject}`,
+      'X-Unsent: 1',
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=UTF-8',
+    ].filter(Boolean).join('\r\n');
+
+    // EML format requires blank line between headers and body
+    const emlContent = headers + '\r\n\r\n' + htmlBody;
+
+    // Trigger download
+    const blob = new Blob([emlContent], { type: 'message/rfc822' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${subject.substring(0, 50).replace(/[^a-z0-9]/gi, '_')}.eml`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const handleRefresh = async () => {
     try {
       setShowProgressPopup(true);
-      const result = await refresh();
+      const result = await refresh(refreshDays);
       await fetchArticles();
       // Keep popup open for a moment to show completion
       setTimeout(() => setShowProgressPopup(false), 2000);
@@ -100,65 +160,155 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
     }
   };
 
-  const handleSearch = async () => {
-    if (!searchCompany.trim() && !searchPerson.trim()) return;
+  // Execute the actual search
+  const executeSearch = async (companyName?: string, personName?: string) => {
+    setSearchStep('searching');
     try {
-      await search({
-        company: searchCompany.trim() || undefined,
-        person: searchPerson.trim() || undefined,
+      const result = await search({
+        company: companyName || undefined,
+        person: personName || undefined,
+        days: searchDays,
       });
+      const count = result?.articles?.length ?? 0;
+      setSearchResultCount(count);
+      setSearchStep('complete');
+      // Keep popup open to show completion
+      setTimeout(() => setShowSearchProgress(false), 2500);
     } catch (err) {
-      // Error already shown in hook
+      setSearchError(err instanceof Error ? err.message : 'Search failed');
+      setSearchStep('error');
     }
   };
 
-  const clearFilters = () => {
-    setFilters({});
+  // Handle search with company name resolution
+  const handleSearch = async () => {
+    if (!searchCompany.trim() && !searchPerson.trim()) return;
+
+    const companyToSearch = searchCompany.trim();
+    const personToSearch = searchPerson.trim();
+
+    // Show progress popup
+    setShowSearchProgress(true);
+    setSearchStep('verifying');
+    setSearchError(null);
+    setSearchResultCount(0);
+
+    // If there's a company name, resolve it first
+    if (companyToSearch) {
+      setResolving(true);
+      try {
+        const result = await resolveCompanyApi(companyToSearch);
+        setResolving(false);
+
+        if (result.status === 'exact') {
+          // Exact match - use the canonical name
+          const resolvedName = result.suggestions[0]?.canonicalName || companyToSearch;
+          setSearchCompany(resolvedName);
+          await executeSearch(resolvedName, personToSearch);
+        } else if (result.status === 'corrected' || result.status === 'ambiguous') {
+          // Hide progress popup temporarily for resolution modal
+          setShowSearchProgress(false);
+          setResolveInput(companyToSearch);
+          setResolveSuggestions(result.suggestions);
+          setResolveStatus(result.status);
+          setResolveModalOpen(true);
+        } else {
+          // Unknown - use as entered
+          await executeSearch(companyToSearch, personToSearch);
+        }
+      } catch (err) {
+        setResolving(false);
+        // On error, proceed with original name
+        await executeSearch(companyToSearch, personToSearch);
+      }
+    } else {
+      // No company, just search by person
+      setSearchStep('searching');
+      await executeSearch(undefined, personToSearch);
+    }
   };
 
-  const hasActiveFilters = Object.values(filters).some(Boolean);
+  // Handle modal selection
+  const handleResolveSelect = async (selectedName: string) => {
+    setSearchCompany(selectedName);
+    setResolveModalOpen(false);
+    // Show progress popup again for the search
+    setShowSearchProgress(true);
+    setSearchStep('searching');
+    await executeSearch(selectedName, searchPerson.trim());
+  };
+
+  // Handle modal cancel - search with original input
+  const handleResolveCancel = async () => {
+    setResolveModalOpen(false);
+    // Show progress popup again for the search
+    setShowSearchProgress(true);
+    setSearchStep('searching');
+    await executeSearch(searchCompany.trim(), searchPerson.trim());
+  };
+
+  const clearFilters = () => {
+    setFilters({ isArchived: false });
+  };
+
+  // Check if any filters are active beyond the default
+  // Status filter is active when: sent=true or archived=true (not when "all" or "new")
+  const hasActiveFilters = !!(
+    filters.revenueOwnerId ||
+    filters.companyId ||
+    filters.personId ||
+    filters.tagId ||
+    filters.isSent === true ||
+    filters.isArchived === true
+  );
 
   // Handle sending email and marking as sent + archived
-  const handleSendEmail = async (article: NewsArticle) => {
-    // Get email recipients from revenue owners
-    const ownersWithEmail = article.revenueOwners.filter(ro => ro.email);
-    if (ownersWithEmail.length === 0) return;
+  const handleSendEmail = async (article: NewsArticle, selectedOwners?: { id: string; name: string; email: string | null }[]) => {
+    // Get email recipients - use selectedOwners if provided (Deep Dive), otherwise from article's revenue owners
+    let recipients: { id: string; name: string; email: string | null }[];
+    if (selectedOwners && selectedOwners.length > 0) {
+      recipients = selectedOwners.filter(o => o.email);
+    } else {
+      recipients = article.revenueOwners.filter(ro => ro.email);
+    }
+    if (recipients.length === 0) return;
 
-    const toEmail = ownersWithEmail[0]?.email || '';
-    const ccEmails = ownersWithEmail.slice(1).map(ro => ro.email).join(',');
+    const toEmail = recipients[0]?.email || '';
+    const ccEmails = recipients.slice(1).map(ro => ro.email).filter(Boolean).join(', ');
 
     // Build email content
     const summary = article.longSummary || article.shortSummary || article.summary || '';
     const whyItMatters = article.whyItMatters || '';
     const tagText = article.tag ? article.tag.name : '';
 
-    // Build email body
-    const bodyParts = [];
-    if (summary) bodyParts.push(`Summary:\n${summary}`);
-    if (whyItMatters) bodyParts.push(`Why it Matters:\n${whyItMatters}`);
-    if (tagText) bodyParts.push(`Tags:\n${tagText}`);
-    bodyParts.push(`Link: ${article.sourceUrl}`);
-    const body = bodyParts.join('\n\n');
+    // Build HTML email body with clickable link
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <h2 style="color: #003399; margin-bottom: 16px;">${article.headline}</h2>
+  ${summary ? `<div style="margin-bottom: 16px;"><strong>Summary:</strong><br/>${summary.replace(/\n/g, '<br/>')}</div>` : ''}
+  ${whyItMatters ? `<div style="margin-bottom: 16px;"><strong>Why it Matters:</strong><br/>${whyItMatters.replace(/\n/g, '<br/>')}</div>` : ''}
+  ${tagText ? `<div style="margin-bottom: 16px;"><strong>Tags:</strong> ${tagText}</div>` : ''}
+  <div style="margin-top: 20px;">
+    <a href="${article.sourceUrl}" style="color: #003399; font-weight: bold;">Read More</a>
+  </div>
+</body>
+</html>`.trim();
 
-    // Build mailto URL using encodeURIComponent (not URLSearchParams which uses + for spaces)
-    let mailtoUrl = `mailto:${encodeURIComponent(toEmail)}`;
-    const params = [];
-    if (ccEmails) params.push(`cc=${encodeURIComponent(ccEmails)}`);
-    params.push(`subject=${encodeURIComponent(article.headline)}`);
-    params.push(`body=${encodeURIComponent(body)}`);
-    mailtoUrl += '?' + params.join('&');
+    // Generate and download .eml file
+    generateEmlFile(toEmail, ccEmails, article.headline, htmlBody);
 
-    // Open email client
-    window.location.href = mailtoUrl;
-
-    // Mark as sent and archive the article
+    // Mark as sent (but don't archive - they are mutually exclusive)
     try {
       await toggleArticleSent(article.id, true);
-      await archiveArticle(article.id, true);
       await fetchArticles();
       // Update selected article
       if (selectedArticle && selectedArticle.id === article.id) {
-        setSelectedArticle({ ...selectedArticle, isSent: true, isArchived: true });
+        setSelectedArticle({ ...selectedArticle, isSent: true });
       }
     } catch (err) {
       console.error('Failed to update article:', err);
@@ -178,49 +328,245 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
     }
   };
 
-  // Group articles for carousels (exclude low priority)
-  const carouselData = useMemo(() => {
-    // Filter out low priority articles - only show high and medium
-    const visibleArticles = articles.filter(a => a.priority === 'high' || a.priority === 'medium');
+  // Toggle selection of an article
+  const toggleArticleSelection = (articleId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setSelectedArticleIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(articleId)) {
+        newSet.delete(articleId);
+      } else {
+        newSet.add(articleId);
+      }
+      return newSet;
+    });
+  };
 
-    // Sort by priority (high first) then by priorityScore
-    const sortByPriority = (a: NewsArticle, b: NewsArticle) => {
-      const priorityOrder = { high: 0, medium: 1 };
-      const aPriority = priorityOrder[a.priority as 'high' | 'medium'] ?? 2;
-      const bPriority = priorityOrder[b.priority as 'high' | 'medium'] ?? 2;
-      if (aPriority !== bPriority) return aPriority - bPriority;
-      return (b.priorityScore || 0) - (a.priorityScore || 0);
+  // Handle bulk archive
+  const handleBulkArchive = async () => {
+    if (selectedArticleIds.size === 0) return;
+    try {
+      await bulkArchiveArticles(Array.from(selectedArticleIds));
+      setSelectedArticleIds(new Set());
+      await fetchArticles();
+    } catch (err) {
+      console.error('Failed to bulk archive articles:', err);
+    }
+  };
+
+  // Handle bulk archive by specific IDs (for section-level actions)
+  const handleBulkArchiveByIds = async (articleIds: string[]) => {
+    if (articleIds.length === 0) return;
+    try {
+      await bulkArchiveArticles(articleIds);
+      // Remove these IDs from selection
+      setSelectedArticleIds(prev => {
+        const newSet = new Set(prev);
+        articleIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      await fetchArticles();
+    } catch (err) {
+      console.error('Failed to bulk archive articles:', err);
+    }
+  };
+
+  // Handle bulk send - creates a digest email with all selected articles
+  const handleBulkSend = async () => {
+    if (selectedArticleIds.size === 0) return;
+
+    // Get the selected articles
+    const selectedArticles = articles.filter(a => selectedArticleIds.has(a.id));
+    if (selectedArticles.length === 0) return;
+
+    // Collect all revenue owners from selected articles
+    const allOwners = new Map<string, { id: string; name: string; email: string | null }>();
+    selectedArticles.forEach(article => {
+      article.revenueOwners.forEach(owner => {
+        if (owner.email && !allOwners.has(owner.id)) {
+          allOwners.set(owner.id, owner);
+        }
+      });
+    });
+
+    const ownersWithEmail = Array.from(allOwners.values());
+    if (ownersWithEmail.length === 0) {
+      alert('No email addresses configured for revenue owners. Add emails in News Setup.');
+      return;
+    }
+
+    // Build subject line
+    const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const subject = `SSAMI News Digest - ${today}`;
+
+    // Build HTML email body with clickable links
+    const articleHtml = selectedArticles.map((article, index) => {
+      const summary = article.longSummary || article.shortSummary || article.summary || '';
+      return `
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #e2e8f0;">
+          <h3 style="color: #003399; margin: 0 0 12px 0;">${index + 1}. ${article.headline}</h3>
+          ${summary ? `<div style="margin-bottom: 8px;"><strong>Summary:</strong><br/>${summary.replace(/\n/g, '<br/>')}</div>` : ''}
+          ${article.whyItMatters ? `<div style="margin-bottom: 8px;"><strong>Why it Matters:</strong><br/>${article.whyItMatters.replace(/\n/g, '<br/>')}</div>` : ''}
+          ${article.company ? `<div><strong>Company:</strong> ${article.company.name}</div>` : ''}
+          ${article.person ? `<div><strong>Person:</strong> ${article.person.name}</div>` : ''}
+          ${article.tag ? `<div><strong>Topic:</strong> ${article.tag.name}</div>` : ''}
+          <div style="margin-top: 12px;">
+            <a href="${article.sourceUrl}" style="color: #003399; font-weight: bold;">Read More</a>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <h1 style="color: #003399; border-bottom: 2px solid #003399; padding-bottom: 12px;">News Digest - ${today}</h1>
+  ${articleHtml}
+</body>
+</html>`.trim();
+
+    // Generate and download .eml file
+    const toEmail = ownersWithEmail[0]?.email || '';
+    const ccEmails = ownersWithEmail.slice(1).map(ro => ro.email).filter(Boolean).join(', ');
+    generateEmlFile(toEmail, ccEmails, subject, htmlBody);
+
+    // Mark all selected as sent and archive them
+    try {
+      await bulkSendArticles(Array.from(selectedArticleIds));
+      setSelectedArticleIds(new Set());
+      await fetchArticles();
+    } catch (err) {
+      console.error('Failed to bulk send articles:', err);
+    }
+  };
+
+  // Handle bulk send by specific IDs (for section-level actions)
+  const handleBulkSendByIds = async (articleIds: string[]) => {
+    if (articleIds.length === 0) return;
+
+    // Get the selected articles
+    const selectedArticles = articles.filter(a => articleIds.includes(a.id));
+    if (selectedArticles.length === 0) return;
+
+    // Collect all revenue owners from selected articles
+    const allOwners = new Map<string, { id: string; name: string; email: string | null }>();
+    selectedArticles.forEach(article => {
+      article.revenueOwners.forEach(owner => {
+        if (owner.email && !allOwners.has(owner.id)) {
+          allOwners.set(owner.id, owner);
+        }
+      });
+    });
+
+    const ownersWithEmail = Array.from(allOwners.values());
+    if (ownersWithEmail.length === 0) {
+      alert('No email addresses configured for revenue owners. Add emails in News Setup.');
+      return;
+    }
+
+    // Build subject line
+    const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const subject = `SSAMI News Digest - ${today}`;
+
+    // Build HTML email body with clickable links
+    const articleHtml = selectedArticles.map((article, index) => {
+      const summary = article.longSummary || article.shortSummary || article.summary || '';
+      return `
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #e2e8f0;">
+          <h3 style="color: #003399; margin: 0 0 12px 0;">${index + 1}. ${article.headline}</h3>
+          ${summary ? `<div style="margin-bottom: 8px;"><strong>Summary:</strong><br/>${summary.replace(/\n/g, '<br/>')}</div>` : ''}
+          ${article.whyItMatters ? `<div style="margin-bottom: 8px;"><strong>Why it Matters:</strong><br/>${article.whyItMatters.replace(/\n/g, '<br/>')}</div>` : ''}
+          ${article.company ? `<div><strong>Company:</strong> ${article.company.name}</div>` : ''}
+          ${article.person ? `<div><strong>Person:</strong> ${article.person.name}</div>` : ''}
+          ${article.tag ? `<div><strong>Topic:</strong> ${article.tag.name}</div>` : ''}
+          <div style="margin-top: 12px;">
+            <a href="${article.sourceUrl}" style="color: #003399; font-weight: bold;">Read More</a>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <h1 style="color: #003399; border-bottom: 2px solid #003399; padding-bottom: 12px;">News Digest - ${today}</h1>
+  ${articleHtml}
+</body>
+</html>`.trim();
+
+    // Generate and download .eml file
+    const toEmail = ownersWithEmail[0]?.email || '';
+    const ccEmails = ownersWithEmail.slice(1).map(ro => ro.email).filter(Boolean).join(', ');
+    generateEmlFile(toEmail, ccEmails, subject, htmlBody);
+
+    // Mark all selected as sent and archive them
+    try {
+      await bulkSendArticles(articleIds);
+      // Remove these IDs from selection
+      setSelectedArticleIds(prev => {
+        const newSet = new Set(prev);
+        articleIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      await fetchArticles();
+    } catch (err) {
+      console.error('Failed to bulk send articles:', err);
+    }
+  };
+
+  // Group articles by revenue owner
+  const carouselData = useMemo(() => {
+    // Sort by published date (newest first)
+    const sortByDate = (a: NewsArticle, b: NewsArticle) => {
+      const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+      const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+      return dateB - dateA;
     };
 
-    // Top Stories: High priority articles sorted by priorityScore, max 10
-    const topStories = visibleArticles
-      .filter(a => a.priority === 'high')
-      .sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0))
-      .slice(0, 10);
-
-    // Group by revenue owner for individual carousels
+    // Group by revenue owner
     const ownerArticles: Record<string, NewsArticle[]> = {};
 
     // Sort owners alphabetically
     const sortedOwners = [...owners].sort((a, b) => a.name.localeCompare(b.name));
 
     for (const owner of sortedOwners) {
-      const ownerArts = visibleArticles
+      const ownerArts = articles
         .filter(a => a.revenueOwners.some(ro => ro.id === owner.id))
-        .sort(sortByPriority);
+        .sort(sortByDate);
 
       if (ownerArts.length > 0) {
         ownerArticles[owner.id] = ownerArts;
       }
     }
 
-    return { topStories, ownerArticles, sortedOwners };
+    return { ownerArticles, sortedOwners };
   }, [articles, owners]);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Unknown date';
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const formatTimestamp = (dateStr: string | null) => {
+    if (!dateStr) return 'Never';
+    const date = new Date(dateStr);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   return (
@@ -242,17 +588,6 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setShowSearch(!showSearch)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-200 ${
-                showSearch
-                  ? 'bg-brand-500/20 border-brand-400/50 text-brand-300 shadow-lg shadow-brand-500/20'
-                  : 'bg-white/10 border-white/20 text-white hover:bg-white/20 backdrop-blur-sm'
-              }`}
-            >
-              <Search size={18} />
-              <span className="hidden sm:inline font-medium">Search</span>
-            </button>
-            <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-200 ${
                 showFilters || hasActiveFilters
@@ -269,32 +604,42 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
                 </span>
               )}
             </button>
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-500 to-brand-600 text-white rounded-xl hover:from-brand-600 hover:to-brand-700 disabled:opacity-50 transition-all duration-200 shadow-lg shadow-brand-500/30 hover:shadow-xl hover:shadow-brand-500/40 font-medium"
-            >
-              <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">{refreshing ? 'Refreshing...' : 'Refresh News'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <select
+                value={refreshDays}
+                onChange={(e) => setRefreshDays(Number(e.target.value))}
+                className="px-3 py-2.5 bg-white/10 border border-white/20 text-white rounded-xl outline-none focus:ring-2 focus:ring-brand-400/50 transition-all backdrop-blur-sm cursor-pointer text-sm font-medium"
+              >
+                {timePeriodOptions.map(opt => (
+                  <option key={opt.value} value={opt.value} className="text-slate-800">{opt.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-500 to-brand-600 text-white rounded-xl hover:from-brand-600 hover:to-brand-700 disabled:opacity-50 transition-all duration-200 shadow-lg shadow-brand-500/30 hover:shadow-xl hover:shadow-brand-500/40 font-medium"
+              >
+                <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+                <span className="hidden sm:inline">{refreshing ? 'Refreshing...' : 'Refresh News'}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Ad-Hoc Search Panel */}
-      {showSearch && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-brand-100 rounded-lg">
-                <Search size={16} className="text-brand-600" />
-              </div>
-              <h3 className="font-semibold text-slate-800">Ad-Hoc Search</h3>
+      {/* Deep Dive Search Panel - Always visible */}
+      <div className="bg-gradient-to-br from-brand-50 via-white to-brand-50/50 border-2 border-brand-200 rounded-2xl p-5 shadow-md hover:shadow-lg transition-all ring-1 ring-brand-100/50">
+        <div className="flex items-center mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-brand-500 to-brand-600 rounded-xl shadow-sm">
+              <Search size={18} className="text-white" />
             </div>
-            <button onClick={() => setShowSearch(false)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-              <X size={18} />
-            </button>
+            <h3 className="font-semibold text-slate-800 text-lg">Deep Dive</h3>
+            <span className="text-xs text-brand-600 font-medium bg-brand-100 px-2 py-0.5 rounded-full">
+              Search any company or person
+            </span>
           </div>
+        </div>
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Building2 size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -316,12 +661,33 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
                 className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-300 transition-all"
               />
             </div>
+            <select
+              value={searchDays}
+              onChange={(e) => setSearchDays(Number(e.target.value))}
+              className="px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-300 transition-all bg-slate-50 hover:bg-white cursor-pointer text-sm font-medium text-slate-700"
+            >
+              {timePeriodOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
             <button
               onClick={handleSearch}
-              disabled={searching || (!searchCompany.trim() && !searchPerson.trim())}
+              disabled={searching || resolving || (!searchCompany.trim() && !searchPerson.trim())}
               className="px-6 py-2.5 bg-gradient-to-r from-brand-500 to-brand-600 text-white rounded-xl hover:from-brand-600 hover:to-brand-700 disabled:opacity-50 transition-all font-medium shadow-sm hover:shadow-md"
             >
-              {searching ? <Loader2 className="animate-spin" size={18} /> : 'Search'}
+              {resolving ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="animate-spin" size={18} />
+                  <span>Verifying...</span>
+                </span>
+              ) : searching ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="animate-spin" size={18} />
+                  <span>Searching...</span>
+                </span>
+              ) : (
+                'Search'
+              )}
             </button>
           </div>
 
@@ -350,7 +716,6 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
             </div>
           )}
         </div>
-      )}
 
       {/* Filters Panel */}
       {showFilters && (
@@ -368,7 +733,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Revenue Owner</label>
               <select
@@ -409,41 +774,46 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Priority</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Status</label>
               <select
-                value={filters.priority || ''}
-                onChange={(e) => setFilters({ ...filters, priority: (e.target.value as 'high' | 'medium') || undefined })}
+                value={
+                  filters.isSent === true ? 'sent' :
+                  filters.isArchived === true ? 'archived' :
+                  (filters.isSent === false && filters.isArchived === false) ? 'new' :
+                  'all'
+                }
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === 'all') {
+                    setFilters({ ...filters, isSent: undefined, isArchived: undefined });
+                  } else if (value === 'new') {
+                    setFilters({ ...filters, isSent: false, isArchived: false });
+                  } else if (value === 'sent') {
+                    setFilters({ ...filters, isSent: true, isArchived: undefined });
+                  } else if (value === 'archived') {
+                    setFilters({ ...filters, isSent: undefined, isArchived: true });
+                  }
+                }}
                 className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-300 transition-all bg-slate-50 hover:bg-white cursor-pointer"
               >
-                <option value="">All priorities</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Archive Status</label>
-              <select
-                value={filters.isArchived === undefined ? '' : filters.isArchived ? 'true' : 'false'}
-                onChange={(e) => setFilters({ ...filters, isArchived: e.target.value === '' ? undefined : e.target.value === 'true' })}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-300 transition-all bg-slate-50 hover:bg-white cursor-pointer"
-              >
-                <option value="">Active Only</option>
-                <option value="true">Archived</option>
-                <option value="false">Active</option>
+                <option value="all">All</option>
+                <option value="new">New</option>
+                <option value="sent">Sent</option>
+                <option value="archived">Archived</option>
               </select>
             </div>
           </div>
         </div>
       )}
 
-      {/* Last Updated Info */}
-      {status.lastRefreshedAt && !refreshing && (
+      {/* Last Updated Info - Always visible */}
+      {!refreshing && (
         <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl w-fit border border-slate-200/80 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <Clock size={14} className="text-slate-400" />
-            <span>Last refreshed: <span className="font-medium">{formatDate(status.lastRefreshedAt)}</span></span>
+            <span>Last refreshed: <span className="font-medium">{formatTimestamp(status.lastRefreshedAt)}</span></span>
           </div>
-          {status.articlesFound > 0 && (
+          {status.lastRefreshedAt && status.articlesFound > 0 && (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-xs font-bold shadow-md shadow-emerald-500/25 border border-emerald-400/30">
               <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
               {status.articlesFound} articles
@@ -506,35 +876,26 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Carousels */}
+      {/* News Sections */}
       {!articlesLoading && articles.length > 0 && (
-        <div className="space-y-8">
-          {/* Top Stories Carousel */}
-          {carouselData.topStories.length > 0 && (
-            <NewsCarousel
-              title="Top Stories"
-              icon={<Sparkles size={20} className="text-amber-500" />}
-              articles={carouselData.topStories}
-              onArticleClick={setSelectedArticle}
-              accentColor="amber"
-              showRevenueOwner={true}
-              showCount={false}
-            />
-          )}
-
-          {/* Revenue Owner Carousels */}
+        <div className="space-y-4">
+          {/* Revenue Owner Sections */}
           {carouselData.sortedOwners.map((owner) => {
             const ownerArts = carouselData.ownerArticles[owner.id];
             if (!ownerArts || ownerArts.length === 0) return null;
 
             return (
-              <NewsCarousel
+              <NewsSection
                 key={owner.id}
                 title={owner.name}
                 icon={<User size={20} className="text-brand-600" />}
                 articles={ownerArts}
                 onArticleClick={setSelectedArticle}
                 accentColor="brand"
+                selectedIds={selectedArticleIds}
+                onToggleSelection={toggleArticleSelection}
+                onBulkSend={handleBulkSendByIds}
+                onBulkArchive={handleBulkArchiveByIds}
               />
             );
           })}
@@ -548,7 +909,182 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate }) => {
           onClose={() => setSelectedArticle(null)}
           onSendEmail={handleSendEmail}
           onArchive={handleArchive}
+          allOwners={owners}
         />
+      )}
+
+      {/* Deep Dive Search Progress Popup */}
+      {showSearchProgress && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+            {/* Header */}
+            <div className={`px-6 py-5 ${
+              searchStep === 'error'
+                ? 'bg-gradient-to-r from-rose-500 to-rose-600'
+                : searchStep === 'complete'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                  : 'bg-gradient-to-r from-brand-500 to-violet-500'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/20 rounded-xl">
+                    {searchStep === 'complete' ? (
+                      <CheckCircle2 className="text-white" size={24} />
+                    ) : searchStep === 'error' ? (
+                      <AlertCircle className="text-white" size={24} />
+                    ) : (
+                      <Loader2 className="animate-spin text-white" size={24} />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">
+                      {searchStep === 'complete' ? 'Search Complete' : searchStep === 'error' ? 'Search Failed' : 'Deep Dive Search'}
+                    </h3>
+                    <p className="text-white/80 text-sm">
+                      {searchCompany && searchPerson
+                        ? `${searchCompany} & ${searchPerson}`
+                        : searchCompany || searchPerson}
+                    </p>
+                  </div>
+                </div>
+                {(searchStep === 'complete' || searchStep === 'error') && (
+                  <button
+                    onClick={() => setShowSearchProgress(false)}
+                    className="p-2 hover:bg-white/20 rounded-xl transition-colors"
+                  >
+                    <X className="text-white" size={20} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              {searchStep === 'error' ? (
+                <div className="text-center">
+                  <p className="text-rose-600 font-medium">{searchError || 'An error occurred'}</p>
+                  <button
+                    onClick={() => setShowSearchProgress(false)}
+                    className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : searchStep === 'complete' ? (
+                <div className="text-center">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-full font-semibold">
+                    <CheckCircle2 size={18} />
+                    Found {searchResultCount} article{searchResultCount !== 1 ? 's' : ''}
+                  </div>
+                  <p className="text-slate-500 text-sm mt-3">Results shown below</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Step 1: Verifying */}
+                  <div className={`flex items-center gap-3 p-3 rounded-xl ${
+                    searchStep === 'verifying' ? 'bg-brand-50 border border-brand-200' : 'bg-slate-50'
+                  }`}>
+                    {searchStep === 'verifying' ? (
+                      <div className="p-1.5 bg-brand-500 rounded-lg">
+                        <Loader2 className="animate-spin text-white" size={16} />
+                      </div>
+                    ) : (
+                      <div className="p-1.5 bg-emerald-500 rounded-lg">
+                        <Check className="text-white" size={16} />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className={`font-medium ${searchStep === 'verifying' ? 'text-brand-700' : 'text-slate-600'}`}>
+                        Verifying company name
+                      </p>
+                      {searchStep === 'verifying' && (
+                        <p className="text-sm text-slate-500">Checking for matches...</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Step 2: Searching */}
+                  <div className={`flex items-center gap-3 p-3 rounded-xl ${
+                    searchStep === 'searching' ? 'bg-brand-50 border border-brand-200' : 'bg-slate-50'
+                  }`}>
+                    {searchStep === 'searching' ? (
+                      <div className="p-1.5 bg-brand-500 rounded-lg">
+                        <Loader2 className="animate-spin text-white" size={16} />
+                      </div>
+                    ) : searchStep === 'verifying' ? (
+                      <div className="p-1.5 bg-slate-300 rounded-lg">
+                        <Circle className="text-white" size={16} />
+                      </div>
+                    ) : (
+                      <div className="p-1.5 bg-emerald-500 rounded-lg">
+                        <Check className="text-white" size={16} />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className={`font-medium ${searchStep === 'searching' ? 'text-brand-700' : 'text-slate-400'}`}>
+                        Searching for news
+                      </p>
+                      {searchStep === 'searching' && (
+                        <p className="text-sm text-slate-500">AI is searching and analyzing...</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Company Resolution Modal */}
+      {resolveModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-amber-500 to-orange-500">
+              <h3 className="text-lg font-bold text-white">
+                {resolveStatus === 'corrected' ? 'Did you mean?' : 'Multiple matches found'}
+              </h3>
+              <p className="text-white/80 text-sm mt-1">
+                {resolveStatus === 'corrected'
+                  ? `We found a similar company for "${resolveInput}"`
+                  : `"${resolveInput}" matches multiple companies`}
+              </p>
+            </div>
+            <div className="p-4 space-y-2 max-h-80 overflow-y-auto">
+              {resolveSuggestions.map((suggestion, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleResolveSelect(suggestion.canonicalName)}
+                  className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-brand-50 transition-all group"
+                >
+                  <div className="font-semibold text-slate-800 group-hover:text-brand-700">
+                    {suggestion.canonicalName}
+                  </div>
+                  {suggestion.description && (
+                    <div className="text-sm text-slate-500 mt-1">{suggestion.description}</div>
+                  )}
+                  {suggestion.industry && (
+                    <div className="text-xs text-slate-400 mt-1">{suggestion.industry}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="px-4 py-3 bg-slate-50 flex justify-between gap-3">
+              <button
+                onClick={handleResolveCancel}
+                className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium transition-colors"
+              >
+                Use "{resolveInput}" anyway
+              </button>
+              <button
+                onClick={() => setResolveModalOpen(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -695,8 +1231,8 @@ const ProgressPopup: React.FC<{
   );
 };
 
-// News Carousel Component
-const NewsCarousel: React.FC<{
+// News Section Component (Grid Layout)
+const NewsSection: React.FC<{
   title: string;
   icon: React.ReactNode;
   articles: NewsArticle[];
@@ -704,43 +1240,32 @@ const NewsCarousel: React.FC<{
   accentColor: 'amber' | 'brand';
   showRevenueOwner?: boolean;
   showCount?: boolean;
-}> = ({ title, icon, articles, onArticleClick, accentColor, showRevenueOwner = false, showCount = true }) => {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
+  selectedIds?: Set<string>;
+  onToggleSelection?: (articleId: string, event: React.MouseEvent) => void;
+  onBulkSend?: (articleIds: string[]) => void;
+  onBulkArchive?: (articleIds: string[]) => void;
+}> = ({ title, icon, articles, onArticleClick, accentColor, showRevenueOwner = false, showCount = true, selectedIds, onToggleSelection, onBulkSend, onBulkArchive }) => {
+  const [collapsed, setCollapsed] = useState(true);
 
-  const checkScrollButtons = () => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    setCanScrollLeft(container.scrollLeft > 0);
-    setCanScrollRight(container.scrollLeft < container.scrollWidth - container.clientWidth - 10);
-  };
-
-  useEffect(() => {
-    checkScrollButtons();
-    const container = scrollContainerRef.current;
-    if (container) {
-      container.addEventListener('scroll', checkScrollButtons);
-      return () => container.removeEventListener('scroll', checkScrollButtons);
-    }
-  }, [articles]);
-
-  const scroll = (direction: 'left' | 'right') => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const scrollAmount = 320; // Card width + gap
-    container.scrollBy({
-      left: direction === 'left' ? -scrollAmount : scrollAmount,
-      behavior: 'smooth',
-    });
-  };
+  // Count how many articles in this section are selected
+  const selectedInSection = articles.filter(a => selectedIds?.has(a.id)).length;
+  const hasSelection = selectedInSection > 0;
 
   const accentStyles = accentColor === 'amber'
     ? { bg: 'from-amber-50 to-orange-50', border: 'border-amber-100', text: 'text-amber-700', iconBg: 'bg-gradient-to-br from-amber-400 to-orange-500' }
     : { bg: 'from-brand-50 to-violet-50', border: 'border-brand-100', text: 'text-brand-700', iconBg: 'bg-gradient-to-br from-brand-400 to-violet-500' };
+
+  const handleSectionSend = () => {
+    if (!hasSelection || !onBulkSend) return;
+    const selectedArticleIds = articles.filter(a => selectedIds?.has(a.id)).map(a => a.id);
+    onBulkSend(selectedArticleIds);
+  };
+
+  const handleSectionArchive = () => {
+    if (!hasSelection || !onBulkArchive) return;
+    const selectedArticleIds = articles.filter(a => selectedIds?.has(a.id)).map(a => a.id);
+    onBulkArchive(selectedArticleIds);
+  };
 
   return (
     <div className="relative">
@@ -772,33 +1297,44 @@ const NewsCarousel: React.FC<{
             )}
           </div>
         </button>
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => scroll('left')}
-              disabled={!canScrollLeft}
-              className="p-2.5 rounded-xl bg-white/80 border border-white shadow-sm text-slate-600 hover:bg-white hover:shadow-md disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <button
-              onClick={() => scroll('right')}
-              disabled={!canScrollRight}
-              className="p-2.5 rounded-xl bg-white/80 border border-white shadow-sm text-slate-600 hover:bg-white hover:shadow-md disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        )}
+
+        {/* Send and Archive buttons */}
+        <div className="flex items-center gap-2">
+          {hasSelection && (
+            <span className="text-sm font-medium text-slate-600 mr-2">
+              {selectedInSection} selected
+            </span>
+          )}
+          <button
+            onClick={handleSectionSend}
+            disabled={!hasSelection}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-all ${
+              hasSelection
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/25 hover:from-emerald-600 hover:to-teal-600'
+                : 'bg-slate-200/80 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            <Send size={16} />
+            <span className="hidden sm:inline">Send</span>
+          </button>
+          <button
+            onClick={handleSectionArchive}
+            disabled={!hasSelection}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-all ${
+              hasSelection
+                ? 'bg-slate-600 text-white shadow-md hover:bg-slate-700'
+                : 'bg-slate-200/80 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            <Archive size={16} />
+            <span className="hidden sm:inline">Archive</span>
+          </button>
+        </div>
       </div>
 
-      {/* Cards Container - collapsible */}
+      {/* Cards Grid - collapsible */}
       {!collapsed && (
-        <div
-          ref={scrollContainerRef}
-          className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide px-1"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {articles.map((article) => (
             <NewsCard
               key={article.id}
@@ -806,6 +1342,8 @@ const NewsCarousel: React.FC<{
               onClick={() => onArticleClick(article)}
               accentColor={accentColor}
               showRevenueOwner={showRevenueOwner}
+              isSelected={selectedIds?.has(article.id) || false}
+              onToggleSelection={onToggleSelection}
             />
           ))}
         </div>
@@ -820,7 +1358,9 @@ const NewsCard: React.FC<{
   onClick: () => void;
   accentColor: 'amber' | 'brand';
   showRevenueOwner?: boolean;
-}> = ({ article, onClick, accentColor, showRevenueOwner = false }) => {
+  isSelected?: boolean;
+  onToggleSelection?: (articleId: string, event: React.MouseEvent) => void;
+}> = ({ article, onClick, accentColor, showRevenueOwner = false, isSelected = false, onToggleSelection }) => {
   const accentHover = accentColor === 'amber'
     ? 'hover:border-amber-300 hover:shadow-amber-100'
     : 'hover:border-brand-300 hover:shadow-brand-100';
@@ -828,25 +1368,25 @@ const NewsCard: React.FC<{
   return (
     <div
       onClick={onClick}
-      className={`flex-shrink-0 w-[300px] bg-white border border-slate-200 rounded-2xl p-5 cursor-pointer hover:shadow-xl transition-all duration-300 group ${accentHover}`}
+      className={`bg-white border rounded-2xl p-5 cursor-pointer hover:shadow-xl transition-all duration-300 group ${accentHover} ${
+        isSelected ? 'border-brand-400 ring-2 ring-brand-200 shadow-brand-100' : 'border-slate-200'
+      }`}
     >
-      {/* Header with priority indicator and sent status */}
+      {/* Header with checkbox and status badges */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
-          {article.priority && (
-            <span className={`
-              inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider
-              shadow-sm backdrop-blur-sm border
-              ${article.priority === 'high'
-                ? 'bg-gradient-to-r from-rose-500 via-rose-500 to-pink-500 text-white border-rose-400/50 shadow-rose-500/25'
-                : article.priority === 'medium'
-                  ? 'bg-gradient-to-r from-amber-400 via-amber-400 to-orange-400 text-white border-amber-400/50 shadow-amber-500/25'
-                  : 'bg-gradient-to-r from-slate-200 to-slate-300 text-slate-600 border-slate-300/50'
-              }
-            `}>
-              <span className={`w-1.5 h-1.5 rounded-full ${article.priority === 'high' ? 'bg-white animate-pulse' : article.priority === 'medium' ? 'bg-white/80' : 'bg-slate-400'}`}></span>
-              {article.priority === 'high' ? 'High' : article.priority === 'medium' ? 'Medium' : 'Low'}
-            </span>
+          {/* Selection checkbox */}
+          {onToggleSelection && (
+            <button
+              onClick={(e) => onToggleSelection(article.id, e)}
+              className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                isSelected
+                  ? 'bg-brand-500 border-brand-500 text-white'
+                  : 'border-slate-300 hover:border-brand-400 bg-white'
+              }`}
+            >
+              {isSelected && <Check size={12} strokeWidth={3} />}
+            </button>
           )}
           {article.isSent && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm shadow-emerald-500/25 border border-emerald-400/50">
@@ -922,41 +1462,60 @@ const NewsCard: React.FC<{
 const ArticleDetailModal: React.FC<{
   article: NewsArticle;
   onClose: () => void;
-  onSendEmail: (article: NewsArticle) => void;
+  onSendEmail: (article: NewsArticle, selectedOwners?: { id: string; name: string; email: string | null }[]) => void;
   onArchive: (articleId: string) => void;
-}> = ({ article, onClose, onSendEmail, onArchive }) => {
-  // Get email recipients from revenue owners
-  const recipientEmails = article.revenueOwners
-    .filter(ro => ro.email)
-    .map(ro => ({ name: ro.name, email: ro.email }));
-  const hasRecipients = recipientEmails.length > 0;
+  allOwners: { id: string; name: string; email?: string | null }[];
+}> = ({ article, onClose, onSendEmail, onArchive, allOwners }) => {
+  // State for manually selected revenue owners (for Deep Dive results)
+  const [selectedOwnerIds, setSelectedOwnerIds] = useState<Set<string>>(new Set());
 
-  const priorityConfig: Record<string, { bg: string; text: string; border: string }> = {
-    high: { bg: 'bg-gradient-to-r from-rose-500 to-rose-600', text: 'text-white', border: 'border-rose-400' },
-    medium: { bg: 'bg-gradient-to-r from-amber-400 to-amber-500', text: 'text-white', border: 'border-amber-400' },
-    low: { bg: 'bg-slate-200', text: 'text-slate-600', border: 'border-slate-300' },
+  // Get email recipients from revenue owners (assigned or manually selected)
+  const assignedRecipients = article.revenueOwners
+    .filter(ro => ro.email)
+    .map(ro => ({ id: ro.id, name: ro.name, email: ro.email }));
+
+  // Get selected owners for Deep Dive results
+  const selectedRecipients = Array.from(selectedOwnerIds)
+    .map(id => allOwners.find(o => o.id === id))
+    .filter((o): o is { id: string; name: string; email?: string | null } => !!o && !!o.email)
+    .map(o => ({ id: o.id, name: o.name, email: o.email! }));
+
+  const recipientEmails = assignedRecipients.length > 0 ? assignedRecipients : selectedRecipients;
+  const hasRecipients = recipientEmails.length > 0;
+  const hasAssignedOwners = article.revenueOwners && article.revenueOwners.length > 0;
+
+  // Filter owners with email addresses for dropdown
+  const ownersWithEmail = allOwners.filter(o => o.email);
+
+  const toggleOwnerSelection = (ownerId: string) => {
+    setSelectedOwnerIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(ownerId)) {
+        newSet.delete(ownerId);
+      } else {
+        newSet.add(ownerId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSendEmail = () => {
+    if (assignedRecipients.length > 0) {
+      onSendEmail(article);
+    } else {
+      onSendEmail(article, selectedRecipients);
+    }
   };
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-start justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full my-8 overflow-hidden">
-        {/* Header with gradient based on priority */}
-        <div className={`relative p-6 ${
-          article.priority === 'high'
-            ? 'bg-gradient-to-br from-rose-500 to-rose-600'
-            : article.priority === 'medium'
-              ? 'bg-gradient-to-br from-amber-400 to-amber-500'
-              : 'bg-gradient-to-br from-slate-700 to-slate-800'
-        }`}>
+        {/* Header with gradient */}
+        <div className="relative p-6 bg-gradient-to-br from-brand-600 to-violet-600">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-50"></div>
           <div className="relative">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                {article.priority && (
-                  <span className="inline-block px-3 py-1 bg-white/20 backdrop-blur-sm text-white text-xs font-bold uppercase tracking-wide rounded-full mb-3">
-                    {article.priority} Priority
-                  </span>
-                )}
                 <h2 className="text-xl font-bold text-white leading-tight">{article.headline}</h2>
                 <div className="flex items-center gap-3 mt-3">
                   <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white/90 rounded-lg text-sm font-medium">
@@ -1104,27 +1663,75 @@ const ArticleDetailModal: React.FC<{
           </div>
 
           {/* Recipients display */}
-          {hasRecipients ? (
+          {hasAssignedOwners ? (
+            // Article has assigned revenue owners
+            hasRecipients ? (
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                  Will be sent to
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {recipientEmails.map((recipient, idx) => (
+                    <span key={idx} className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm">
+                      <Mail size={14} className="text-slate-400" />
+                      <span className="font-medium text-slate-700">{recipient.name}</span>
+                      <span className="text-slate-400">({recipient.email})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                <p className="text-sm text-amber-700 flex items-center gap-2">
+                  <AlertCircle size={16} />
+                  No email addresses configured for revenue owners. Add emails in News Setup.
+                </p>
+              </div>
+            )
+          ) : (
+            // Deep Dive result - show owner selection dropdown
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                Will be sent to
+                Select Revenue Owner(s) to Send To
               </label>
-              <div className="flex flex-wrap gap-2">
-                {recipientEmails.map((recipient, idx) => (
-                  <span key={idx} className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm">
-                    <Mail size={14} className="text-slate-400" />
-                    <span className="font-medium text-slate-700">{recipient.name}</span>
-                    <span className="text-slate-400">({recipient.email})</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
-              <p className="text-sm text-amber-700 flex items-center gap-2">
-                <AlertCircle size={16} />
-                No email addresses configured for revenue owners. Add emails in News Setup.
-              </p>
+              {ownersWithEmail.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {ownersWithEmail.map((owner) => (
+                      <button
+                        key={owner.id}
+                        onClick={() => toggleOwnerSelection(owner.id)}
+                        className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                          selectedOwnerIds.has(owner.id)
+                            ? 'bg-brand-500 text-white shadow-md'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {selectedOwnerIds.has(owner.id) ? (
+                          <CheckCircle2 size={14} />
+                        ) : (
+                          <Circle size={14} />
+                        )}
+                        {owner.name}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedRecipients.length > 0 && (
+                    <div className="p-2 bg-brand-50 border border-brand-200 rounded-lg">
+                      <p className="text-xs text-brand-600">
+                        Will send to: {selectedRecipients.map(r => r.email).join(', ')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <p className="text-sm text-amber-700 flex items-center gap-2">
+                    <AlertCircle size={16} />
+                    No revenue owners with email addresses. Add emails in News Setup.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -1140,7 +1747,7 @@ const ArticleDetailModal: React.FC<{
               </button>
             )}
             <button
-              onClick={() => onSendEmail(article)}
+              onClick={handleSendEmail}
               disabled={!hasRecipients}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium transition-all ml-auto ${
                 !hasRecipients

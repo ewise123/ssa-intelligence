@@ -47,6 +47,7 @@ import newsArticlesRouter from './api/news/articles.js';
 import newsRefreshRouter from './api/news/refresh.js';
 import newsSearchRouter from './api/news/search.js';
 import newsExportRouter from './api/news/export.js';
+import { initNewsScheduler } from './services/news-scheduler.js';
 
 // ============================================================================
 // SERVER SETUP
@@ -299,15 +300,17 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 // ============================================================================
 
 app.listen(PORT, () => {
+  const env = process.env.NODE_ENV || 'development';
+  const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.CORS_ORIGIN || `http://localhost:${PORT}`;
   console.log(`
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
-║   SSA Intelligence Research API                                     ║
+║   SSA Intelligence Research API                                ║
 ║                                                                ║
 ║   Status:      Running                                         ║
-║   Environment: ${process.env.NODE_ENV || 'development'}                                    ║
-║   Port:        ${PORT}                                            ║
-║   URL:         http://localhost:${PORT}                          ║
+║   Environment: ${env.padEnd(44)}║
+║   Port:        ${String(PORT).padEnd(44)}║
+║   URL:         ${baseUrl.padEnd(44)}║
 ║                                                                ║
 ║   API Endpoints:                                               ║
 ║   - POST   /api/research/generate                              ║
@@ -317,6 +320,9 @@ app.listen(PORT, () => {
 ║                                                                ║
 ╚════════════════════════════════════════════════════════════════╝
   `);
+
+  // Initialize news scheduler for daily refresh at midnight EST
+  initNewsScheduler();
 });
 
 // Graceful shutdown

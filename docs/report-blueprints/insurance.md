@@ -30,6 +30,7 @@ Legacy UI context (optional):
 Uses base section ids plus Insurance-specific sections.
 
 ### Base sections
+
 | Section id | Display title | Default | Focus |
 | --- | --- | --- | --- |
 | exec_summary | Executive Summary | Yes | Underwriting performance, investment results, and strategic positioning. |
@@ -44,6 +45,7 @@ Uses base section ids plus Insurance-specific sections.
 | appendix | Appendix and Sources | Yes | Sources used across sections. |
 
 ### Report-specific sections
+
 | Section id | Display title | Default | Focus |
 | --- | --- | --- | --- |
 | leadership_and_governance | Leadership and Governance | Yes | Executive team, actuarial leadership, and regulatory compliance signals. |

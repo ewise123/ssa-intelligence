@@ -11,7 +11,8 @@ const router = Router();
 // POST /api/news/search - Ad-hoc search
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { company, person, topics } = req.body;
+    const { company, person, topics, days = 1 } = req.body;
+    const daysNum = Math.min(Math.max(Number(days) || 1, 1), 30); // Clamp between 1-30
 
     // At least one search parameter required
     if (!company && !person) {
@@ -21,12 +22,13 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    console.log('[search] Ad-hoc search:', { company, person, topics });
+    console.log('[search] Ad-hoc search:', { company, person, topics, days: daysNum });
 
     const result = await searchNews({
       company: company?.trim(),
       person: person?.trim(),
       topics: Array.isArray(topics) ? topics : [],
+      days: daysNum,
     });
 
     res.json({

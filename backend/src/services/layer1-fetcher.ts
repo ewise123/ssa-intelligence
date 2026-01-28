@@ -12,6 +12,53 @@ const rssParser = new Parser({
   },
 });
 
+/**
+ * Resolve Google News redirect URL to the actual article URL.
+ * Google News uses encoded redirect URLs that need to be followed.
+ */
+async function resolveGoogleNewsUrl(googleUrl: string): Promise<string> {
+  // If it's not a Google News redirect URL, return as-is
+  if (!googleUrl.includes('news.google.com/rss/articles/')) {
+    return googleUrl;
+  }
+
+  try {
+    // Follow the redirect to get the actual article URL
+    const response = await fetch(googleUrl, {
+      method: 'HEAD',
+      redirect: 'manual',
+      headers: {
+        'User-Agent': 'SSA-Intelligence/1.0 (News Aggregator)',
+      },
+    });
+
+    // Check for redirect location
+    const location = response.headers.get('location');
+    if (location) {
+      // Google News may do multiple redirects, follow them
+      if (location.includes('news.google.com')) {
+        return resolveGoogleNewsUrl(location);
+      }
+      return location;
+    }
+
+    // If no redirect, try following with redirect enabled
+    const fullResponse = await fetch(googleUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: {
+        'User-Agent': 'SSA-Intelligence/1.0 (News Aggregator)',
+      },
+    });
+
+    // Return the final URL after redirects
+    return fullResponse.url || googleUrl;
+  } catch (error) {
+    console.warn(`[layer1] Failed to resolve Google News URL: ${googleUrl}`, error);
+    return googleUrl; // Return original URL as fallback
+  }
+}
+
 export interface RawArticle {
   headline: string;
   description: string;
@@ -33,15 +80,23 @@ export async function fetchGoogleNewsRSS(query: string): Promise<RawArticle[]> {
     console.log(`[layer1] Fetching Google News RSS for: "${query}"`);
     const feed = await rssParser.parseURL(url);
 
-    return feed.items.slice(0, 15).map((item) => ({
-      headline: item.title || '',
-      description: item.contentSnippet || item.content || '',
-      sourceUrl: item.link || '',
-      sourceName: extractSourceFromGoogleNews(item.title || ''),
-      publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
-      fetchLayer: 'layer1_rss' as const,
-      queryUsed: query,
-    }));
+    // Resolve Google News redirect URLs to actual article URLs
+    const articlesWithResolvedUrls = await Promise.all(
+      feed.items.slice(0, 15).map(async (item) => {
+        const resolvedUrl = await resolveGoogleNewsUrl(item.link || '');
+        return {
+          headline: item.title || '',
+          description: item.contentSnippet || item.content || '',
+          sourceUrl: resolvedUrl,
+          sourceName: extractSourceFromGoogleNews(item.title || ''),
+          publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
+          fetchLayer: 'layer1_rss' as const,
+          queryUsed: query,
+        };
+      })
+    );
+
+    return articlesWithResolvedUrls;
   } catch (error) {
     console.error(`[layer1] Failed to fetch Google News for "${query}":`, error);
     return [];
@@ -60,77 +115,6 @@ function extractSourceFromGoogleNews(title: string): string {
   return 'Google News';
 }
 
-/**
- * Fetch SEC EDGAR filings for a company by CIK
- */
-export async function fetchSECFilings(cik: string, companyName: string): Promise<RawArticle[]> {
-  const paddedCik = cik.padStart(10, '0');
-  const url = `https://data.sec.gov/submissions/CIK${paddedCik}.json`;
-
-  try {
-    console.log(`[layer1] Fetching SEC EDGAR for CIK: ${cik}`);
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'SSA-Intelligence/1.0 (contact@ssaandco.com)',
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`SEC API returned ${response.status}`);
-    }
-
-    const data = await response.json() as { filings?: { recent?: Record<string, string[]> } };
-    const recentFilings = data.filings?.recent || {};
-    const articles: RawArticle[] = [];
-
-    const forms = recentFilings.form || [];
-    const dates = recentFilings.filingDate || [];
-    const accessions = recentFilings.accessionNumber || [];
-    const descriptions = recentFilings.primaryDocDescription || [];
-
-    // Get filings from the last 3 days (72 hours)
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-
-    for (let i = 0; i < Math.min(20, forms.length); i++) {
-      const filingDate = new Date(dates[i]);
-      if (filingDate < threeDaysAgo) continue;
-
-      // Only include relevant filing types
-      if (['8-K', '10-K', '10-Q', '13F-HR', '4', 'S-1', 'S-4'].includes(forms[i])) {
-        const accessionFormatted = accessions[i].replace(/-/g, '');
-        articles.push({
-          headline: `${companyName}: ${forms[i]} Filing - ${descriptions[i] || forms[i]}`,
-          description: `${forms[i]} filed on ${dates[i]}. ${getFilingDescription(forms[i])}`,
-          sourceUrl: `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionFormatted}`,
-          sourceName: 'SEC EDGAR',
-          publishedAt: filingDate,
-          fetchLayer: 'layer1_api' as const,
-        });
-      }
-    }
-
-    console.log(`[layer1] Found ${articles.length} SEC filings for ${companyName}`);
-    return articles;
-  } catch (error) {
-    console.error(`[layer1] Failed to fetch SEC filings for CIK ${cik}:`, error);
-    return [];
-  }
-}
-
-function getFilingDescription(form: string): string {
-  const descriptions: Record<string, string> = {
-    '8-K': 'Current report - material event or corporate change.',
-    '10-K': 'Annual report with comprehensive financial data.',
-    '10-Q': 'Quarterly financial report.',
-    '13F-HR': 'Quarterly holdings report.',
-    '4': 'Insider trading report.',
-    'S-1': 'Registration statement for IPO.',
-    'S-4': 'Registration for merger/acquisition.',
-  };
-  return descriptions[form] || '';
-}
 
 /**
  * Fetch news from PE/Industry RSS feeds

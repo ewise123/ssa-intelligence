@@ -4,15 +4,18 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, X, Building2, User, Tag, ChevronRight, Loader2, Save, Settings, Users, Briefcase, Sparkles, Mail } from 'lucide-react';
+import { Plus, Trash2, X, Building2, User, Tag, ChevronRight, ChevronDown, Loader2, Save, Settings, Users, Briefcase, Sparkles, Mail } from 'lucide-react';
 import {
   useRevenueOwners,
   useNewsTags,
+  useTrackedCompanies,
   RevenueOwner,
   NewsTag,
   TrackedCompany,
   TrackedPerson,
 } from '../services/newsManager';
+import { resolveCompanyApi, CompanySuggestion } from '../services/researchManager';
+import { CompanyResolveModal } from '../components/CompanyResolveModal';
 
 interface NewsSetupProps {
   onNavigate: (path: string) => void;
@@ -29,13 +32,16 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
     deleteOwner,
     addCompanyToOwner,
     removeCompanyFromOwner,
+    bulkRemoveCompaniesFromOwner,
     addPersonToOwner,
     removePersonFromOwner,
+    bulkRemovePeopleFromOwner,
     addTagToOwner,
     removeTagFromOwner,
   } = useRevenueOwners();
 
   const { tags, loading: tagsLoading } = useNewsTags();
+  const { companies: allCompanies } = useTrackedCompanies();
 
   const [selectedOwner, setSelectedOwner] = useState<RevenueOwner | null>(null);
   const [ownerDetails, setOwnerDetails] = useState<RevenueOwner | null>(null);
@@ -44,18 +50,49 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
   // Form states
   const [newOwnerName, setNewOwnerName] = useState('');
   const [ownerEmail, setOwnerEmail] = useState('');
-  const [companyInputs, setCompanyInputs] = useState<{ name: string; ticker: string; cik: string }[]>([]);
-  const [personInputs, setPersonInputs] = useState<{ name: string; title: string }[]>([]);
+  const [companyInputs, setCompanyInputs] = useState<{ name: string }[]>([]);
+  const [personInputs, setPersonInputs] = useState<{ name: string; companyId: string }[]>([]);
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [showAddTag, setShowAddTag] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
 
+  // Collapse states (collapsed by default)
+  const [companiesExpanded, setCompaniesExpanded] = useState(false);
+  const [peopleExpanded, setPeopleExpanded] = useState(false);
+  const [topicsExpanded, setTopicsExpanded] = useState(false);
+
+  // Sort states
+  const [companySortAsc, setCompanySortAsc] = useState(true);
+  const [peopleSortColumn, setPeopleSortColumn] = useState<'name' | 'company'>('name');
+  const [peopleSortAsc, setPeopleSortAsc] = useState(true);
+  const [topicsSortColumn, setTopicsSortColumn] = useState<'name' | 'category'>('name');
+  const [topicsSortAsc, setTopicsSortAsc] = useState(true);
+
+  // Company resolution state
+  const [resolveModalOpen, setResolveModalOpen] = useState(false);
+  const [resolveInput, setResolveInput] = useState('');
+  const [resolveIndex, setResolveIndex] = useState<number>(0);
+  const [resolveSuggestions, setResolveSuggestions] = useState<CompanySuggestion[]>([]);
+  const [resolveStatus, setResolveStatus] = useState<'corrected' | 'ambiguous'>('corrected');
+  const [resolving, setResolving] = useState(false);
+
+  // Bulk selection state
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(new Set());
+  const [selectedPeopleIds, setSelectedPeopleIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   // Load owner details when selected
   useEffect(() => {
     if (selectedOwner) {
       setLoadingDetails(true);
+      // Collapse all sections and clear selections when switching owners
+      setCompaniesExpanded(false);
+      setPeopleExpanded(false);
+      setTopicsExpanded(false);
+      setSelectedCompanyIds(new Set());
+      setSelectedPeopleIds(new Set());
       getOwnerDetails(selectedOwner.id)
         .then((details) => {
           setOwnerDetails(details);
@@ -65,6 +102,8 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
     } else {
       setOwnerDetails(null);
       setOwnerEmail('');
+      setSelectedCompanyIds(new Set());
+      setSelectedPeopleIds(new Set());
     }
   }, [selectedOwner, getOwnerDetails]);
 
@@ -109,10 +148,10 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
 
   // Company input handlers
   const addCompanyInputRow = () => {
-    setCompanyInputs(prev => [...prev, { name: '', ticker: '', cik: '' }]);
+    setCompanyInputs(prev => [...prev, { name: '' }]);
   };
 
-  const updateCompanyInput = (index: number, field: 'name' | 'ticker' | 'cik', value: string) => {
+  const updateCompanyInput = (index: number, field: 'name', value: string) => {
     setCompanyInputs(prev => prev.map((item, i) =>
       i === index ? { ...item, [field]: value } : item
     ));
@@ -124,10 +163,10 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
 
   // Person input handlers
   const addPersonInputRow = () => {
-    setPersonInputs(prev => [...prev, { name: '', title: '' }]);
+    setPersonInputs(prev => [...prev, { name: '', companyId: '' }]);
   };
 
-  const updatePersonInput = (index: number, field: 'name' | 'title', value: string) => {
+  const updatePersonInput = (index: number, field: 'name' | 'companyId', value: string) => {
     setPersonInputs(prev => prev.map((item, i) =>
       i === index ? { ...item, [field]: value } : item
     ));
@@ -141,23 +180,87 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
   const validCompanyInputs = companyInputs.filter(c => c.name.trim());
   const validPersonInputs = personInputs.filter(p => p.name.trim());
 
-  const handleSaveChanges = async () => {
-    if (!selectedOwner) return;
-    setSaving(true);
+  // Company resolution - resolve a single company name
+  const resolveCompanyName = async (name: string, index: number): Promise<string | null> => {
     try {
-      // Add companies
-      for (const company of validCompanyInputs) {
+      const result = await resolveCompanyApi(name.trim());
+
+      if (result.status === 'exact') {
+        // Exact match - use the canonical name
+        return result.suggestions[0]?.canonicalName || name;
+      } else if (result.status === 'corrected' || result.status === 'ambiguous') {
+        // Show modal for user to confirm
+        setResolveInput(name);
+        setResolveIndex(index);
+        setResolveSuggestions(result.suggestions);
+        setResolveStatus(result.status);
+        setResolveModalOpen(true);
+        return null; // Will be handled by modal
+      } else {
+        // Unknown - use as entered
+        return name;
+      }
+    } catch (err) {
+      console.error('Failed to resolve company:', err);
+      return name; // Use as entered on error
+    }
+  };
+
+  // Handle modal confirmation
+  const handleResolveConfirm = (selectedName: string) => {
+    setCompanyInputs(prev => prev.map((item, i) =>
+      i === resolveIndex ? { ...item, name: selectedName } : item
+    ));
+    setResolveModalOpen(false);
+    // Continue saving after resolution
+    continueAfterResolve(resolveIndex + 1);
+  };
+
+  // Handle modal cancel
+  const handleResolveCancel = () => {
+    setResolveModalOpen(false);
+    setResolving(false);
+    setSaving(false);
+  };
+
+  // Continue resolving remaining companies
+  const continueAfterResolve = async (startIndex: number) => {
+    for (let i = startIndex; i < validCompanyInputs.length; i++) {
+      const company = validCompanyInputs[i];
+      const resolved = await resolveCompanyName(company.name, i);
+      if (resolved === null) {
+        // Modal opened, will continue after user confirms
+        return;
+      }
+      // Update the company name with resolved name
+      setCompanyInputs(prev => prev.map((item, idx) =>
+        idx === i ? { ...item, name: resolved } : item
+      ));
+    }
+    // All companies resolved, proceed to save
+    setResolving(false);
+    await doSaveChanges();
+  };
+
+  // Actual save logic (called after all companies are resolved)
+  const doSaveChanges = async () => {
+    if (!selectedOwner) return;
+    try {
+      // Add companies (use current companyInputs which have resolved names)
+      const currentValidCompanies = companyInputs.filter(c => c.name.trim());
+      for (const company of currentValidCompanies) {
         await addCompanyToOwner(
           selectedOwner.id,
-          company.name.trim(),
-          company.ticker.trim() || undefined,
-          company.cik.trim() || undefined
+          company.name.trim()
         );
       }
 
       // Add people
       for (const person of validPersonInputs) {
-        await addPersonToOwner(selectedOwner.id, person.name.trim(), person.title.trim() || undefined);
+        // Get company name from companyId for companyAffiliation
+        const selectedCompany = allCompanies.find(c => c.id === person.companyId);
+        const companyName = selectedCompany?.name || undefined;
+        await addPersonToOwner(selectedOwner.id, person.name.trim(), companyName);
       }
 
       // Clear inputs and refresh
@@ -176,6 +279,15 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveChanges = async () => {
+    if (!selectedOwner) return;
+    setSaving(true);
+    setResolving(true);
+
+    // Start resolving companies from index 0
+    await continueAfterResolve(0);
   };
 
   const handleRemoveCompany = async (companyId: string) => {
@@ -215,6 +327,90 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
       setOwnerDetails(updated);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update tag');
+    }
+  };
+
+  // Toggle company selection
+  const toggleCompanySelection = (companyId: string) => {
+    setSelectedCompanyIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(companyId)) {
+        newSet.delete(companyId);
+      } else {
+        newSet.add(companyId);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle all companies selection
+  const toggleAllCompanies = () => {
+    if (!ownerDetails?.companies) return;
+    if (selectedCompanyIds.size === ownerDetails.companies.length) {
+      setSelectedCompanyIds(new Set());
+    } else {
+      setSelectedCompanyIds(new Set(ownerDetails.companies.map(c => c.id)));
+    }
+  };
+
+  // Toggle person selection
+  const togglePersonSelection = (personId: string) => {
+    setSelectedPeopleIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(personId)) {
+        newSet.delete(personId);
+      } else {
+        newSet.add(personId);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle all people selection
+  const toggleAllPeople = () => {
+    if (!ownerDetails?.people) return;
+    if (selectedPeopleIds.size === ownerDetails.people.length) {
+      setSelectedPeopleIds(new Set());
+    } else {
+      setSelectedPeopleIds(new Set(ownerDetails.people.map(p => p.id)));
+    }
+  };
+
+  // Bulk delete companies
+  const handleBulkDeleteCompanies = async () => {
+    if (!selectedOwner || selectedCompanyIds.size === 0) return;
+    if (!confirm(`Are you sure you want to remove ${selectedCompanyIds.size} company(ies)?`)) return;
+
+    setBulkDeleting(true);
+    try {
+      await bulkRemoveCompaniesFromOwner(selectedOwner.id, Array.from(selectedCompanyIds));
+      setSelectedCompanyIds(new Set());
+      const updated = await getOwnerDetails(selectedOwner.id);
+      setOwnerDetails(updated);
+      fetchOwners();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete companies');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  // Bulk delete people
+  const handleBulkDeletePeople = async () => {
+    if (!selectedOwner || selectedPeopleIds.size === 0) return;
+    if (!confirm(`Are you sure you want to remove ${selectedPeopleIds.size} person(s)?`)) return;
+
+    setBulkDeleting(true);
+    try {
+      await bulkRemovePeopleFromOwner(selectedOwner.id, Array.from(selectedPeopleIds));
+      setSelectedPeopleIds(new Set());
+      const updated = await getOwnerDetails(selectedOwner.id);
+      setOwnerDetails(updated);
+      fetchOwners();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete people');
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -413,259 +609,452 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
 
               <div className="p-5 space-y-6">
                 {/* Companies Section */}
-                <div className="bg-gradient-to-br from-blue-50/50 to-cyan-50/50 rounded-2xl p-5 border border-blue-100">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl border border-blue-100 overflow-hidden">
+                  <button
+                    onClick={() => setCompaniesExpanded(!companiesExpanded)}
+                    className="w-full flex items-center justify-between p-5 hover:bg-blue-50/50 transition-colors"
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-xl shadow-sm">
+                      <div className="p-2 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-xl shadow-md shadow-blue-500/20">
                         <Building2 size={16} className="text-white" />
                       </div>
                       <span className="font-bold text-slate-800">Companies</span>
-                      <span className="inline-flex items-center justify-center px-2.5 py-1 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full text-xs font-bold min-w-[26px] shadow-md shadow-blue-500/30 border border-blue-400/30">
-                        {ownerDetails?.companies?.length || 0}
-                      </span>
+                      <span className="text-sm text-slate-500">({ownerDetails?.companies?.length || 0})</span>
                     </div>
-                    {!showAddCompany && (
-                      <button
-                        onClick={() => {
-                          setShowAddCompany(true);
-                          setCompanyInputs([{ name: '', ticker: '', cik: '' }]);
-                        }}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-white text-blue-600 hover:text-blue-700 font-semibold text-sm rounded-lg border border-blue-200 hover:border-blue-300 shadow-sm hover:shadow transition-all"
-                      >
-                        <Plus size={14} />
-                        Add
-                      </button>
-                    )}
-                  </div>
+                    <ChevronDown size={20} className={`text-slate-400 transition-transform ${companiesExpanded ? '' : '-rotate-90'}`} />
+                  </button>
 
-                  {showAddCompany && (
-                    <div className="mb-4 p-4 bg-white rounded-xl border border-blue-100 space-y-3 shadow-sm">
-                      {companyInputs.map((input, index) => (
-                        <div key={index} className="flex gap-2 items-center">
-                          <input
-                            type="text"
-                            value={input.name}
-                            onChange={(e) => updateCompanyInput(index, 'name', e.target.value)}
-                            placeholder="Company name"
-                            className="flex-1 px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all"
-                          />
-                          <input
-                            type="text"
-                            value={input.ticker}
-                            onChange={(e) => updateCompanyInput(index, 'ticker', e.target.value)}
-                            placeholder="Ticker"
-                            className="w-24 px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all"
-                          />
-                          <input
-                            type="text"
-                            value={input.cik}
-                            onChange={(e) => updateCompanyInput(index, 'cik', e.target.value)}
-                            placeholder="CIK"
-                            className="w-24 px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all"
-                            title="SEC Central Index Key (10 digits)"
-                          />
-                          <button
-                            onClick={() => removeCompanyInputRow(index)}
-                            className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                        <button
-                          onClick={addCompanyInputRow}
-                          className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-semibold"
-                        >
-                          <Plus size={14} />
-                          Add another
-                        </button>
+                  {companiesExpanded && (
+                    <div className="px-5 pb-5">
+                      {!showAddCompany && (
                         <button
                           onClick={() => {
-                            setShowAddCompany(false);
-                            setCompanyInputs([]);
+                            setShowAddCompany(true);
+                            setCompanyInputs([{ name: '' }]);
                           }}
-                          className="text-sm text-slate-500 hover:text-slate-700 font-medium"
+                          className="mb-4 flex items-center gap-1 px-3 py-1.5 bg-white/80 hover:bg-white text-blue-600 font-medium text-sm rounded-lg border border-blue-200 hover:border-blue-300 transition-all shadow-sm"
                         >
-                          Cancel
+                          <Plus size={14} />
+                          Add Company
                         </button>
-                      </div>
+                      )}
+
+                      {showAddCompany && (
+                        <div className="mb-4 p-4 bg-white/80 rounded-xl border border-blue-100 space-y-3">
+                          {companyInputs.map((input, index) => (
+                            <div key={index} className="flex gap-2 items-center">
+                              <input
+                                type="text"
+                                value={input.name}
+                                onChange={(e) => updateCompanyInput(index, 'name', e.target.value)}
+                                placeholder="Company name"
+                                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                              />
+                              <button
+                                onClick={() => removeCompanyInputRow(index)}
+                                className="p-2 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ))}
+                          <div className="flex justify-between items-center pt-2">
+                            <button
+                              onClick={addCompanyInputRow}
+                              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                            >
+                              <Plus size={14} />
+                              Add another
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowAddCompany(false);
+                                setCompanyInputs([]);
+                              }}
+                              className="text-sm text-slate-500 hover:text-slate-700 font-medium"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {ownerDetails?.companies?.length === 0 && !showAddCompany ? (
+                        <p className="text-sm text-slate-500 italic">No companies added yet</p>
+                      ) : (ownerDetails?.companies?.length || 0) > 0 && (
+                        <div className="bg-white/80 rounded-xl border border-blue-100 overflow-hidden">
+                          <div className="flex items-center justify-between px-4 py-2 bg-blue-50/50 border-b border-blue-100">
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={toggleAllCompanies}
+                                className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                  selectedCompanyIds.size === ownerDetails?.companies?.length && selectedCompanyIds.size > 0
+                                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 border-blue-500'
+                                    : selectedCompanyIds.size > 0
+                                    ? 'bg-blue-200 border-blue-400'
+                                    : 'border-slate-300 hover:border-blue-400'
+                                }`}
+                              >
+                                {selectedCompanyIds.size === ownerDetails?.companies?.length && selectedCompanyIds.size > 0 && (
+                                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                                {selectedCompanyIds.size > 0 && selectedCompanyIds.size < (ownerDetails?.companies?.length || 0) && (
+                                  <div className="w-2 h-0.5 bg-blue-600 rounded"></div>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => setCompanySortAsc(!companySortAsc)}
+                                className="flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors"
+                              >
+                                Name
+                                <ChevronDown size={14} className={`transition-transform ${companySortAsc ? '' : 'rotate-180'}`} />
+                              </button>
+                            </div>
+                            {selectedCompanyIds.size > 0 && (
+                              <button
+                                onClick={handleBulkDeleteCompanies}
+                                disabled={bulkDeleting}
+                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-50"
+                              >
+                                <Trash2 size={12} />
+                                Delete ({selectedCompanyIds.size})
+                              </button>
+                            )}
+                          </div>
+                          <div className="divide-y divide-blue-50">
+                            {[...(ownerDetails?.companies || [])].sort((a, b) =>
+                              companySortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
+                            ).map((company) => (
+                              <div
+                                key={company.id}
+                                className={`flex items-center justify-between px-4 py-2.5 hover:bg-blue-50/50 transition-colors ${
+                                  selectedCompanyIds.has(company.id) ? 'bg-blue-50/80' : ''
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={() => toggleCompanySelection(company.id)}
+                                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                      selectedCompanyIds.has(company.id)
+                                        ? 'bg-gradient-to-r from-blue-500 to-cyan-500 border-blue-500'
+                                        : 'border-slate-300 hover:border-blue-400'
+                                    }`}
+                                  >
+                                    {selectedCompanyIds.has(company.id) && (
+                                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                  <span className="text-slate-700 font-medium">{company.name}</span>
+                                </div>
+                                <button
+                                  onClick={() => handleRemoveCompany(company.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
-
-                  <div className="flex flex-wrap gap-2.5">
-                    {ownerDetails?.companies?.length === 0 && (
-                      <div className="w-full py-4 text-center text-sm text-slate-400">
-                        No companies added yet
-                      </div>
-                    )}
-                    {ownerDetails?.companies?.map((company) => (
-                      <span
-                        key={company.id}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full text-sm font-semibold shadow-lg shadow-blue-500/25 border border-blue-400/30 hover:shadow-xl hover:scale-[1.02] transition-all group"
-                      >
-                        <Building2 size={14} />
-                        {company.name}
-                        {(company.ticker || company.cik) && (
-                          <span className="text-blue-100 text-xs font-medium">
-                            ({[company.ticker, company.cik && `CIK: ${company.cik}`].filter(Boolean).join(' | ')})
-                          </span>
-                        )}
-                        <button
-                          onClick={() => handleRemoveCompany(company.id)}
-                          className="ml-1 text-blue-200 hover:text-white hover:bg-white/20 p-0.5 rounded-full transition-all"
-                        >
-                          <X size={14} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
                 </div>
 
                 {/* People Section */}
-                <div className="bg-gradient-to-br from-purple-50/50 to-pink-50/50 rounded-2xl p-5 border border-purple-100">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl border border-pink-100 overflow-hidden">
+                  <button
+                    onClick={() => setPeopleExpanded(!peopleExpanded)}
+                    className="w-full flex items-center justify-between p-5 hover:bg-pink-50/50 transition-colors"
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-gradient-to-br from-purple-400 to-pink-500 rounded-xl shadow-sm">
+                      <div className="p-2 bg-gradient-to-br from-pink-400 to-rose-500 rounded-xl shadow-md shadow-pink-500/20">
                         <User size={16} className="text-white" />
                       </div>
                       <span className="font-bold text-slate-800">People</span>
-                      <span className="inline-flex items-center justify-center px-2.5 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-xs font-bold min-w-[26px] shadow-md shadow-purple-500/30 border border-purple-400/30">
-                        {ownerDetails?.people?.length || 0}
-                      </span>
+                      <span className="text-sm text-slate-500">({ownerDetails?.people?.length || 0})</span>
                     </div>
-                    {!showAddPerson && (
-                      <button
-                        onClick={() => {
-                          setShowAddPerson(true);
-                          setPersonInputs([{ name: '', title: '' }]);
-                        }}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-white text-purple-600 hover:text-purple-700 font-semibold text-sm rounded-lg border border-purple-200 hover:border-purple-300 shadow-sm hover:shadow transition-all"
-                      >
-                        <Plus size={14} />
-                        Add
-                      </button>
-                    )}
-                  </div>
+                    <ChevronDown size={20} className={`text-slate-400 transition-transform ${peopleExpanded ? '' : '-rotate-90'}`} />
+                  </button>
 
-                  {showAddPerson && (
-                    <div className="mb-4 p-4 bg-white rounded-xl border border-purple-100 space-y-3 shadow-sm">
-                      {personInputs.map((input, index) => (
-                        <div key={index} className="flex gap-2 items-center">
-                          <input
-                            type="text"
-                            value={input.name}
-                            onChange={(e) => updatePersonInput(index, 'name', e.target.value)}
-                            placeholder="Person name"
-                            className="flex-1 px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300 transition-all"
-                          />
-                          <input
-                            type="text"
-                            value={input.title}
-                            onChange={(e) => updatePersonInput(index, 'title', e.target.value)}
-                            placeholder="Title"
-                            className="w-36 px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300 transition-all"
-                          />
-                          <button
-                            onClick={() => removePersonInputRow(index)}
-                            className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                        <button
-                          onClick={addPersonInputRow}
-                          className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-700 font-semibold"
-                        >
-                          <Plus size={14} />
-                          Add another
-                        </button>
+                  {peopleExpanded && (
+                    <div className="px-5 pb-5">
+                      {!showAddPerson && (
                         <button
                           onClick={() => {
-                            setShowAddPerson(false);
-                            setPersonInputs([]);
+                            setShowAddPerson(true);
+                            setPersonInputs([{ name: '', companyId: '' }]);
                           }}
-                          className="text-sm text-slate-500 hover:text-slate-700 font-medium"
+                          className="mb-4 flex items-center gap-1 px-3 py-1.5 bg-white/80 hover:bg-white text-pink-600 font-medium text-sm rounded-lg border border-pink-200 hover:border-pink-300 transition-all shadow-sm"
                         >
-                          Cancel
+                          <Plus size={14} />
+                          Add Person
                         </button>
-                      </div>
+                      )}
+
+                      {showAddPerson && (
+                        <div className="mb-4 p-4 bg-white/80 rounded-xl border border-pink-100 space-y-3">
+                          {personInputs.map((input, index) => (
+                            <div key={index} className="flex gap-2 items-center">
+                              <input
+                                type="text"
+                                value={input.name}
+                                onChange={(e) => updatePersonInput(index, 'name', e.target.value)}
+                                placeholder="Person name"
+                                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-400 transition-all"
+                              />
+                              <select
+                                value={input.companyId}
+                                onChange={(e) => updatePersonInput(index, 'companyId', e.target.value)}
+                                className="w-48 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-400 transition-all cursor-pointer"
+                              >
+                                <option value="">Select company...</option>
+                                {allCompanies.map((company) => (
+                                  <option key={company.id} value={company.id}>
+                                    {company.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={() => removePersonInputRow(index)}
+                                className="p-2 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ))}
+                          <div className="flex justify-between items-center pt-2">
+                            <button
+                              onClick={addPersonInputRow}
+                              className="flex items-center gap-1 text-sm text-pink-600 hover:text-pink-700 font-medium"
+                            >
+                              <Plus size={14} />
+                              Add another
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowAddPerson(false);
+                                setPersonInputs([]);
+                              }}
+                              className="text-sm text-slate-500 hover:text-slate-700 font-medium"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {ownerDetails?.people?.length === 0 && !showAddPerson ? (
+                        <p className="text-sm text-slate-500 italic">No people added yet</p>
+                      ) : (ownerDetails?.people?.length || 0) > 0 && (
+                        <div className="bg-white/80 rounded-xl border border-pink-100 overflow-hidden">
+                          <div className="flex items-center justify-between px-4 py-2 bg-pink-50/50 border-b border-pink-100">
+                            <div className="flex items-center gap-3 flex-1">
+                              <button
+                                onClick={toggleAllPeople}
+                                className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                  selectedPeopleIds.size === ownerDetails?.people?.length && selectedPeopleIds.size > 0
+                                    ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500'
+                                    : selectedPeopleIds.size > 0
+                                    ? 'bg-pink-200 border-pink-400'
+                                    : 'border-slate-300 hover:border-pink-400'
+                                }`}
+                              >
+                                {selectedPeopleIds.size === ownerDetails?.people?.length && selectedPeopleIds.size > 0 && (
+                                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                                {selectedPeopleIds.size > 0 && selectedPeopleIds.size < (ownerDetails?.people?.length || 0) && (
+                                  <div className="w-2 h-0.5 bg-pink-600 rounded"></div>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (peopleSortColumn === 'name') {
+                                    setPeopleSortAsc(!peopleSortAsc);
+                                  } else {
+                                    setPeopleSortColumn('name');
+                                    setPeopleSortAsc(true);
+                                  }
+                                }}
+                                className="flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors"
+                              >
+                                Name
+                                {peopleSortColumn === 'name' && (
+                                  <ChevronDown size={14} className={`transition-transform ${peopleSortAsc ? '' : 'rotate-180'}`} />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (peopleSortColumn === 'company') {
+                                    setPeopleSortAsc(!peopleSortAsc);
+                                  } else {
+                                    setPeopleSortColumn('company');
+                                    setPeopleSortAsc(true);
+                                  }
+                                }}
+                                className="flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors ml-auto"
+                              >
+                                Company
+                                {peopleSortColumn === 'company' && (
+                                  <ChevronDown size={14} className={`transition-transform ${peopleSortAsc ? '' : 'rotate-180'}`} />
+                                )}
+                              </button>
+                            </div>
+                            {selectedPeopleIds.size > 0 && (
+                              <button
+                                onClick={handleBulkDeletePeople}
+                                disabled={bulkDeleting}
+                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-50 ml-3"
+                              >
+                                <Trash2 size={12} />
+                                Delete ({selectedPeopleIds.size})
+                              </button>
+                            )}
+                          </div>
+                          <div className="divide-y divide-pink-50">
+                            {[...(ownerDetails?.people || [])].sort((a, b) => {
+                              const aVal = peopleSortColumn === 'name' ? a.name : (a.companyAffiliation || '');
+                              const bVal = peopleSortColumn === 'name' ? b.name : (b.companyAffiliation || '');
+                              return peopleSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                            }).map((person) => (
+                              <div
+                                key={person.id}
+                                className={`grid grid-cols-[auto,1fr,1fr,40px] items-center gap-3 px-4 py-2.5 hover:bg-pink-50/50 transition-colors ${
+                                  selectedPeopleIds.has(person.id) ? 'bg-pink-50/80' : ''
+                                }`}
+                              >
+                                <button
+                                  onClick={() => togglePersonSelection(person.id)}
+                                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                    selectedPeopleIds.has(person.id)
+                                      ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500'
+                                      : 'border-slate-300 hover:border-pink-400'
+                                  }`}
+                                >
+                                  {selectedPeopleIds.has(person.id) && (
+                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </button>
+                                <span className="text-slate-700 font-medium">{person.name}</span>
+                                <span className="text-slate-500 text-sm">{person.companyAffiliation || '—'}</span>
+                                <button
+                                  onClick={() => handleRemovePerson(person.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all justify-self-end"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
-
-                  <div className="flex flex-wrap gap-2.5">
-                    {ownerDetails?.people?.length === 0 && (
-                      <div className="w-full py-4 text-center text-sm text-slate-400">
-                        No people added yet
-                      </div>
-                    )}
-                    {ownerDetails?.people?.map((person) => (
-                      <span
-                        key={person.id}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-sm font-semibold shadow-lg shadow-purple-500/25 border border-purple-400/30 hover:shadow-xl hover:scale-[1.02] transition-all group"
-                      >
-                        <User size={14} />
-                        {person.name}
-                        {person.title && (
-                          <span className="text-purple-100 text-xs font-medium">({person.title})</span>
-                        )}
-                        <button
-                          onClick={() => handleRemovePerson(person.id)}
-                          className="ml-1 text-purple-200 hover:text-white hover:bg-white/20 p-0.5 rounded-full transition-all"
-                        >
-                          <X size={14} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
                 </div>
 
                 {/* Tags Section */}
-                <div className="bg-gradient-to-br from-emerald-50/50 to-teal-50/50 rounded-2xl p-5 border border-emerald-100">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl shadow-sm">
-                      <Tag size={16} className="text-white" />
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-100 overflow-hidden">
+                  <button
+                    onClick={() => setTopicsExpanded(!topicsExpanded)}
+                    className="w-full flex items-center justify-between p-5 hover:bg-green-50/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gradient-to-br from-green-400 to-emerald-500 rounded-xl shadow-md shadow-green-500/20">
+                        <Tag size={16} className="text-white" />
+                      </div>
+                      <span className="font-bold text-slate-800">Topics to Track</span>
+                      <span className="text-sm text-slate-500">({ownerDetails?.tags?.length || 0} selected)</span>
                     </div>
-                    <span className="font-bold text-slate-800">Topics to Track</span>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-xs font-bold shadow-md shadow-emerald-500/30 border border-emerald-400/30">
-                      <span className="w-1.5 h-1.5 bg-white/80 rounded-full"></span>
-                      {ownerDetails?.tags?.length || 0} selected
-                    </span>
-                  </div>
+                    <ChevronDown size={20} className={`text-slate-400 transition-transform ${topicsExpanded ? '' : '-rotate-90'}`} />
+                  </button>
 
-                  <div className="space-y-4">
-                    {['universal', 'pe', 'industrials'].map((category) => {
-                      const categoryTags = tags.filter((t) => t.category === category);
-                      if (categoryTags.length === 0) return null;
-                      return (
-                        <div key={category} className="bg-white/60 rounded-xl p-4 border border-emerald-100/50">
-                          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">
-                            {category === 'pe' ? 'PE-Specific' : category.charAt(0).toUpperCase() + category.slice(1)}
+                  {topicsExpanded && (
+                    <div className="px-5 pb-5">
+                      {tags.length === 0 ? (
+                        <p className="text-sm text-slate-500 italic">No topics available</p>
+                      ) : (
+                        <div className="bg-white/80 rounded-xl border border-green-100 overflow-hidden">
+                          <div className="grid grid-cols-[1fr,auto,40px] px-4 py-2 bg-green-50/50 border-b border-green-100">
+                            <button
+                              onClick={() => {
+                                if (topicsSortColumn === 'name') {
+                                  setTopicsSortAsc(!topicsSortAsc);
+                                } else {
+                                  setTopicsSortColumn('name');
+                                  setTopicsSortAsc(true);
+                                }
+                              }}
+                              className="flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors"
+                            >
+                              Topic
+                              {topicsSortColumn === 'name' && (
+                                <ChevronDown size={14} className={`transition-transform ${topicsSortAsc ? '' : 'rotate-180'}`} />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (topicsSortColumn === 'category') {
+                                  setTopicsSortAsc(!topicsSortAsc);
+                                } else {
+                                  setTopicsSortColumn('category');
+                                  setTopicsSortAsc(true);
+                                }
+                              }}
+                              className="flex items-center gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wide hover:text-slate-700 transition-colors"
+                            >
+                              Category
+                              {topicsSortColumn === 'category' && (
+                                <ChevronDown size={14} className={`transition-transform ${topicsSortAsc ? '' : 'rotate-180'}`} />
+                              )}
+                            </button>
+                            <span></span>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {categoryTags.map((tag) => {
+                          <div className="divide-y divide-green-50">
+                            {[...tags].sort((a, b) => {
+                              const aVal = topicsSortColumn === 'name' ? a.name : a.category;
+                              const bVal = topicsSortColumn === 'name' ? b.name : b.category;
+                              return topicsSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                            }).map((tag) => {
                               const isSelected = ownerDetails?.tags?.some((t) => t.id === tag.id);
                               return (
-                                <button
+                                <div
                                   key={tag.id}
+                                  className="grid grid-cols-[1fr,auto,40px] items-center px-4 py-2.5 hover:bg-green-50/50 transition-colors cursor-pointer"
                                   onClick={() => handleToggleTag(tag.id)}
-                                  className={`px-3 py-2 rounded-xl text-sm font-medium transition-all ${
-                                    isSelected
-                                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/30'
-                                      : 'bg-white text-slate-600 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50'
-                                  }`}
                                 >
-                                  {tag.name}
-                                </button>
+                                  <span className="text-slate-700 font-medium">{tag.name}</span>
+                                  <span className="text-slate-500 text-sm px-2 py-0.5 bg-slate-100 rounded text-xs">
+                                    {tag.category === 'pe' ? 'PE-Specific' : tag.category.charAt(0).toUpperCase() + tag.category.slice(1)}
+                                  </span>
+                                  <div className="justify-self-end">
+                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                      isSelected
+                                        ? 'bg-gradient-to-r from-green-500 to-emerald-500 border-green-500'
+                                        : 'border-slate-300 hover:border-green-400'
+                                    }`}>
+                                      {isSelected && (
+                                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
                               );
                             })}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Save Button */}
@@ -679,7 +1068,7 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
                       {saving ? (
                         <>
                           <Loader2 size={20} className="animate-spin" />
-                          Saving...
+                          {resolving ? 'Validating companies...' : 'Saving...'}
                         </>
                       ) : (
                         <>
@@ -699,47 +1088,15 @@ export const NewsSetup: React.FC<NewsSetupProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="relative overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl p-5 shadow-lg shadow-violet-500/20">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1.5 bg-white/20 rounded-lg">
-                <Users size={14} className="text-white" />
-              </div>
-              <div className="text-sm font-medium text-white/80">Revenue Owners</div>
-            </div>
-            <div className="text-3xl font-bold text-white">{owners.length}</div>
-          </div>
-        </div>
-        <div className="relative overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 shadow-lg shadow-emerald-500/20">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1.5 bg-white/20 rounded-lg">
-                <Tag size={14} className="text-white" />
-              </div>
-              <div className="text-sm font-medium text-white/80">Available Tags</div>
-            </div>
-            <div className="text-3xl font-bold text-white">{tags.length}</div>
-          </div>
-        </div>
-        <div className="relative overflow-hidden bg-gradient-to-br from-brand-500 to-blue-600 rounded-2xl p-5 shadow-lg shadow-brand-500/20">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1.5 bg-white/20 rounded-lg">
-                <Sparkles size={14} className="text-white" />
-              </div>
-              <div className="text-sm font-medium text-white/80">Ready for News</div>
-            </div>
-            <div className="text-3xl font-bold text-white">
-              {owners.filter((o) => (o._count?.companies || 0) > 0 || (o._count?.people || 0) > 0).length}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Company Resolve Modal */}
+      <CompanyResolveModal
+        isOpen={resolveModalOpen}
+        input={resolveInput}
+        suggestions={resolveSuggestions}
+        status={resolveStatus}
+        onConfirm={handleResolveConfirm}
+        onCancel={handleResolveCancel}
+      />
     </div>
   );
 };

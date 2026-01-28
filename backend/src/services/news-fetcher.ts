@@ -7,20 +7,20 @@
 import Anthropic from '@anthropic-ai/sdk';
 import {
   fetchGoogleNewsRSS,
-  fetchSECFilings,
   fetchPEFeeds,
   filterPEFeedArticles,
   deduplicateArticles,
   filterRecentArticles,
   RawArticle,
 } from './layer1-fetcher.js';
+import { prisma } from '../lib/prisma.js';
 
 const anthropic = new Anthropic();
 
 export interface CallDietInput {
   revenueOwnerId: string;
   revenueOwnerName: string;
-  companies: Array<{ name: string; ticker?: string; cik?: string }>;
+  companies: Array<{ name: string; ticker?: string }>;
   people: Array<{ name: string; title?: string }>;
   topics: string[]; // Kept for backward compatibility but not used in search
 }
@@ -44,8 +44,6 @@ export interface ProcessedArticle {
   company: string | null;
   person: string | null;
   category: string;
-  priority: 'high' | 'medium' | 'low';
-  priorityScore: number;        // 1-10 for sorting (hidden from UI)
   status: 'new_article' | 'update';
   matchType: 'exact' | 'contextual';
   fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm';
@@ -80,7 +78,8 @@ export type ProgressCallback = (progress: number, message: string, stepUpdate?: 
  */
 export async function fetchNewsHybrid(
   callDiets: CallDietInput[],
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  days: number = 1
 ): Promise<FetchResult> {
   if (callDiets.length === 0) {
     return { articles: [], coverageGaps: [] };
@@ -95,7 +94,7 @@ export async function fetchNewsHybrid(
   };
 
   // Extract unique companies and people (topics are no longer used for search)
-  const allCompanies = new Map<string, { name: string; ticker?: string; cik?: string }>();
+  const allCompanies = new Map<string, { name: string; ticker?: string }>();
   const allPeople = new Map<string, { name: string; title?: string }>();
 
   for (const cd of callDiets) {
@@ -145,19 +144,6 @@ export async function fetchNewsHybrid(
 
       console.log(`[layer1] Google News: ${googleNewsCount} articles`);
 
-      // Fetch SEC filings for companies with CIK
-      let secFilingsCount = 0;
-      const companiesWithCIK = companies.filter(c => c.cik);
-      for (const company of companiesWithCIK) {
-        if (company.cik) {
-          const filings = await fetchSECFilings(company.cik, company.name);
-          secFilingsCount += filings.length;
-          layer1Articles.push(...filings);
-        }
-      }
-
-      console.log(`[layer1] SEC filings: ${secFilingsCount} articles`);
-
       // Fetch PE industry feeds and filter for relevant mentions
       const peFeedArticles = await fetchPEFeeds();
       const relevantPEArticles = filterPEFeedArticles(
@@ -175,7 +161,8 @@ export async function fetchNewsHybrid(
     // Layer 2: Claude web search (runs independently for ALL companies/people)
     fetchLayer2Contextual(
       companies.map((c) => c.name),
-      people.slice(0, 10).map((p) => p.name) // Top 10 people
+      people.slice(0, 10).map((p) => p.name), // Top 10 people
+      days
     ),
   ]);
 
@@ -186,7 +173,7 @@ export async function fetchNewsHybrid(
   console.log(`[hybrid] Layer 1 complete: ${layer1Articles.length} articles`);
   console.log(`[hybrid] Layer 2 complete: ${layer2Articles.length} articles`);
 
-  await onProgress?.(30, `Layer 1: ${layer1Articles.length} articles`, { index: 1, status: 'completed', detail: `${layer1Articles.length} from Google News, SEC, PE feeds` });
+  await onProgress?.(30, `Layer 1: ${layer1Articles.length} articles`, { index: 1, status: 'completed', detail: `${layer1Articles.length} from Google News & PE feeds` });
   await onProgress?.(40, `Layer 2: ${layer2Articles.length} articles`, { index: 2, status: 'completed', detail: `${layer2Articles.length} from AI web search` });
 
   // ═══════════════════════════════════════════════════════════════════
@@ -199,7 +186,7 @@ export async function fetchNewsHybrid(
 
   // Phase 1: Fast heuristic dedup (URL, fingerprint, similarity)
   const heuristicDeduped = deduplicateArticles(allRawArticles);
-  const recentArticles = filterRecentArticles(heuristicDeduped, 3); // 72 hours = 3 days
+  const recentArticles = filterRecentArticles(heuristicDeduped, 1); // 24 hours
 
   console.log(`[hybrid] After heuristic dedup: ${recentArticles.length} articles`);
 
@@ -207,11 +194,17 @@ export async function fetchNewsHybrid(
 
   // Phase 2: LLM-based semantic deduplication (pick best source per story)
   const llmDeduped = await deduplicateWithLLM(recentArticles, onProgress);
-  stats.afterDedup = llmDeduped.length;
 
   console.log(`[hybrid] After LLM dedup: ${llmDeduped.length} articles`);
 
-  await onProgress?.(65, `Deduplicated to ${llmDeduped.length} unique articles`, { index: 3, status: 'completed', detail: `${allRawArticles.length} raw → ${recentArticles.length} → ${llmDeduped.length} unique` });
+  // Phase 3: Historical deduplication against database (last 30 days)
+  await onProgress?.(60, 'Checking against historical articles...', { index: 3, status: 'in_progress', detail: 'Comparing with last 30 days' });
+  const historicalDeduped = await deduplicateAgainstDatabase(llmDeduped, onProgress);
+  stats.afterDedup = historicalDeduped.length;
+
+  console.log(`[hybrid] After historical dedup: ${historicalDeduped.length} articles`);
+
+  await onProgress?.(65, `Deduplicated to ${historicalDeduped.length} unique articles`, { index: 3, status: 'completed', detail: `${allRawArticles.length} raw → ${recentArticles.length} → ${llmDeduped.length} → ${historicalDeduped.length} unique` });
 
   // ═══════════════════════════════════════════════════════════════════
   // PROCESS WITH LLM
@@ -219,7 +212,7 @@ export async function fetchNewsHybrid(
   await onProgress?.(70, 'Processing articles with Claude AI...', { index: 4, status: 'in_progress' });
 
   const processed = await processArticlesWithLLM(
-    llmDeduped,
+    historicalDeduped,
     callDiets,
     companies.map((c) => c.name),
     people.map((p) => p.name)
@@ -239,17 +232,19 @@ export async function fetchNewsHybrid(
 
 /**
  * Layer 2: Claude web search for comprehensive discovery
- * Searches for news in the last 72 hours for ALL companies and people
+ * Searches for news in the specified time period for ALL companies and people
  */
 async function fetchLayer2Contextual(
   companies: string[],
-  people: string[]
+  people: string[],
+  days: number = 1
 ): Promise<RawArticle[]> {
   if (companies.length === 0 && people.length === 0) {
     return [];
   }
 
-  const searchPrompt = `You are a news intelligence analyst. Search for recent news (last 72 hours / 3 days only) about these companies and people. This is an INDEPENDENT search to complement RSS feeds - search comprehensively.
+  const timeDescription = days === 1 ? 'last 24 hours' : `last ${days} days`;
+  const searchPrompt = `You are a news intelligence analyst. Search for recent news (${timeDescription} only) about these companies and people. This is an INDEPENDENT search to complement RSS feeds - search comprehensively.
 
 ${companies.length > 0 ? `## Companies to Search
 ${companies.map((c) => `- ${c}`).join('\n')}` : ''}
@@ -269,7 +264,7 @@ For each company/person, search broadly - include:
 - Executive speaking engagements, quotes, or interviews
 
 IMPORTANT:
-- Only include articles published within the last 72 hours (3 days)
+- Only include articles published within the ${timeDescription}
 - Prioritize high-quality sources (Reuters, WSJ, Bloomberg, etc.)
 - Include actionable business news useful for consultants
 
@@ -291,6 +286,8 @@ Return maximum 25 results, prioritizing the most actionable and relevant news.`;
 
   try {
     console.log('[layer2] Starting Claude web search...');
+    console.log('[layer2] Searching for companies:', companies.join(', '));
+    console.log('[layer2] Searching for people:', people.join(', '));
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -309,24 +306,36 @@ Return maximum 25 results, prioritizing the most actionable and relevant news.`;
       ],
     });
 
+    console.log('[layer2] Response received, content blocks:', response.content.length);
+    console.log('[layer2] Content types:', response.content.map(c => c.type).join(', '));
+
     // Get the last text block
     const textBlocks = response.content.filter((c) => c.type === 'text');
+    console.log('[layer2] Text blocks found:', textBlocks.length);
+
     const textContent = textBlocks[textBlocks.length - 1];
 
     if (!textContent || textContent.type !== 'text') {
       console.error('[layer2] No text response from Claude');
+      console.error('[layer2] Full response content:', JSON.stringify(response.content, null, 2));
       return [];
     }
+
+    console.log('[layer2] Text response length:', textContent.text.length);
+    console.log('[layer2] Text preview:', textContent.text.substring(0, 500));
 
     // Parse JSON from response
     const jsonMatch = textContent.text.match(/\{[\s\S]*"results"[\s\S]*\}/);
     if (!jsonMatch) {
       console.error('[layer2] Could not find JSON in response');
+      console.error('[layer2] Full text:', textContent.text);
       return [];
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
     const results = parsed.results || [];
+
+    console.log('[layer2] Parsed results count:', results.length);
 
     return results.map((r: any) => ({
       headline: r.headline || '',
@@ -338,13 +347,17 @@ Return maximum 25 results, prioritizing the most actionable and relevant news.`;
     }));
   } catch (error) {
     console.error('[layer2] Error in contextual search:', error);
+    if (error instanceof Error) {
+      console.error('[layer2] Error message:', error.message);
+      console.error('[layer2] Error stack:', error.stack);
+    }
     return [];
   }
 }
 
 /**
  * Process raw articles with LLM for filtering, categorization, and summarization
- * Focuses on consultant-client engagement usefulness for priority scoring
+ * Focuses on consultant-client engagement usefulness
  */
 async function processArticlesWithLLM(
   rawArticles: RawArticle[],
@@ -383,21 +396,37 @@ ${callDiets.map((cd) => `- ${cd.revenueOwnerName}: tracks ${cd.companies.map((c)
 
 ## Instructions
 
-1. **Filter out** (be lenient - when in doubt, include the article):
-   - Clear duplicates of the same story
-   - Completely generic industry commentary with no company-specific angle
-   - Extremely routine announcements with no substance
+1. **STRICTLY filter out** (when in doubt, EXCLUDE the article):
+   - Articles where the tracked entity is mentioned only tangentially or for context
+   - Articles about a different entity with a similar name
+   - General industry news without specific entity focus
+   - Generic press releases with no substantive news
+   - Routine product updates without strategic significance
+   - Event sponsorship or award/recognition announcements
+   - Minor personnel changes (non-executive level)
+   - Rehashed information from prior announcements
+   - Promotional content disguised as news
+   - Opinion pieces without new factual information
+   - Historical references without current relevance
+   - Speculation without substantive basis
+   - **IMPORTANT: Analyst ratings, upgrades, or downgrades where the tracked company is the ANALYST (not the subject)** - e.g., if tracking "Morgan Stanley" and they downgrade another company's stock, EXCLUDE this because Morgan Stanley is just the analyst, not the subject of the news
+   - Articles where the tracked company is providing analysis, ratings, or commentary about OTHER companies
+   - Marketing campaign announcements, advertising initiatives, or brand promotion activities
+   - Price target changes, analyst price target updates, or stock rating changes for the company's shares
+   - Share purchases, stock buybacks, or insider trading activity UNLESS it represents a controlling share acquisition, takeover attempt, or significant ownership change (>10% stake)
+
+   **KEEP only articles that are definitively ABOUT a tracked company/person as the main subject and cover:**
+   - Mergers, acquisitions, divestitures, strategic partnerships
+   - C-suite appointments/departures, board changes
+   - Earnings releases, significant revenue/profit changes
+   - Major contract wins/losses, facility changes
+   - PE/VC investments, debt refinancing, IPOs
+   - Market share changes, competitive threats
+   - Technology implementations, workforce restructuring
 
 2. **For each relevant article**:
    - Match to tracked company/person
    - Assign category: M&A / Deal Activity, Leadership Changes, Earnings & Operational Performance, Strategy, Value Creation / Cost Initiatives, Digital & Technology Modernization, Fundraising / New Funds, Operating Partner Activity, Supply Chain & Logistics, Plant & Footprint Changes
-   - Assign priority: high (actionable), medium (notable), low (informational)
-   - Assign priorityScore (1-10): Based on how useful this story would be for a consultant preparing to engage the company or person. Consider:
-     * 9-10: Major deals, significant leadership changes, earnings surprises, strategic pivots
-     * 7-8: Notable operational changes, new initiatives, meaningful partnerships
-     * 5-6: Informative updates, industry context, minor developments
-     * 3-4: Routine news, general mentions
-     * 1-2: Tangentially related, minimal engagement value
    - Generate shortSummary: 1-2 sentences for card preview
    - Generate longSummary: 3-5 sentences for detailed view
    - Generate "Why It Matters": 1-2 sentences explaining relevance for consultant engagement
@@ -427,8 +456,6 @@ Return ONLY valid JSON:
       "company": "matched company or null",
       "person": "matched person or null",
       "category": "topic category",
-      "priority": "high|medium|low",
-      "priorityScore": 8,
       "status": "new_article",
       "matchType": "exact|contextual",
       "fetchLayer": "layer from input",
@@ -443,7 +470,7 @@ Return ONLY valid JSON:
   ]
 }
 
-Return maximum 30 most relevant articles, sorted by priorityScore (highest first) then recency.`;
+Return ALL relevant articles, sorted by recency (most recent first).`;
 
   try {
     console.log('[process] Sending articles to Claude for processing...');
@@ -478,8 +505,6 @@ Return maximum 30 most relevant articles, sorted by priorityScore (highest first
           company: null,
           person: null,
           category: 'News',
-          priority: 'medium' as const,
-          priorityScore: 5,
           status: 'new_article' as const,
           matchType: 'contextual' as const,
           fetchLayer: a.fetchLayer,
@@ -561,8 +586,6 @@ Return maximum 30 most relevant articles, sorted by priorityScore (highest first
         company: a.company || null,
         person: a.person || null,
         category: a.category || 'News',
-        priority: a.priority || 'medium',
-        priorityScore: a.priorityScore || 5,
         status: a.status || 'new_article',
         matchType: a.matchType || 'contextual',
         fetchLayer: a.fetchLayer || original?.fetchLayer || 'layer2_llm',
@@ -592,8 +615,6 @@ Return maximum 30 most relevant articles, sorted by priorityScore (highest first
         company: null,
         person: null,
         category: 'News',
-        priority: 'medium' as const,
-        priorityScore: 5,
         status: 'new_article' as const,
         matchType: 'contextual' as const,
         fetchLayer: a.fetchLayer,
@@ -721,36 +742,226 @@ Return ONLY valid JSON:
   }
 }
 
+/**
+ * Historical Deduplication: Check new articles against database (last 30 days)
+ * Uses LLM to identify if new articles cover the same story as existing ones
+ */
+async function deduplicateAgainstDatabase(
+  newArticles: RawArticle[],
+  onProgress?: (progress: number, message: string, stepUpdate?: { index: number; status: 'in_progress' | 'completed' | 'error'; detail?: string }) => Promise<void>
+): Promise<RawArticle[]> {
+  if (newArticles.length === 0) {
+    return newArticles;
+  }
+
+  // Fetch recent articles from database (last 30 days)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const existingArticles = await prisma.newsArticle.findMany({
+    where: {
+      fetchedAt: { gte: thirtyDaysAgo },
+    },
+    select: {
+      id: true,
+      headline: true,
+      sourceUrl: true,
+      shortSummary: true,
+      publishedAt: true,
+    },
+    orderBy: { fetchedAt: 'desc' },
+  });
+
+  if (existingArticles.length === 0) {
+    console.log('[hist-dedup] No existing articles in database, skipping historical dedup');
+    return newArticles;
+  }
+
+  console.log(`[hist-dedup] Checking ${newArticles.length} new articles against ${existingArticles.length} existing articles`);
+
+  // First pass: URL matching (fast, exact)
+  const existingUrls = new Set(existingArticles.map(a => a.sourceUrl.toLowerCase()));
+  const urlFiltered = newArticles.filter(article => {
+    const urlLower = article.sourceUrl.toLowerCase();
+    if (existingUrls.has(urlLower)) {
+      console.log(`[hist-dedup] URL match found, skipping: ${article.headline}`);
+      return false;
+    }
+    return true;
+  });
+
+  if (urlFiltered.length === 0) {
+    console.log('[hist-dedup] All new articles already exist by URL');
+    return [];
+  }
+
+  // If we have more than 50 articles to compare, use LLM for semantic comparison
+  // For smaller batches, the URL check is sufficient
+  if (urlFiltered.length > 20 || existingArticles.length > 100) {
+    // Use LLM for semantic deduplication against historical articles
+    const result = await llmHistoricalDedup(urlFiltered, existingArticles);
+    console.log(`[hist-dedup] After LLM check: ${result.length} unique articles`);
+    return result;
+  }
+
+  return urlFiltered;
+}
+
+/**
+ * LLM-based historical deduplication
+ * Compares new articles against existing database articles to find semantic duplicates
+ */
+async function llmHistoricalDedup(
+  newArticles: RawArticle[],
+  existingArticles: Array<{ id: string; headline: string; sourceUrl: string; shortSummary: string | null; publishedAt: Date | null }>
+): Promise<RawArticle[]> {
+  // Format existing articles for comparison (limit to avoid token overflow)
+  const existingForPrompt = existingArticles.slice(0, 100).map((a, i) => ({
+    id: `E${i}`,
+    headline: a.headline,
+    summary: a.shortSummary || '',
+    publishedAt: a.publishedAt?.toISOString().split('T')[0] || 'unknown',
+  }));
+
+  // Format new articles
+  const newForPrompt = newArticles.map((a, i) => ({
+    id: `N${i}`,
+    headline: a.headline,
+    description: a.description || '',
+    publishedAt: a.publishedAt?.toISOString().split('T')[0] || 'unknown',
+  }));
+
+  const prompt = `You are deduplicating news articles. Compare the NEW articles against EXISTING articles in our database to identify duplicates.
+
+## EXISTING ARTICLES (already in database, last 30 days)
+${JSON.stringify(existingForPrompt, null, 2)}
+
+## NEW ARTICLES (to evaluate)
+${JSON.stringify(newForPrompt, null, 2)}
+
+## Task
+Identify which NEW articles are duplicates of EXISTING articles. Two articles are duplicates if they cover THE SAME story/event, even if from different sources.
+
+Return JSON with the IDs of NEW articles that should be KEPT (not duplicates):
+{
+  "keepIds": ["N0", "N2", "N5"],
+  "duplicates": [
+    {"newId": "N1", "existingId": "E3", "reason": "Same M&A announcement"}
+  ]
+}
+
+If you're unsure whether an article is a duplicate, EXCLUDE it (don't include in keepIds).`;
+
+  try {
+    console.log('[hist-dedup] Sending to LLM for semantic comparison...');
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      temperature: 0,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const textContent = response.content.find(c => c.type === 'text');
+    if (!textContent || textContent.type !== 'text') {
+      console.error('[hist-dedup] No text response from LLM');
+      return newArticles;
+    }
+
+    let cleaned = textContent.text
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim();
+
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('[hist-dedup] Could not parse LLM response');
+      return newArticles;
+    }
+
+    const result = JSON.parse(jsonMatch[0]);
+    const keepIds = new Set(result.keepIds || []);
+
+    // Log duplicates found
+    if (result.duplicates && result.duplicates.length > 0) {
+      for (const dup of result.duplicates) {
+        console.log(`[hist-dedup] Duplicate found: ${dup.newId} matches ${dup.existingId} - ${dup.reason}`);
+      }
+    }
+
+    // Filter to kept articles
+    const keptArticles = newArticles.filter((_, i) => keepIds.has(`N${i}`));
+    const removedCount = newArticles.length - keptArticles.length;
+    console.log(`[hist-dedup] Reduced ${newArticles.length} → ${keptArticles.length} (removed ${removedCount} historical duplicates)`);
+
+    return keptArticles;
+  } catch (error) {
+    console.error('[hist-dedup] LLM error:', error);
+    return newArticles; // Return original on error
+  }
+}
+
 // Legacy exports for backward compatibility
 export { fetchNewsHybrid as fetchNewsForCallDiets };
 
 /**
- * Ad-hoc search for specific company/person
- * Searches within the last 72 hours
+ * Deep Dive search for specific company/person
+ * Uses the same strict filtering as the main refresh
  */
 export async function searchNews(params: {
   company?: string;
   person?: string;
   topics?: string[]; // Kept for compatibility but not used
+  days?: number;
 }): Promise<FetchResult> {
-  const { company, person } = params;
+  const { company, person, days = 1 } = params;
 
   if (!company && !person) {
     return { articles: [], coverageGaps: [] };
   }
 
-  const searchPrompt = `You are a news intelligence analyst helping consultants prepare for client engagements. Search for recent news (last 72 hours / 3 days only) about:
+  const timeDescription = days === 1 ? 'last 24 hours' : `last ${days} days`;
+  const entityName = company || person;
+  const entityType = company ? 'company' : 'person';
+
+  const searchPrompt = `You are a news intelligence analyst helping consultants prepare for client engagements. Search for recent news (${timeDescription} only) about:
 
 ${company ? `Company: ${company}` : ''}
 ${person ? `Person: ${person}` : ''}
 
+## STRICT Filtering Rules - EXCLUDE these types of articles:
+- Articles where ${entityName} is mentioned only tangentially or for context
+- Articles about a different entity with a similar name
+- General industry news without specific focus on ${entityName}
+- Generic press releases with no substantive news
+- Routine product updates without strategic significance
+- Event sponsorship or award/recognition announcements
+- Minor personnel changes (non-executive level)
+- Rehashed information from prior announcements
+- Promotional content disguised as news
+- Opinion pieces without new factual information
+- Historical references without current relevance
+- Speculation without substantive basis
+${company ? `- **CRITICAL: Analyst ratings, upgrades, or downgrades where ${company} is the ANALYST (not the subject)** - e.g., if ${company} downgrades another company's stock, EXCLUDE this because ${company} is just the analyst providing the rating, not the subject of the news
+- Articles where ${company} is providing analysis, ratings, commentary, or research about OTHER companies` : ''}
+- Marketing campaign announcements, advertising initiatives, or brand promotion activities
+- Price target changes, analyst price target updates, or stock rating changes for the ${entityType}'s shares
+- Share purchases, stock buybacks, or insider trading activity UNLESS it represents a controlling share acquisition, takeover attempt, or significant ownership change (>10% stake)
+
+## KEEP only articles that are definitively ABOUT ${entityName} as the main subject and cover:
+- Mergers, acquisitions, divestitures, strategic partnerships
+- C-suite appointments/departures, board changes
+- Earnings releases, significant revenue/profit changes
+- Major contract wins/losses, facility changes
+- PE/VC investments, debt refinancing, IPOs
+- Market share changes, competitive threats
+- Technology implementations, workforce restructuring
+
 ## Instructions
-1. Search for relevant news articles from the last 72 hours only
-2. Filter out routine/generic content (be lenient - include when in doubt)
-3. Categorize by topic
-4. Assign priorityScore (1-10) based on usefulness for consultant-client engagement
-5. Generate both short (1-2 sentences) and long (3-5 sentences) summaries
-6. Explain why it matters for client engagement
+1. Search comprehensively but filter strictly - when in doubt, EXCLUDE
+2. The article must be primarily ABOUT ${entityName}, not just mentioning them
+3. Generate both short (1-2 sentences) and long (3-5 sentences) summaries
+4. Explain why it matters for client engagement
 
 ## Output Format
 Return ONLY valid JSON (no markdown, no backticks):
@@ -768,8 +979,6 @@ Return ONLY valid JSON (no markdown, no backticks):
       "company": "${company || 'null'}",
       "person": "${person || 'null'}",
       "category": "Topic category",
-      "priority": "high|medium|low",
-      "priorityScore": 8,
       "status": "new_article",
       "matchType": "exact",
       "fetchLayer": "layer2_llm",
@@ -779,7 +988,7 @@ Return ONLY valid JSON (no markdown, no backticks):
   "coverageGaps": []
 }
 
-Return maximum 10 most relevant articles, sorted by priorityScore.`;
+Return only HIGH-QUALITY, RELEVANT articles where ${entityName} is the PRIMARY subject.`;
 
   console.log(`[search] Ad-hoc search for company="${company}", person="${person}"`);
 

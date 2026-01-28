@@ -10,11 +10,10 @@ interface ExportOptions {
   revenueOwnerId: string;
   dateFrom?: Date;
   dateTo?: Date;
-  priorityFilter?: ('high' | 'medium' | 'low')[];
 }
 
 export async function generateNewsDigestPDF(options: ExportOptions): Promise<Buffer> {
-  const { revenueOwnerId, dateFrom, dateTo, priorityFilter } = options;
+  const { revenueOwnerId, dateFrom, dateTo } = options;
 
   // Fetch revenue owner
   const owner = await prisma.revenueOwner.findUnique({
@@ -37,9 +36,6 @@ export async function generateNewsDigestPDF(options: ExportOptions): Promise<Buf
         gte: dateFrom || defaultDateFrom,
         lte: dateTo || new Date(),
       },
-      ...(priorityFilter && priorityFilter.length > 0 && {
-        priority: { in: priorityFilter },
-      }),
     },
     include: {
       company: true,
@@ -47,7 +43,6 @@ export async function generateNewsDigestPDF(options: ExportOptions): Promise<Buf
       tag: true,
     },
     orderBy: [
-      { priority: 'asc' }, // high, medium, low
       { publishedAt: 'desc' },
     ],
   });
@@ -102,10 +97,6 @@ export async function generateNewsDigestPDF(options: ExportOptions): Promise<Buf
   // SUMMARY STATS
   // ═══════════════════════════════════════════════════════════════════
 
-  const highCount = articles.filter(a => a.priority === 'high').length;
-  const mediumCount = articles.filter(a => a.priority === 'medium').length;
-  const lowCount = articles.filter(a => a.priority === 'low').length;
-
   doc.fontSize(12)
      .font('Helvetica-Bold')
      .text('Summary');
@@ -113,44 +104,28 @@ export async function generateNewsDigestPDF(options: ExportOptions): Promise<Buf
 
   doc.fontSize(10)
      .font('Helvetica')
-     .text(`Total Articles: ${articles.length}`)
-     .text(`High Priority: ${highCount}`)
-     .text(`Medium Priority: ${mediumCount}`)
-     .text(`Low Priority: ${lowCount}`);
+     .text(`Total Articles: ${articles.length}`);
 
   doc.moveDown(1);
 
   // ═══════════════════════════════════════════════════════════════════
-  // ARTICLES BY PRIORITY
+  // ARTICLES
   // ═══════════════════════════════════════════════════════════════════
 
-  const priorityGroups = [
-    { label: 'HIGH PRIORITY', priority: 'high', articles: articles.filter(a => a.priority === 'high'), color: '#dc2626' },
-    { label: 'MEDIUM PRIORITY', priority: 'medium', articles: articles.filter(a => a.priority === 'medium'), color: '#d97706' },
-    { label: 'LOW PRIORITY', priority: 'low', articles: articles.filter(a => a.priority === 'low'), color: '#059669' },
-  ];
-
-  for (const group of priorityGroups) {
-    if (group.articles.length === 0) continue;
-
-    // Check if we need a new page
-    if (doc.y > 700) {
-      doc.addPage();
-    }
-
-    // Section header with colored bar
+  if (articles.length > 0) {
+    // Section header
     doc.rect(50, doc.y, 495, 20)
-       .fill(group.color);
+       .fill('#1e40af');
 
     doc.fontSize(11)
        .font('Helvetica-Bold')
        .fillColor('#ffffff')
-       .text(group.label, 55, doc.y - 15);
+       .text('ARTICLES', 55, doc.y - 15);
 
     doc.fillColor('#000000');
     doc.moveDown(1.2);
 
-    for (const article of group.articles) {
+    for (const article of articles) {
       // Check for page break
       if (doc.y > 680) {
         doc.addPage();
@@ -217,8 +192,6 @@ export async function generateNewsDigestPDF(options: ExportOptions): Promise<Buf
       doc.fillColor('#000000');
       doc.moveDown(1);
     }
-
-    doc.moveDown(0.5);
   }
 
   // ═══════════════════════════════════════════════════════════════════

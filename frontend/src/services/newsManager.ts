@@ -38,6 +38,7 @@ export interface TrackedPerson {
   id: string;
   name: string;
   title: string | null;
+  companyAffiliation: string | null;
   createdAt: string;
   _count?: {
     callDiets: number;
@@ -81,10 +82,8 @@ export interface NewsArticle {
   sources: ArticleSource[];     // All sources for merged stories
   publishedAt: string | null;
   fetchedAt: string;
-  priority: 'high' | 'medium' | 'low' | null;
-  priorityScore: number | null; // 1-10 for sorting (hidden from UI)
   status: 'new_article' | 'update' | null;
-  isSent: boolean;              // Sent to client status (legacy)
+  isSent: boolean;              // Sent to client status
   isArchived: boolean;          // Archived status
   matchType: 'exact' | 'contextual' | null;
   fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm' | null;
@@ -302,10 +301,10 @@ export const useRevenueOwners = () => {
   };
 
   // Call Diet management
-  const addCompanyToOwner = async (ownerId: string, companyName: string, ticker?: string, cik?: string) => {
+  const addCompanyToOwner = async (ownerId: string, companyName: string, ticker?: string) => {
     await fetchJson(`/news/revenue-owners/${ownerId}/companies`, {
       method: 'POST',
-      body: JSON.stringify({ name: companyName, ticker, cik }),
+      body: JSON.stringify({ name: companyName, ticker }),
     });
   };
 
@@ -315,10 +314,18 @@ export const useRevenueOwners = () => {
     });
   };
 
-  const addPersonToOwner = async (ownerId: string, personName: string, title?: string) => {
+  const bulkRemoveCompaniesFromOwner = async (ownerId: string, companyIds: string[]) => {
+    const data = await fetchJson(`/news/revenue-owners/${ownerId}/companies/bulk-delete`, {
+      method: 'POST',
+      body: JSON.stringify({ companyIds }),
+    });
+    return data.count;
+  };
+
+  const addPersonToOwner = async (ownerId: string, personName: string, companyAffiliation?: string) => {
     await fetchJson(`/news/revenue-owners/${ownerId}/people`, {
       method: 'POST',
-      body: JSON.stringify({ name: personName, title }),
+      body: JSON.stringify({ name: personName, companyAffiliation }),
     });
   };
 
@@ -326,6 +333,14 @@ export const useRevenueOwners = () => {
     await fetchJson(`/news/revenue-owners/${ownerId}/people/${personId}`, {
       method: 'DELETE',
     });
+  };
+
+  const bulkRemovePeopleFromOwner = async (ownerId: string, personIds: string[]) => {
+    const data = await fetchJson(`/news/revenue-owners/${ownerId}/people/bulk-delete`, {
+      method: 'POST',
+      body: JSON.stringify({ personIds }),
+    });
+    return data.count;
   };
 
   const addTagToOwner = async (ownerId: string, tagId: string) => {
@@ -352,8 +367,10 @@ export const useRevenueOwners = () => {
     deleteOwner,
     addCompanyToOwner,
     removeCompanyFromOwner,
+    bulkRemoveCompaniesFromOwner,
     addPersonToOwner,
     removePersonFromOwner,
+    bulkRemovePeopleFromOwner,
     addTagToOwner,
     removeTagFromOwner,
   };
@@ -368,7 +385,6 @@ export interface ArticleFilters {
   companyId?: string;
   personId?: string;
   tagId?: string;
-  priority?: 'high' | 'medium' | 'low';
   isSent?: boolean;
   isArchived?: boolean;
 }
@@ -387,7 +403,7 @@ export const useNewsArticles = (filters?: ArticleFilters) => {
       if (filters?.companyId) params.set('companyId', filters.companyId);
       if (filters?.personId) params.set('personId', filters.personId);
       if (filters?.tagId) params.set('tagId', filters.tagId);
-      if (filters?.priority) params.set('priority', filters.priority);
+      if (filters?.isSent !== undefined) params.set('isSent', String(filters.isSent));
       if (filters?.isArchived !== undefined) params.set('isArchived', String(filters.isArchived));
 
       const queryString = params.toString();
@@ -400,7 +416,7 @@ export const useNewsArticles = (filters?: ArticleFilters) => {
     } finally {
       setLoading(false);
     }
-  }, [filters?.revenueOwnerId, filters?.companyId, filters?.personId, filters?.tagId, filters?.priority, filters?.isArchived]);
+  }, [filters?.revenueOwnerId, filters?.companyId, filters?.personId, filters?.tagId, filters?.isSent, filters?.isArchived]);
 
   useEffect(() => {
     fetchArticles();
@@ -437,11 +453,14 @@ export const useNewsRefresh = () => {
     fetchStatus();
   }, [fetchStatus]);
 
-  const refresh = async (): Promise<{ articlesFound: number; coverageGaps: any[] }> => {
+  const refresh = async (days: number = 1): Promise<{ articlesFound: number; coverageGaps: any[] }> => {
     setRefreshing(true);
     setError(null);
     try {
-      const result = await fetchJson('/news/refresh', { method: 'POST' });
+      const result = await fetchJson('/news/refresh', {
+        method: 'POST',
+        body: JSON.stringify({ days }),
+      });
       await fetchStatus();
       return result;
     } catch (err) {
@@ -465,13 +484,13 @@ export const useNewsSearch = () => {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const search = async (params: { company?: string; person?: string; topics?: string[] }) => {
+  const search = async (params: { company?: string; person?: string; topics?: string[]; days?: number }) => {
     setSearching(true);
     setError(null);
     try {
       const data = await fetchJson('/news/search', {
         method: 'POST',
-        body: JSON.stringify(params),
+        body: JSON.stringify({ ...params, days: params.days || 1 }),
       });
       setResults(data.articles || []);
       return data;
@@ -511,4 +530,28 @@ export const archiveArticle = async (articleId: string, isArchived?: boolean): P
     body: JSON.stringify({ isArchived }),
   });
   return data.isArchived;
+};
+
+// ============================================================================
+// Bulk Archive Articles
+// ============================================================================
+
+export const bulkArchiveArticles = async (articleIds: string[]): Promise<number> => {
+  const data = await fetchJson('/news/articles/bulk-archive', {
+    method: 'POST',
+    body: JSON.stringify({ articleIds }),
+  });
+  return data.count;
+};
+
+// ============================================================================
+// Bulk Send Articles (marks as sent and archives)
+// ============================================================================
+
+export const bulkSendArticles = async (articleIds: string[]): Promise<number> => {
+  const data = await fetchJson('/news/articles/bulk-send', {
+    method: 'POST',
+    body: JSON.stringify({ articleIds }),
+  });
+  return data.count;
 };
