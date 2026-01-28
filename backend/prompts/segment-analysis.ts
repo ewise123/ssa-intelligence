@@ -8,41 +8,7 @@
 // ============================================================================
 
 import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
-
-export interface FoundationOutput {
-  company_basics: {
-    legal_name: string;
-    ticker?: string;
-    ownership: 'Public' | 'Private' | 'Subsidiary';
-    headquarters: string;
-    global_revenue_usd: number;
-    global_employees: number;
-    fiscal_year_end: string;
-  };
-  geography_specifics: {
-    regional_revenue_usd: number;
-    regional_revenue_pct: number;
-    regional_employees: number;
-    facilities: Array<{
-      name: string;
-      location: string;
-      type: string;
-    }>;
-    key_facts: string[];
-  };
-  source_catalog: Array<{
-    id: string;
-    citation: string;
-    url?: string;
-    type: string;
-    date: string;
-  }>;
-  segment_structure: Array<{
-    name: string;
-    revenue_pct: number;
-    description: string;
-  }>;
-}
+import type { FoundationOutput } from './types.js';
 
 export interface Section2Context {
   kpi_table: {

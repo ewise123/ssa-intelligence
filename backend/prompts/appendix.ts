@@ -3,36 +3,11 @@
  * Auto-generates from all completed sections
  */
 
+import type { FoundationOutput } from './types.js';
+
 // ============================================================================
 // INPUT TYPES
 // ============================================================================
-
-export interface FoundationOutput {
-  company_basics: {
-    legal_name: string;
-    ticker?: string;
-    ownership: 'Public' | 'Private' | 'Subsidiary';
-    headquarters: string;
-    global_revenue_usd: number;
-    global_employees: number;
-    fiscal_year_end: string;
-  };
-  source_catalog: Array<{
-    id: string;
-    citation: string;
-    url?: string;
-    type: string;
-    date: string;
-  }>;
-  fx_rates: Record<string, {
-    rate: number;
-    source: 'A' | 'B' | 'C';
-  }>;
-  industry_averages: {
-    source: 'A' | 'B' | 'C';
-    dataset: string;
-  };
-}
 
 // Generic section output with sources
 interface SectionWithSources {
