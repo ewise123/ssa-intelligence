@@ -15,6 +15,37 @@ const MIDNIGHT_EST_CRON = '0 5 * * *';
 let isSchedulerRunning = false;
 
 /**
+ * Auto-archive articles older than 72 hours that haven't been sent or archived
+ */
+async function runAutoArchive(): Promise<void> {
+  console.log('[scheduler] Running auto-archive for articles older than 72 hours...');
+
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setHours(cutoffDate.getHours() - 72);
+
+    const result = await prisma.newsArticle.updateMany({
+      where: {
+        fetchedAt: { lt: cutoffDate },
+        isSent: false,
+        isArchived: false,
+      },
+      data: {
+        isArchived: true,
+      },
+    });
+
+    if (result.count > 0) {
+      console.log(`[scheduler] Auto-archived ${result.count} articles older than 72 hours`);
+    } else {
+      console.log('[scheduler] No articles to auto-archive');
+    }
+  } catch (error) {
+    console.error('[scheduler] Error during auto-archive:', error);
+  }
+}
+
+/**
  * Run the news refresh job
  */
 async function runNewsRefresh(): Promise<void> {
@@ -238,15 +269,17 @@ export function initNewsScheduler(): void {
   console.log(`[scheduler] Cron expression: ${MIDNIGHT_EST_CRON} (approximately midnight EST)`);
 
   // Schedule the job
-  cron.schedule(MIDNIGHT_EST_CRON, () => {
+  cron.schedule(MIDNIGHT_EST_CRON, async () => {
     console.log(`[scheduler] Triggered at ${new Date().toISOString()}`);
-    runNewsRefresh();
+    // Run auto-archive first, then refresh news
+    await runAutoArchive();
+    await runNewsRefresh();
   }, {
     timezone: 'America/New_York', // Use proper EST/EDT timezone
   });
 
   isSchedulerRunning = true;
-  console.log('[scheduler] News scheduler initialized - will run daily at midnight EST');
+  console.log('[scheduler] News scheduler initialized - will run daily at midnight EST (auto-archive + refresh)');
 }
 
 /**

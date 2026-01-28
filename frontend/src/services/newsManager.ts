@@ -314,6 +314,14 @@ export const useRevenueOwners = () => {
     });
   };
 
+  const bulkRemoveCompaniesFromOwner = async (ownerId: string, companyIds: string[]) => {
+    const data = await fetchJson(`/news/revenue-owners/${ownerId}/companies/bulk-delete`, {
+      method: 'POST',
+      body: JSON.stringify({ companyIds }),
+    });
+    return data.count;
+  };
+
   const addPersonToOwner = async (ownerId: string, personName: string, companyAffiliation?: string) => {
     await fetchJson(`/news/revenue-owners/${ownerId}/people`, {
       method: 'POST',
@@ -325,6 +333,14 @@ export const useRevenueOwners = () => {
     await fetchJson(`/news/revenue-owners/${ownerId}/people/${personId}`, {
       method: 'DELETE',
     });
+  };
+
+  const bulkRemovePeopleFromOwner = async (ownerId: string, personIds: string[]) => {
+    const data = await fetchJson(`/news/revenue-owners/${ownerId}/people/bulk-delete`, {
+      method: 'POST',
+      body: JSON.stringify({ personIds }),
+    });
+    return data.count;
   };
 
   const addTagToOwner = async (ownerId: string, tagId: string) => {
@@ -351,8 +367,10 @@ export const useRevenueOwners = () => {
     deleteOwner,
     addCompanyToOwner,
     removeCompanyFromOwner,
+    bulkRemoveCompaniesFromOwner,
     addPersonToOwner,
     removePersonFromOwner,
+    bulkRemovePeopleFromOwner,
     addTagToOwner,
     removeTagFromOwner,
   };
