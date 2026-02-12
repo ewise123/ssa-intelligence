@@ -48,7 +48,7 @@
     "ioredis": "^5.4.2",
     "jsonrepair": "^3.13.0",
     "marked": "^15.0.12",
-    "node-cron": "^3.0.3",
+    "node-cron": "^4.2.1",
     "pdfkit": "^0.15.2",
     "playwright": "1.57.0",
     "rss-parser": "^3.13.0",
