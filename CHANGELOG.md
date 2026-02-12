@@ -22,6 +22,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Add Dependabot PR review instructions to CLAUDE.md, AGENTS.md, and CONTRIBUTING.md — LLM agents must review every Dependabot PR before merge.
 - Skip CodeRabbit automatic reviews on Dependabot PRs (`.coderabbit.yaml`).
 - Update Playwright Docker base image from v1.57.0 to v1.58.2 to match the bumped library version.
+- Remove unused `backend/Dockerfile` — production uses the root `Dockerfile` via Render.
 
 ### Refactored
 - Add `vite-env.d.ts` and remove all `(import.meta as any)` casts across 12 frontend files — uses Vite's built-in `ImportMeta` types instead.
