@@ -39,32 +39,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Backend API (optional - can run locally in dev)
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ssa-intelligence-backend
-    restart: unless-stopped
-    environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      PORT: ${PORT:-3000}
-      DATABASE_URL: postgresql://ssa_intelligence:${POSTGRES_PASSWORD:-ssa_intelligence_dev_password}@postgres:5432/ssa_intelligence_research
-      REDIS_URL: redis://:${REDIS_PASSWORD:-ssa_intelligence_redis_password}@redis:6379
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-5}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5174}
-    ports:
-      - "${PORT:-3000}:3000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./src:/app/src
-      - ./prompts:/app/prompts
-    command: npm run dev
 
 volumes:
   postgres_data:

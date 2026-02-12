@@ -23,6 +23,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Skip CodeRabbit automatic reviews on Dependabot PRs (`.coderabbit.yaml`).
 - Update Playwright Docker base image from v1.57.0 to v1.58.2 to match the bumped library version.
 - Remove unused `backend/Dockerfile` — production uses the root `Dockerfile` via Render.
+- Remove stale `backend` service from `docker-compose.yml` (referenced deleted Dockerfile); postgres and redis services remain for local dev.
 
 ### Refactored
 - Add `vite-env.d.ts` and remove all `(import.meta as any)` casts across 12 frontend files — uses Vite's built-in `ImportMeta` types instead.
