@@ -72,3 +72,20 @@ Integration tests use a separate database (`ssa_intelligence_test`). The global 
 - PR title must follow: `type(scope): short summary`
 - Use the template verbatim and do not remove sections.
 - Always update CHANGELOG.md before creating a PR.
+
+## Dependabot PR Review
+
+Dependabot opens automated PRs for dependency updates every Monday. **Do not merge Dependabot PRs without an LLM agent review.** When asked to review a Dependabot PR:
+
+1. Check that all CI checks pass.
+2. Read the PR diff — confirm only `package.json` and `package-lock.json` changed.
+3. For **grouped PRs** (title contains "the \<group\> group with N updates"):
+   - Skim the list of bumped packages. Flag any that look risky (new major features, large changelogs).
+   - If all are minor/patch with passing CI, approve.
+4. For **individual carve-out PRs** (single package name in title):
+   - These are high/medium-risk deps excluded from grouping. Read the package's release notes.
+   - **Prisma**: Check for migration format changes or breaking generated types. After merge, `npx prisma generate` must be run.
+   - **Playwright**: Browser binaries must match. After merge, `npx playwright install` is required.
+   - **Anthropic SDK**: Check for response shape or method deprecation changes. Test the orchestrator pipeline.
+   - Flag any concerns and do not approve if breaking changes are detected.
+5. Security update PRs (from Dependabot security alerts) should be prioritized — review and approve promptly.

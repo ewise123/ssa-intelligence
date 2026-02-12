@@ -102,3 +102,28 @@ Copy `backend/.env.example` to `backend/.env` and fill in required values (DATAB
   - Types: `feat` | `fix` | `refactor` | `perf` | `chore` | `docs` | `test` | `ci` | `build`
 - Use the template verbatim and do not remove sections.
 - Always update CHANGELOG.md before creating a PR.
+
+## Dependabot PR Review
+
+Dependabot opens automated dependency update PRs every Monday. **Humans should not merge these directly.** An LLM agent must review and approve every Dependabot PR before it is merged.
+
+### Review checklist
+
+1. **CI must pass.** Do not approve if any check is failing.
+2. **Verify the diff is dependency-only** — only `package.json` and `package-lock.json` should change. Flag any unexpected source code changes.
+3. **Grouped PRs** (title: "bump the \<group\> group in /\<dir\> with N updates"):
+   - These batch minor/patch bumps for low-risk dependencies.
+   - Skim the package list. If CI passes and nothing looks unusual, approve.
+4. **Individual carve-out PRs** (title: "bump \<package\> from X to Y"):
+   - These are high/medium-risk deps excluded from grouping. Extra scrutiny required.
+   - Read the package's changelog/release notes for the version range being bumped.
+   - **Prisma** (`@prisma/client`, `prisma`): Check for breaking generated types or migration format changes. Post-merge requires `npx prisma generate`.
+   - **Playwright**: Browser binaries must match the library version. Post-merge requires `npx playwright install`. Test PDF export.
+   - **Anthropic SDK** (`@anthropic-ai/sdk`): Check for response shape changes or deprecated methods. Test the orchestrator pipeline end-to-end.
+   - **three.js ecosystem** (`three`, `@react-three/fiber`, `three-stdlib`, `camera-controls`, `@types/three`): These must be bumped in lockstep. If only one is bumped, do not approve — coordinate a combined upgrade.
+   - Do not approve if breaking changes are detected. Leave a comment explaining the risk.
+5. **Security PRs** (from Dependabot security alerts): Prioritize these. Review and approve promptly.
+
+### What is excluded
+
+- **Major version bumps** are ignored by Dependabot config. These require intentional migration work and should be handled as dedicated feature branches, not via Dependabot.
