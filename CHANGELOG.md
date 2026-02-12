@@ -19,6 +19,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Add Dependabot with weekly grouped version updates for backend, frontend, and GitHub Actions; high/medium-risk deps (Prisma, Playwright, Anthropic SDK, three.js ecosystem) excluded from groups for individual manual review.
 - Skip changelog CI check for Dependabot PRs.
 - Ignore major version bumps in Dependabot — only minor/patch PRs are opened automatically.
+- Add Dependabot PR review instructions to CLAUDE.md, AGENTS.md, and CONTRIBUTING.md — LLM agents must review every Dependabot PR before merge.
 
 ### Refactored
 - Add `vite-env.d.ts` and remove all `(import.meta as any)` casts across 12 frontend files — uses Vite's built-in `ImportMeta` types instead.
