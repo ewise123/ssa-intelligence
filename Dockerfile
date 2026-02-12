@@ -1,8 +1,8 @@
 # Multi-stage build for full app (backend + frontend)
 # This does not change local dev; existing backend Dockerfile/docker-compose remain untouched.
 
-# Playwright 1.57.0 validated via `npm run test:playwright` (browser launch smoke check).
-FROM mcr.microsoft.com/playwright:v1.57.0-jammy AS backend-build
+# Playwright 1.58.2 validated via `npm run test:playwright` (browser launch smoke check).
+FROM mcr.microsoft.com/playwright:v1.58.2-jammy AS backend-build
 WORKDIR /app/backend
 
 COPY backend/package*.json ./
@@ -22,7 +22,7 @@ RUN npm ci
 COPY frontend ./
 RUN npm run build
 
-FROM mcr.microsoft.com/playwright:v1.57.0-jammy AS runner
+FROM mcr.microsoft.com/playwright:v1.58.2-jammy AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
