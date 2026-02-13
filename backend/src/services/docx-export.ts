@@ -219,14 +219,42 @@ export async function generateResearchDocx(params: {
   const dateStr = new Date(job.createdAt).toISOString().slice(0, 10);
 
   // ── Cover page (vertically + horizontally centered) ──
-  const coverChildren: Paragraph[] = [
+  // Large centered logo above title (matching PDF cover page)
+  const coverLogoWidth = 450;
+  const coverLogoHeight = Math.round(coverLogoWidth / 6.4); // maintain ~6.4:1 aspect ratio
+  const coverChildren: Paragraph[] = [];
+  try {
+    const logoData = loadAsset('ssa-header-logo.jpg');
+    coverChildren.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 400 },
+        children: [
+          new ImageRun({
+            type: 'jpg',
+            data: logoData,
+            transformation: { width: coverLogoWidth, height: coverLogoHeight },
+            altText: {
+              title: 'SSA & Company',
+              description: 'SSA & Company logo',
+              name: 'SSA Logo',
+            },
+          }),
+        ],
+      }),
+    );
+  } catch {
+    // Logo not available — skip
+  }
+
+  coverChildren.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
       heading: HeadingLevel.HEADING_1,
       children: [new TextRun({ text: job.companyName })],
       spacing: { before: 0, after: 120 },
     }),
-  ];
+  );
 
   const metaLines = [
     `Geography: ${job.geography || 'N/A'}`,
@@ -319,9 +347,10 @@ export async function generateResearchDocx(params: {
       },
     },
     sections: [
-      // Section 1: Cover page — vertically centered
+      // Section 1: Cover page — vertically centered, no header on first page
       {
         properties: {
+          titlePage: true,
           page: {
             size: {
               width: 12240,
@@ -341,7 +370,10 @@ export async function generateResearchDocx(params: {
           column: { separate: true, space: 720 },
           verticalAlign: VerticalAlignSection.CENTER,
         },
-        headers: { default: header },
+        headers: {
+          default: header,
+          first: new Header({ children: [new Paragraph({ children: [] })] }),
+        },
         footers: { default: footer },
         children: coverChildren,
       },
