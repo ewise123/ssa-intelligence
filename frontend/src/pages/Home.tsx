@@ -33,7 +33,7 @@ export const Home: React.FC<HomeProps> = ({ jobs, loading = false, reportBluepri
   );
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
-  const [exportingId, setExportingId] = useState<string | null>(null);
+  const [exportingKey, setExportingKey] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
@@ -132,7 +132,7 @@ export const Home: React.FC<HomeProps> = ({ jobs, loading = false, reportBluepri
 
   const handleExport = async (job: ResearchJob, format: 'pdf' | 'docx' | 'markdown' = 'pdf') => {
     try {
-      setExportingId(job.id);
+      setExportingKey(`${job.id}:${format}`);
       const res = await fetch(`${API_BASE}/research/${job.id}/export/${format}`);
       if (!res.ok) {
         const text = await res.text();
@@ -153,7 +153,7 @@ export const Home: React.FC<HomeProps> = ({ jobs, loading = false, reportBluepri
       logger.error(`${format.toUpperCase()} export failed`, err);
       showToast(`Failed to export ${format.toUpperCase()}. Please try again.`, 'error');
     } finally {
-      setExportingId(null);
+      setExportingKey(null);
       setOpenMenuId(null);
     }
   };
@@ -473,26 +473,26 @@ export const Home: React.FC<HomeProps> = ({ jobs, loading = false, reportBluepri
                                         >
                                           <button
                                             onClick={() => handleExport(job, 'pdf')}
-                                            disabled={exportingId === job.id}
+                                            disabled={exportingKey?.startsWith(job.id) ?? false}
                                             className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 disabled:opacity-60"
                                           >
-                                            {exportingId === job.id ? <Loader2 size={14} className="animate-spin text-slate-500" /> : null}
+                                            {exportingKey === `${job.id}:pdf` ? <Loader2 size={14} className="animate-spin text-slate-500" /> : null}
                                             Export PDF
                                           </button>
                                           <button
                                             onClick={() => handleExport(job, 'docx')}
-                                            disabled={exportingId === job.id}
+                                            disabled={exportingKey?.startsWith(job.id) ?? false}
                                             className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 disabled:opacity-60"
                                           >
-                                            {exportingId === job.id ? <Loader2 size={14} className="animate-spin text-slate-500" /> : null}
+                                            {exportingKey === `${job.id}:docx` ? <Loader2 size={14} className="animate-spin text-slate-500" /> : null}
                                             Export DOCX
                                           </button>
                                           <button
                                             onClick={() => handleExport(job, 'markdown')}
-                                            disabled={exportingId === job.id}
+                                            disabled={exportingKey?.startsWith(job.id) ?? false}
                                             className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 disabled:opacity-60"
                                           >
-                                            {exportingId === job.id ? <Loader2 size={14} className="animate-spin text-slate-500" /> : null}
+                                            {exportingKey === `${job.id}:markdown` ? <Loader2 size={14} className="animate-spin text-slate-500" /> : null}
                                             Export Markdown
                                           </button>
                                           <button
