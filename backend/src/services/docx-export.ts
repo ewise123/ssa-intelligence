@@ -13,6 +13,7 @@ import {
   ExternalHyperlink,
   AlignmentType,
   HeadingLevel,
+  Table,
   TabStopType,
   HorizontalPositionRelativeFrom,
   VerticalPositionRelativeFrom,
@@ -279,7 +280,7 @@ export async function generateResearchDocx(params: {
   }
 
   // ── Body content ──
-  const bodyChildren: (Paragraph | import('docx').Table)[] = [];
+  const bodyChildren: (Paragraph | Table)[] = [];
 
   for (const section of exportSections) {
     const rendered = renderSection(section.id, section.data);
