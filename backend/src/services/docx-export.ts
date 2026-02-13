@@ -374,7 +374,7 @@ export async function generateResearchDocx(params: {
           default: header,
           first: new Header({ children: [new Paragraph({ children: [] })] }),
         },
-        footers: { default: footer },
+        footers: { default: footer, first: footer },
         children: coverChildren,
       },
       // Section 2: Body content — starts on new page (default nextPage)
