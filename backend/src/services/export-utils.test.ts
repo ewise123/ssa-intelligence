@@ -92,6 +92,7 @@ describe('export-utils', () => {
       expect(md).toContain('## Financial Snapshot');
       expect(md).toContain('Key insight');
       expect(md).toContain('Good financials');
+      expect(md).not.toContain('Status:');
     });
 
     it('handles empty sections', () => {
@@ -112,6 +113,23 @@ describe('export-utils', () => {
       });
 
       expect(md).toContain('_No content generated for this section._');
+    });
+
+    it('skips title block when skipTitleBlock is true', () => {
+      const md = buildResearchMarkdown({
+        companyName: 'SkipCo',
+        geography: 'US',
+        date: '2025-01-01',
+        exportSections: [
+          { id: 'exec_summary', title: 'Executive Summary', status: 'completed', data: { bullet_points: [{ bullet: 'A' }] } },
+        ],
+        skipTitleBlock: true,
+      });
+
+      expect(md).not.toContain('# SkipCo');
+      expect(md).not.toContain('Geography');
+      expect(md).not.toContain('---');
+      expect(md).toContain('## Executive Summary');
     });
   });
 });

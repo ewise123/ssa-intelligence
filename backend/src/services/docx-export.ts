@@ -231,7 +231,6 @@ export async function generateResearchDocx(params: {
   const metaLines = [
     `Geography: ${job.geography || 'N/A'}`,
     `Industry: ${job.industry || 'N/A'}`,
-    `Status: ${job.status}`,
     `Date: ${dateStr}`,
   ];
   for (const line of metaLines) {

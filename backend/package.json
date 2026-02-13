@@ -50,6 +50,7 @@
     "jsonrepair": "^3.13.0",
     "marked": "^15.0.12",
     "node-cron": "^3.0.3",
+    "pdf-lib": "^1.17.1",
     "pdfkit": "^0.17.2",
     "playwright": "1.58.2",
     "rss-parser": "^3.13.0",

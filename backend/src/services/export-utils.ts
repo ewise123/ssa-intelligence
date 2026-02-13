@@ -116,27 +116,26 @@ export const buildResearchMarkdown = (params: {
   companyName: string;
   geography?: string | null;
   industry?: string | null;
-  status?: string;
   date?: string;
   exportSections: ExportSection[];
+  skipTitleBlock?: boolean;
 }): string => {
   const { companyName, exportSections } = params;
   const chunks: string[] = [];
 
-  // Title page
-  chunks.push(`# ${companyName}`);
-  chunks.push('');
-  if (params.geography) chunks.push(`**Geography:** ${params.geography}`);
-  if (params.industry) chunks.push(`**Industry:** ${params.industry}`);
-  if (params.status) chunks.push(`**Status:** ${params.status}`);
-  if (params.date) chunks.push(`**Date:** ${params.date}`);
-  chunks.push('');
-  chunks.push('---');
-  chunks.push('');
+  if (!params.skipTitleBlock) {
+    chunks.push(`# ${companyName}`);
+    chunks.push('');
+    if (params.geography) chunks.push(`**Geography:** ${params.geography}`);
+    if (params.industry) chunks.push(`**Industry:** ${params.industry}`);
+    if (params.date) chunks.push(`**Date:** ${params.date}`);
+    chunks.push('');
+    chunks.push('---');
+    chunks.push('');
+  }
 
-  exportSections.forEach(({ id: sectionId, title, status, data }) => {
+  exportSections.forEach(({ id: sectionId, title, data }) => {
     chunks.push(`## ${title}`);
-    chunks.push(`_Status: ${status}_`);
     const formatted = formatSectionContent(sectionId as SectionId, data);
     if (formatted && formatted.trim().length) {
       chunks.push(formatted);

@@ -50,7 +50,6 @@ export async function exportResearchMarkdown(req: Request, res: Response) {
       companyName: job.companyName,
       geography: job.geography,
       industry: job.industry,
-      status: job.status,
       date: dateStr,
       exportSections,
     });
