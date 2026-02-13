@@ -6,7 +6,15 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 
 ## [Unreleased]
 
+### Added
+- DOCX and Markdown export routes with SSA-branded cover page, header logo, and footer.
+- DOCX OOXML post-processing pipeline for Word compliance (relationship IDs, section properties, footer anchor fixes).
+- DOCX and section renderer unit tests (42 tests).
+
 ### Fixed
+- Resolve "Word found unreadable content" errors in DOCX export via OOXML compliance fixes.
+- Show footer on DOCX title page while keeping header suppressed.
+- Show export loading spinner only on the clicked format button instead of all buttons.
 - Remove `z-10` from content wrapper in Layout that created a stacking context trapping modals behind the header and sidebar.
 - Add `backdrop-blur-sm` to Prompt Library edit modal overlay to match the rest of the app.
 - Render all modals and toasts via React portals to `document.body` so backdrop blur covers the full viewport including the sticky header.
