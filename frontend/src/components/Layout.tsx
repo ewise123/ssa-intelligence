@@ -211,16 +211,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, activePath
                   <span className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Admin</span>
                 </div>
               )}
-              {isSuperAdmin && (
-                <button
-                  onClick={() => onNavigate('/admin')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activePath === '/admin' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${isCollapsed ? 'justify-center px-2' : ''}`}
-                  title={isCollapsed ? "Users & Groups" : undefined}
-                >
-                  <Users size={18} className="flex-shrink-0" />
-                  {!isCollapsed && <span className="whitespace-nowrap">Users & Groups</span>}
-                </button>
-              )}
+              <button
+                onClick={() => onNavigate('/admin')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activePath === '/admin' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${isCollapsed ? 'justify-center px-2' : ''}`}
+                title={isCollapsed ? "Users & Groups" : undefined}
+              >
+                <Users size={18} className="flex-shrink-0" />
+                {!isCollapsed && <span className="whitespace-nowrap">Users & Groups</span>}
+              </button>
               <button
                 onClick={() => onNavigate('/admin/metrics')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activePath === '/admin/metrics' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${isCollapsed ? 'justify-center px-2' : ''}`}

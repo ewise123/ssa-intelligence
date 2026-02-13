@@ -27,7 +27,7 @@ import { deleteResearchJob } from './api/research/delete.js';
 import { rerunResearchSections } from './api/research/rerun.js';
 import { submitFeedback, listFeedback, updateFeedback, deleteFeedback } from './api/feedback.js';
 import { exportResearchPdf } from './api/research/export-pdf.js';
-import { authMiddleware, requireAdmin, requireActiveUser, requireSuperAdmin } from './middleware/auth.js';
+import { authMiddleware, requireAdmin, requireActiveUser } from './middleware/auth.js';
 import { getMe } from './api/me.js';
 import { listGroups } from './api/groups/list.js';
 import { listUsers, getUser, updateUser, deleteUser, createUser } from './api/admin/users.js';
@@ -216,27 +216,27 @@ app.delete('/api/feedback/:id', ...applyLimiter(writeLimiter), authMiddleware, r
 app.get('/api/groups', authMiddleware, requireActiveUser, listGroups);
 
 // ============================================================================
-// ADMIN: USER & GROUP MANAGEMENT (super-admin only)
+// ADMIN: USER & GROUP MANAGEMENT (admin only)
 // ============================================================================
 
-app.get('/api/admin/users', authMiddleware, requireActiveUser, requireSuperAdmin, listUsers);
-app.post('/api/admin/users', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireSuperAdmin, createUser);
-app.get('/api/admin/users/:id', authMiddleware, requireActiveUser, requireSuperAdmin, getUser);
-app.patch('/api/admin/users/:id', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireSuperAdmin, updateUser);
-app.delete('/api/admin/users/:id', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireSuperAdmin, deleteUser);
-app.get('/api/admin/groups', authMiddleware, requireActiveUser, requireSuperAdmin, listAdminGroups);
-app.post('/api/admin/groups', authMiddleware, requireActiveUser, requireSuperAdmin, createGroup);
-app.delete('/api/admin/groups/:groupId', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireSuperAdmin, deleteGroup);
-app.post('/api/admin/groups/:groupId/members', authMiddleware, requireActiveUser, requireSuperAdmin, addGroupMember);
-app.delete('/api/admin/groups/:groupId/members/:userId', authMiddleware, requireActiveUser, requireSuperAdmin, removeGroupMember);
+app.get('/api/admin/users', authMiddleware, requireActiveUser, requireAdmin, listUsers);
+app.post('/api/admin/users', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireAdmin, createUser);
+app.get('/api/admin/users/:id', authMiddleware, requireActiveUser, requireAdmin, getUser);
+app.patch('/api/admin/users/:id', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireAdmin, updateUser);
+app.delete('/api/admin/users/:id', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireAdmin, deleteUser);
+app.get('/api/admin/groups', authMiddleware, requireActiveUser, requireAdmin, listAdminGroups);
+app.post('/api/admin/groups', authMiddleware, requireActiveUser, requireAdmin, createGroup);
+app.delete('/api/admin/groups/:groupId', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireAdmin, deleteGroup);
+app.post('/api/admin/groups/:groupId/members', authMiddleware, requireActiveUser, requireAdmin, addGroupMember);
+app.delete('/api/admin/groups/:groupId/members/:userId', authMiddleware, requireActiveUser, requireAdmin, removeGroupMember);
 
 // ============================================================================
-// ADMIN: INVITE MANAGEMENT (super-admin only)
+// ADMIN: INVITE MANAGEMENT (admin only)
 // ============================================================================
 
-app.get('/api/admin/invites', ...applyLimiter(getLimiter), authMiddleware, requireActiveUser, requireSuperAdmin, listInvites);
-app.post('/api/admin/invites', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireSuperAdmin, createInvite);
-app.delete('/api/admin/invites/:id', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireSuperAdmin, revokeInvite);
+app.get('/api/admin/invites', ...applyLimiter(getLimiter), authMiddleware, requireActiveUser, requireAdmin, listInvites);
+app.post('/api/admin/invites', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireAdmin, createInvite);
+app.delete('/api/admin/invites/:id', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, requireAdmin, revokeInvite);
 
 // ============================================================================
 // ADMIN: METRICS, PRICING, PROMPTS (admin only, not super-admin restricted)

@@ -14,6 +14,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Center company reports modal vertically instead of top-aligned.
 
 ### Changed
+- Open User/Group/Invite management to all admins (role: ADMIN) instead of restricting to the single super-admin.
 - Replace ShaderGradient hero background with React Bits Threads animation (OGL-based WebGL) — white animated threads on brand-700 with mouse interaction.
 - Remove `@shadergradient/react`, `@react-three/fiber`, `three`, `three-stdlib`, `camera-controls`, and `@types/three` dependencies; add `ogl`.
 - Add Dependabot with weekly grouped version updates for backend, frontend, and GitHub Actions; high/medium-risk deps (Prisma, Playwright, Anthropic SDK, three.js ecosystem) excluded from groups for individual manual review.

@@ -103,14 +103,12 @@ export const AdminUsers: React.FC<{ isAdmin?: boolean; isSuperAdmin?: boolean; c
       setUsers(userRes.results || []);
       setGroups(groupRes.results || []);
 
-      // Load invites if super-admin
-      if (isSuperAdmin) {
-        try {
-          const inviteRes = await fetchJson('/admin/invites');
-          setInvites(inviteRes.results || []);
-        } catch {
-          // Non-critical — invites may not be accessible if not super-admin
-        }
+      // Load invites
+      try {
+        const inviteRes = await fetchJson('/admin/invites');
+        setInvites(inviteRes.results || []);
+      } catch {
+        // Non-critical — invites may not be accessible
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load admin data.');
@@ -120,9 +118,9 @@ export const AdminUsers: React.FC<{ isAdmin?: boolean; isSuperAdmin?: boolean; c
   };
 
   useEffect(() => {
-    if (!isSuperAdmin) return;
+    if (!isAdmin) return;
     loadData().catch(() => {});
-  }, [isSuperAdmin]);
+  }, [isAdmin]);
 
   const handleCreateGroup = async () => {
     const name = newGroupName.trim();
@@ -310,10 +308,10 @@ export const AdminUsers: React.FC<{ isAdmin?: boolean; isSuperAdmin?: boolean; c
     }
   };
 
-  if (!isSuperAdmin) {
+  if (!isAdmin) {
     return (
       <div className="bg-white border border-slate-200 rounded-xl p-6 text-slate-500">
-        Super-admin access required.
+        Admin access required.
       </div>
     );
   }
