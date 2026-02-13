@@ -3,10 +3,10 @@ import crypto from 'crypto';
 import { prisma } from '../../lib/prisma.js';
 import { parseAllowedDomains, isAllowedDomain } from '../../lib/domain-validation.js';
 
-/** POST /api/admin/invites — Create a new invite (super-admin only) */
+/** POST /api/admin/invites — Create a new invite (admin only) */
 export async function createInvite(req: Request, res: Response) {
-  if (!req.auth?.isSuperAdmin) {
-    return res.status(403).json({ error: 'Super-admin access required' });
+  if (!req.auth?.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
   }
 
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
@@ -173,10 +173,10 @@ export async function acceptInvite(req: Request, res: Response) {
   }
 }
 
-/** GET /api/admin/invites — List all invites (super-admin only) */
+/** GET /api/admin/invites — List all invites (admin only) */
 export async function listInvites(req: Request, res: Response) {
-  if (!req.auth?.isSuperAdmin) {
-    return res.status(403).json({ error: 'Super-admin access required' });
+  if (!req.auth?.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
   }
 
   try {
@@ -227,10 +227,10 @@ export async function listInvites(req: Request, res: Response) {
   }
 }
 
-/** DELETE /api/admin/invites/:id — Revoke an unused invite (super-admin only) */
+/** DELETE /api/admin/invites/:id — Revoke an unused invite (admin only) */
 export async function revokeInvite(req: Request, res: Response) {
-  if (!req.auth?.isSuperAdmin) {
-    return res.status(403).json({ error: 'Super-admin access required' });
+  if (!req.auth?.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
   }
 
   const { id } = req.params;

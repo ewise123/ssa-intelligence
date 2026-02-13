@@ -7,7 +7,7 @@ SSA Intelligence uses a layered auth model:
 1. **oauth2-proxy** handles authentication (login, sessions, identity headers)
 2. **Auth middleware** reads proxy headers, upserts the user, and attaches `req.auth`
 3. **User status** (ACTIVE / PENDING) gates access to protected routes
-4. **Role guards** (member / admin / super-admin) restrict admin functionality
+4. **Role guards** (member / admin) restrict admin functionality
 5. **Group-based visibility** scopes research jobs by team membership
 
 ## Authentication (oauth2-proxy)
@@ -59,15 +59,14 @@ When a request arrives with a valid email header that has no matching user recor
 
 ## Roles & Permissions
 
-### Three tiers
+### Two tiers
 
 | Role | Who | Access |
 |------|-----|--------|
 | **Member** | Any domain-validated user | Research, news, groups, feedback (own + group-visible) |
-| **Admin** | Emails in `ADMIN_EMAILS` | Everything members can do + metrics, pricing, prompts. Can see all research jobs. |
-| **Super-admin** | The `SUPER_ADMIN_EMAIL` | Everything admins can do + user management, group management, invite management. |
+| **Admin** | Emails in `ADMIN_EMAILS` | Everything members can do + metrics, pricing, prompts, user/group/invite management. Can see all research jobs. |
 
-Note: Super-admin is not a separate role in the database — it's determined at runtime by comparing the user's email to `SUPER_ADMIN_EMAIL`. A super-admin's DB role is still ADMIN or MEMBER.
+Note: `SUPER_ADMIN_EMAIL` still exists as an env var and grants automatic ACTIVE status on first login, but it no longer gates any additional routes. All admin functionality is available to any user with `role: ADMIN`.
 
 ### Middleware guards
 
@@ -75,8 +74,7 @@ Note: Super-admin is not a separate role in the database — it's determined at 
 |-----------|----------|---------|
 | `authMiddleware` | `middleware/auth.ts` | Resolves identity from proxy headers, upserts user, attaches `req.auth`. Applied to all protected routes. |
 | `requireActiveUser` | `middleware/auth.ts` | Returns 403 if `req.auth.status !== 'ACTIVE'`. Applied to all routes except `/api/me` and `/api/invites/accept`. |
-| `requireAdmin` | `middleware/auth.ts` | Returns 403 if `req.auth.isAdmin` is false. Used for metrics, pricing, prompts. |
-| `requireSuperAdmin` | `middleware/auth.ts` | Returns 403 if `req.auth.isSuperAdmin` is false. Used for user/group/invite management. |
+| `requireAdmin` | `middleware/auth.ts` | Returns 403 if `req.auth.isAdmin` is false. Used for all admin routes (metrics, pricing, prompts, user/group/invite management). |
 
 ### Route middleware chains
 
@@ -89,21 +87,19 @@ POST /api/invites/accept    → authMiddleware → acceptInvite
 GET  /api/research          → authMiddleware → requireActiveUser → handler
 POST /api/research/generate → authMiddleware → requireActiveUser → handler
 
-# Admin routes
+# Admin routes (metrics, pricing, prompts, users, groups, invites)
 GET  /api/admin/metrics     → authMiddleware → requireActiveUser → requireAdmin → handler
-
-# Super-admin routes
-GET  /api/admin/users       → authMiddleware → requireActiveUser → requireSuperAdmin → handler
-POST /api/admin/invites     → authMiddleware → requireActiveUser → requireSuperAdmin → handler
+GET  /api/admin/users       → authMiddleware → requireActiveUser → requireAdmin → handler
+POST /api/admin/invites     → authMiddleware → requireActiveUser → requireAdmin → handler
 ```
 
 ## Invite System
 
 ### Flow
 
-1. Super-admin creates an invite via `POST /api/admin/invites` with the target email.
+1. An admin creates an invite via `POST /api/admin/invites` with the target email.
 2. Backend generates a 256-bit cryptographic token (`crypto.randomBytes(32)`), stores the invite with a 7-day expiry, and returns the invite URL.
-3. Super-admin shares the URL (`/#/invite/{token}`) with the user.
+3. The admin shares the URL (`/#/invite/{token}`) with the user.
 4. User visits the URL. The frontend calls `POST /api/invites/accept` with the token.
 5. Backend validates: token exists, not used, not expired, email matches the authenticated user.
 6. Backend atomically marks the invite as used and sets the user's status to ACTIVE.
@@ -121,9 +117,9 @@ POST /api/admin/invites     → authMiddleware → requireActiveUser → require
 
 | Method | Path | Guard | Purpose |
 |--------|------|-------|---------|
-| `POST` | `/api/admin/invites` | super-admin | Create invite |
-| `GET` | `/api/admin/invites` | super-admin | List all invites |
-| `DELETE` | `/api/admin/invites/:id` | super-admin | Revoke unused invite |
+| `POST` | `/api/admin/invites` | admin | Create invite |
+| `GET` | `/api/admin/invites` | admin | List all invites |
+| `DELETE` | `/api/admin/invites/:id` | admin | Revoke unused invite |
 | `POST` | `/api/invites/accept` | auth only | Accept invite (no active-user check) |
 
 ## Group-Based Visibility
@@ -144,7 +140,7 @@ The visibility filter is built by `buildVisibilityWhere()` in `auth.ts`.
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `ADMIN_EMAILS` | Yes | Comma-separated list of admin emails. Auto-promoted to ADMIN/ACTIVE. |
-| `SUPER_ADMIN_EMAIL` | Yes | Single email. Gets super-admin powers (user/group/invite management). |
+| `SUPER_ADMIN_EMAIL` | No | Single email. Auto-promoted to ACTIVE status on first login. No longer gates additional routes beyond what `ADMIN_EMAILS` provides. |
 | `AUTH_EMAIL_DOMAIN` | No | Comma-separated allowed domains. Defaults to `ssaandco.com`. Use `*` to allow all. |
 | `OAUTH2_PROXY_EMAIL_DOMAINS` | No | Fallback for `AUTH_EMAIL_DOMAIN`. |
 | `DEV_ADMIN_EMAIL` | No | Dev-only fallback email when no proxy headers present. |

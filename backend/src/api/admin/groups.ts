@@ -9,8 +9,8 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, '');
 
 export async function listAdminGroups(req: Request, res: Response) {
-  if (!req.auth || !req.auth.isSuperAdmin) {
-    return res.status(403).json({ error: 'Super-admin access required' });
+  if (!req.auth || !req.auth.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
   }
 
   try {
@@ -39,8 +39,8 @@ export async function listAdminGroups(req: Request, res: Response) {
 }
 
 export async function createGroup(req: Request, res: Response) {
-  if (!req.auth || !req.auth.isSuperAdmin) {
-    return res.status(403).json({ error: 'Super-admin access required' });
+  if (!req.auth || !req.auth.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
   }
 
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
@@ -63,8 +63,8 @@ export async function createGroup(req: Request, res: Response) {
 }
 
 export async function addGroupMember(req: Request, res: Response) {
-  if (!req.auth || !req.auth.isSuperAdmin) {
-    return res.status(403).json({ error: 'Super-admin access required' });
+  if (!req.auth || !req.auth.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
   }
 
   const { groupId } = req.params;
@@ -107,8 +107,8 @@ export async function addGroupMember(req: Request, res: Response) {
 }
 
 export async function removeGroupMember(req: Request, res: Response) {
-  if (!req.auth || !req.auth.isSuperAdmin) {
-    return res.status(403).json({ error: 'Super-admin access required' });
+  if (!req.auth || !req.auth.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
   }
 
   const { groupId, userId } = req.params;
@@ -129,8 +129,8 @@ export async function removeGroupMember(req: Request, res: Response) {
 }
 
 export async function deleteGroup(req: Request, res: Response) {
-  if (!req.auth || !req.auth.isSuperAdmin) {
-    return res.status(403).json({ error: 'Super-admin access required' });
+  if (!req.auth || !req.auth.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
   }
 
   const { groupId } = req.params;
