@@ -6,6 +6,9 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 
 ## [Unreleased]
 
+### Fixed
+- Copy `backend/assets/` into Docker production image so SSA logos appear in PDF and DOCX exports.
+
 ## [1.2.0] - 2026-02-13
 
 ### Added
