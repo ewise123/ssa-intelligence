@@ -27,6 +27,8 @@ import { deleteResearchJob } from './api/research/delete.js';
 import { rerunResearchSections } from './api/research/rerun.js';
 import { submitFeedback, listFeedback, updateFeedback, deleteFeedback } from './api/feedback.js';
 import { exportResearchPdf } from './api/research/export-pdf.js';
+import { exportResearchMarkdown } from './api/research/export-markdown.js';
+import { exportResearchDocx } from './api/research/export-docx.js';
 import { authMiddleware, requireAdmin, requireActiveUser, requireSuperAdmin } from './middleware/auth.js';
 import { getMe } from './api/me.js';
 import { listGroups } from './api/groups/list.js';
@@ -205,6 +207,8 @@ app.get('/api/research', ...applyLimiter(getLimiter), authMiddleware, requireAct
 app.post('/api/research/:id/cancel', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, cancelResearchJob);
 app.delete('/api/research/:id', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, deleteResearchJob);
 app.get('/api/research/:id/export/pdf', ...applyLimiter(exportLimiter), authMiddleware, requireActiveUser, exportResearchPdf);
+app.get('/api/research/:id/export/markdown', ...applyLimiter(exportLimiter), authMiddleware, requireActiveUser, exportResearchMarkdown);
+app.get('/api/research/:id/export/docx', ...applyLimiter(exportLimiter), authMiddleware, requireActiveUser, exportResearchDocx);
 app.post('/api/research/:id/rerun', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, rerunResearchSections);
 
 // Bug Tracker / Feedback routes

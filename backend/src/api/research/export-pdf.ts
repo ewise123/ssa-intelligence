@@ -2,8 +2,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { chromium } from 'playwright';
 import { marked } from 'marked';
-import { formatSectionContent, sectionOrder } from '../../services/section-formatter.js';
-import { buildExportSections, isExportReady } from '../../services/export-utils.js';
+import { sectionOrder } from '../../services/section-formatter.js';
+import { buildExportSections, buildResearchMarkdown, isExportReady } from '../../services/export-utils.js';
 import { getReportBlueprint } from '../../services/report-blueprints.js';
 import { buildVisibilityWhere } from '../../middleware/auth.js';
 import { safeErrorMessage } from '../../lib/error-utils.js';
@@ -15,7 +15,7 @@ const htmlTemplate = (params: { title: string; meta: string[]; body: string }) =
   <meta charset="utf-8" />
   <style>
     @page { margin: 40px 32px 40px 32px; }
-    body { font-family: "Inter", "Helvetica Neue", Arial, sans-serif; color: #111827; }
+    body { font-family: "Inter", "Helvetica Neue", Arial, sans-serif; color: #111827; margin: 0; }
     h1 { font-size: 28px; margin: 0 0 8px 0; }
     h2 { font-size: 20px; margin: 24px 0 8px 0; }
     h3 { font-size: 16px; margin: 18px 0 6px 0; }
@@ -28,10 +28,21 @@ const htmlTemplate = (params: { title: string; meta: string[]; body: string }) =
     code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 11px; }
     ul { padding-left: 18px; }
     ol { padding-left: 20px; }
+    .cover-page {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+      page-break-after: always;
+    }
+    .cover-page h1 { font-size: 36px; margin-bottom: 16px; }
+    .cover-page .meta { font-size: 13px; }
   </style>
 </head>
 <body>
-  <div style="margin-bottom:16px;">
+  <div class="cover-page">
     <h1>${params.title}</h1>
     ${params.meta.map((m) => `<div class="meta">${m}</div>`).join('')}
   </div>
@@ -80,22 +91,14 @@ export async function exportResearchPdf(req: Request, res: Response) {
       fallbackOrder: sectionOrder
     });
 
-    // Build Markdown using the formatter (mirrors frontend)
-    const chunks: string[] = [];
-
-    exportSections.forEach(({ id: sectionId, title, status, data }) => {
-      chunks.push(`## ${title}`);
-      chunks.push(`_Status: ${status}_`);
-      const formatted = formatSectionContent(sectionId as any, data);
-      if (formatted && formatted.trim().length) {
-        chunks.push(formatted);
-      } else {
-        chunks.push('_No content generated for this section._');
-      }
-      chunks.push('');
+    const markdown = buildResearchMarkdown({
+      companyName: job.companyName,
+      geography: job.geography,
+      industry: job.industry,
+      status: job.status,
+      date: dateStr,
+      exportSections,
     });
-
-    const markdown = chunks.join('\n');
     const htmlBody = marked.parse(markdown);
 
     const html = htmlTemplate({

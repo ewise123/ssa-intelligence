@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildExportSections, isExportReady } from './export-utils.js';
+import { buildExportSections, buildResearchMarkdown, isExportReady } from './export-utils.js';
 
 type Blueprint = { sections: { id: string; title: string; defaultSelected?: boolean }[] };
 
@@ -65,5 +65,53 @@ describe('export-utils', () => {
     expect(isExportReady('completed')).toBe(true);
     expect(isExportReady('completed_with_errors')).toBe(true);
     expect(isExportReady('failed')).toBe(false);
+  });
+
+  describe('buildResearchMarkdown', () => {
+    it('produces markdown with company name heading and section headers', () => {
+      const md = buildResearchMarkdown({
+        companyName: 'TestCo',
+        exportSections: [
+          {
+            id: 'exec_summary',
+            title: 'Executive Summary',
+            status: 'completed',
+            data: { bullet_points: [{ bullet: 'Key insight', sources: ['S1'] }] },
+          },
+          {
+            id: 'financial_snapshot',
+            title: 'Financial Snapshot',
+            status: 'completed',
+            data: { summary: 'Good financials' },
+          },
+        ],
+      });
+
+      expect(md).toContain('# TestCo');
+      expect(md).toContain('## Executive Summary');
+      expect(md).toContain('## Financial Snapshot');
+      expect(md).toContain('Key insight');
+      expect(md).toContain('Good financials');
+    });
+
+    it('handles empty sections', () => {
+      const md = buildResearchMarkdown({
+        companyName: 'EmptyCo',
+        exportSections: [],
+      });
+
+      expect(md).toContain('# EmptyCo');
+    });
+
+    it('shows placeholder for sections with no content', () => {
+      const md = buildResearchMarkdown({
+        companyName: 'NullCo',
+        exportSections: [
+          { id: 'exec_summary', title: 'Executive Summary', status: 'completed', data: null },
+        ],
+      });
+
+      expect(md).toContain('_No content generated for this section._');
+    });
   });
 });

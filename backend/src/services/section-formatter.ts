@@ -1,6 +1,6 @@
 // Utilities to format section content into Markdown (ported from frontend)
 
-type SectionId =
+export type SectionId =
   | 'exec_summary'
   | 'financial_snapshot'
   | 'company_overview'
