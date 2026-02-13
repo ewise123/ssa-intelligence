@@ -34,6 +34,7 @@ COPY --from=backend-build /app/backend/node_modules ./backend/node_modules
 COPY --from=backend-build /app/backend/package*.json ./backend/
 COPY --from=backend-build /app/backend/prisma ./backend/prisma
 COPY --from=backend-build /app/backend/prompts ./backend/prompts
+COPY --from=backend-build /app/backend/assets ./backend/assets
 
 # Frontend static build
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
