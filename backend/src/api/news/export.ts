@@ -245,4 +245,69 @@ router.get('/docx', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/news/export/:format/from-data - Export articles from request body (no DB lookup)
+router.post('/:format/from-data', async (req: Request, res: Response) => {
+  try {
+    const { format } = req.params;
+    if (!['pdf', 'markdown', 'docx'].includes(format)) {
+      res.status(400).json({ error: 'Invalid format. Use pdf, markdown, or docx' });
+      return;
+    }
+
+    const { articles } = req.body;
+    if (!Array.isArray(articles) || articles.length === 0) {
+      res.status(400).json({ error: 'articles array is required and must not be empty' });
+      return;
+    }
+
+    // Resolve userName from auth context
+    let userName = 'User';
+    if (req.auth?.userId) {
+      const user = await prisma.user.findUnique({ where: { id: req.auth.userId } });
+      if (user) userName = user.name || user.email;
+    }
+
+    // Map flat search result shape → nested export shape
+    const mapped = articles.map((a: any) => ({
+      headline: a.headline || '',
+      shortSummary: a.shortSummary || null,
+      longSummary: a.longSummary || null,
+      summary: a.summary || null,
+      whyItMatters: a.whyItMatters || null,
+      sourceUrl: a.sourceUrl || '',
+      sourceName: a.sourceName || null,
+      publishedAt: a.publishedAt || null,
+      matchType: a.matchType || null,
+      company: a.company?.name ? a.company : (typeof a.company === 'string' && a.company) ? { name: a.company } : null,
+      person: a.person?.name ? a.person : (typeof a.person === 'string' && a.person) ? { name: a.person } : null,
+      tag: a.tag?.name ? a.tag : (typeof a.category === 'string' && a.category) ? { name: a.category } : null,
+    }));
+
+    const exportOpts = { articles: mapped, userName };
+
+    if (format === 'pdf') {
+      const pdf = await generateNewsDigestPDF(exportOpts);
+      const filename = `sami-deep-dive-${new Date().toISOString().split('T')[0]}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(pdf);
+    } else if (format === 'markdown') {
+      const md = await generateNewsDigestMarkdown(exportOpts);
+      const filename = `sami-deep-dive-${new Date().toISOString().split('T')[0]}.md`;
+      res.setHeader('Content-Type', 'text/markdown');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(md);
+    } else {
+      const docx = await generateNewsDigestDocx(exportOpts);
+      const filename = `sami-deep-dive-${new Date().toISOString().split('T')[0]}.docx`;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(docx);
+    }
+  } catch (error) {
+    console.error('From-data export error:', error);
+    res.status(500).json({ error: 'Failed to generate export' });
+  }
+});
+
 export default router;

@@ -441,9 +441,13 @@ Return maximum 25 results, prioritizing the most actionable and relevant news.`;
   }
 }
 
+// Limits for article processing
+const ARTICLE_PROCESSING_LIMIT = 250;
+const ARTICLE_BATCH_SIZE = 80;
+
 /**
  * Process raw articles with LLM for filtering, categorization, and summarization
- * Focuses on consultant-client engagement usefulness
+ * Batches large volumes to avoid token overflow
  */
 async function processArticlesWithLLM(
   rawArticles: RawArticle[],
@@ -455,9 +459,67 @@ async function processArticlesWithLLM(
     return { articles: [], coverageGaps: [] };
   }
 
-  // Build article summaries for LLM
-  const articleSummaries = rawArticles.slice(0, 50).map((a, i) => ({
-    id: i,
+  const articlesToProcess = rawArticles.slice(0, ARTICLE_PROCESSING_LIMIT);
+
+  // Split into batches to avoid token overflow
+  const batches: { articles: RawArticle[]; globalOffset: number }[] = [];
+  for (let i = 0; i < articlesToProcess.length; i += ARTICLE_BATCH_SIZE) {
+    batches.push({
+      articles: articlesToProcess.slice(i, i + ARTICLE_BATCH_SIZE),
+      globalOffset: i,
+    });
+  }
+
+  console.log(`[process] Processing ${articlesToProcess.length} articles in ${batches.length} batch(es) of up to ${ARTICLE_BATCH_SIZE}`);
+
+  const allProcessedArticles: ProcessedArticle[] = [];
+
+  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+    const { articles: batchArticles, globalOffset } = batches[batchIdx];
+    console.log(`[process] Batch ${batchIdx + 1}/${batches.length}: ${batchArticles.length} articles (offset ${globalOffset})`);
+
+    const batchResult = await processArticleBatch(
+      batchArticles,
+      globalOffset,
+      rawArticles,
+      callDiets,
+      companies,
+      people
+    );
+    allProcessedArticles.push(...batchResult.articles);
+  }
+
+  // Compute coverage gaps: companies with no articles across all batches
+  const coveredCompanies = new Set(
+    allProcessedArticles
+      .map((a) => a.company?.toLowerCase())
+      .filter((c): c is string => c !== null && c !== undefined)
+  );
+  const coverageGaps: CoverageGap[] = companies
+    .filter((c) => !coveredCompanies.has(c.toLowerCase()))
+    .map((c) => ({ company: c, note: 'No relevant news found' }));
+
+  return { articles: allProcessedArticles, coverageGaps };
+}
+
+/**
+ * Process a single batch of articles through the LLM for filtering and categorization
+ */
+async function processArticleBatch(
+  batchArticles: RawArticle[],
+  globalOffset: number,
+  allRawArticles: RawArticle[],
+  callDiets: CallDietInput[],
+  companies: string[],
+  people: string[]
+): Promise<{ articles: ProcessedArticle[]; coverageGaps: CoverageGap[] }> {
+  if (batchArticles.length === 0) {
+    return { articles: [], coverageGaps: [] };
+  }
+
+  // Build article summaries for LLM (use global IDs for enrichment lookup)
+  const articleSummaries = batchArticles.map((a, i) => ({
+    id: globalOffset + i,
     headline: a.headline,
     description: a.description?.substring(0, 300) || '',
     source: a.sourceName,
@@ -582,7 +644,7 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
       console.error('[process] No text response');
       // Fall back to raw articles with basic formatting
       return {
-        articles: rawArticles.slice(0, 30).map((a) => ({
+        articles: batchArticles.map((a) => ({
           headline: a.headline,
           shortSummary: a.description?.substring(0, 150) || null,
           longSummary: a.description || null,
@@ -662,7 +724,7 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
 
     // Enrich with original URLs if IDs provided and ensure all fields exist
     const processedArticles: ProcessedArticle[] = result.articles.map((a: any) => {
-      const original = typeof a.id === 'number' ? rawArticles[a.id] : null;
+      const original = typeof a.id === 'number' ? allRawArticles[a.id] : null;
       return {
         headline: a.headline || original?.headline || '',
         shortSummary: a.shortSummary || a.summary?.substring(0, 150) || null,
@@ -692,7 +754,7 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
     // Fall back to raw articles with basic formatting
     console.log('[process] Falling back to raw articles...');
     return {
-      articles: rawArticles.slice(0, 30).map((a) => ({
+      articles: batchArticles.map((a) => ({
         headline: a.headline,
         shortSummary: a.description?.substring(0, 150) || null,
         longSummary: a.description || null,

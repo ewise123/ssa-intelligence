@@ -63,49 +63,71 @@ const pdfFooterTemplate = footerWaveDataUri
        ${footerTextHtml}
      </div>`;
 
+export interface ExportArticle {
+  headline: string;
+  shortSummary: string | null;
+  longSummary: string | null;
+  summary: string | null;
+  whyItMatters: string | null;
+  sourceUrl: string;
+  sourceName: string | null;
+  publishedAt: string | Date | null;
+  matchType: string | null;
+  company: { name: string } | null;
+  person: { name: string } | null;
+  tag: { name: string } | null;
+}
+
 interface ExportOptions {
   userId?: string;
   articleIds?: string[];
   dateFrom?: Date;
   dateTo?: Date;
+  articles?: ExportArticle[];
+  userName?: string;
 }
 
 export async function generateNewsDigestPDF(options: ExportOptions): Promise<Buffer> {
   const { userId, articleIds, dateFrom, dateTo } = options;
 
-  let userName = 'User';
+  let userName = options.userName || 'User';
 
-  if (userId) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new Error('User not found');
-    userName = user.name || user.email;
-  }
-
-  // Fetch articles — by IDs or by user (all non-archived)
+  // If pre-loaded articles provided, use them directly (no DB access)
   let articles;
-  if (articleIds && articleIds.length > 0) {
-    articles = await prisma.newsArticle.findMany({
-      where: { id: { in: articleIds } },
-      include: { company: true, person: true, tag: true },
-      orderBy: [{ publishedAt: 'desc' }],
-    });
-  } else if (userId) {
-    const where: any = {
-      articleUsers: { some: { userId } },
-      isArchived: false,
-    };
-    if (dateFrom || dateTo) {
-      where.publishedAt = {};
-      if (dateFrom) where.publishedAt.gte = dateFrom;
-      if (dateTo) where.publishedAt.lte = dateTo;
-    }
-    articles = await prisma.newsArticle.findMany({
-      where,
-      include: { company: true, person: true, tag: true },
-      orderBy: [{ publishedAt: 'desc' }],
-    });
+  if (options.articles) {
+    articles = options.articles;
   } else {
-    throw new Error('Either userId or articleIds must be provided');
+    if (userId && !options.userName) {
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) throw new Error('User not found');
+      userName = user.name || user.email;
+    }
+
+    // Fetch articles — by IDs or by user (all non-archived)
+    if (articleIds && articleIds.length > 0) {
+      articles = await prisma.newsArticle.findMany({
+        where: { id: { in: articleIds } },
+        include: { company: true, person: true, tag: true },
+        orderBy: [{ publishedAt: 'desc' }],
+      });
+    } else if (userId) {
+      const where: any = {
+        articleUsers: { some: { userId } },
+        isArchived: false,
+      };
+      if (dateFrom || dateTo) {
+        where.publishedAt = {};
+        if (dateFrom) where.publishedAt.gte = dateFrom;
+        if (dateTo) where.publishedAt.lte = dateTo;
+      }
+      articles = await prisma.newsArticle.findMany({
+        where,
+        include: { company: true, person: true, tag: true },
+        orderBy: [{ publishedAt: 'desc' }],
+      });
+    } else {
+      throw new Error('Either userId, articleIds, or articles must be provided');
+    }
   }
 
   // Group articles by company
@@ -263,7 +285,7 @@ export async function generateNewsDigestPDF(options: ExportOptions): Promise<Buf
   <div class="cover-page">
     ${samiDataUri ? `<img src="${samiDataUri}" alt="SAMI" style="width:250px;margin-bottom:24px;" />` : ''}
     ${headerLogoDataUri ? `<img class="cover-logo" src="${headerLogoDataUri}" alt="SSA &amp; Company" />` : ''}
-    <h1>SAMI News Digest</h1>
+    <h1>SSAMI News Digest</h1>
     <div class="meta">Prepared for: ${escapeHtml(userName)}</div>
     <div class="meta">${escapeHtml(dateStr)}</div>
     <div class="meta">${articles.length} article${articles.length !== 1 ? 's' : ''}</div>
