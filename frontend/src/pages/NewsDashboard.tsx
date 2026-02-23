@@ -46,6 +46,8 @@ import {
   archiveArticle,
   bulkArchiveArticles,
   exportArticles,
+  exportSearchResults,
+  pinSearchResult,
 } from '../services/newsManager';
 import { resolveCompanyApi, CompanySuggestion } from '../services/researchManager';
 import { ArticleCard } from '../components/news/ArticleCard';
@@ -108,14 +110,24 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
+  // Search results export dropdown state
+  const [showSearchExportMenu, setShowSearchExportMenu] = useState(false);
+  const searchExportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Search result pinned map: sourceUrl → DB articleId
+  const [searchPinnedMap, setSearchPinnedMap] = useState<Map<string, string>>(new Map());
+
   // Progress popup state
   const [showProgressPopup, setShowProgressPopup] = useState(false);
 
-  // Close export menu on outside click
+  // Close export menus on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
         setShowExportMenu(false);
+      }
+      if (searchExportMenuRef.current && !searchExportMenuRef.current.contains(e.target as Node)) {
+        setShowSearchExportMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -348,6 +360,38 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
     } catch (err) {
       console.error('Failed to toggle pin:', err);
     }
+  };
+
+  // Handle pin/unpin for search results (no DB id yet)
+  const handleSearchTogglePin = async (article: NewsArticle) => {
+    try {
+      const existingId = searchPinnedMap.get(article.sourceUrl);
+      if (existingId) {
+        // Already pinned — unpin using the stored DB ID
+        await unpinArticle(existingId);
+        setSearchPinnedMap(prev => {
+          const next = new Map(prev);
+          next.delete(article.sourceUrl);
+          return next;
+        });
+      } else {
+        // Save to DB and pin
+        const { articleId } = await pinSearchResult(article);
+        setSearchPinnedMap(prev => new Map(prev).set(article.sourceUrl, articleId));
+        // Sync local pinnedIds state (backend already pinned, this just updates React state)
+        await pinArticle(articleId);
+      }
+    } catch (err) {
+      console.error('Failed to toggle search result pin:', err);
+    }
+  };
+
+  // Check if a search result is pinned
+  const isSearchResultPinned = (article: NewsArticle): boolean => {
+    // Has a real DB ID and is in pinnedIds
+    if (article.id && isPinned(article.id)) return true;
+    // Was pinned via search flow
+    return searchPinnedMap.has(article.sourceUrl);
   };
 
   // Handle export with scope: all, pinned, or selected
@@ -612,21 +656,74 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
                 <span className="text-sm font-medium text-slate-600">
                   <span className="text-brand-600 font-semibold">{searchResults.length}</span> results found
                 </span>
-                <button onClick={clearResults} className="text-sm text-slate-400 hover:text-rose-500 transition-colors">
-                  Clear all
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="relative" ref={searchExportMenuRef}>
+                    <button
+                      onClick={() => setShowSearchExportMenu(!showSearchExportMenu)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg transition-colors"
+                    >
+                      <Download size={14} />
+                      Export
+                      <ChevronDown size={12} />
+                    </button>
+                    {showSearchExportMenu && (
+                      <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1 z-50">
+                        <button
+                          onClick={async () => { setShowSearchExportMenu(false); await exportSearchResults('pdf', searchResults); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                        >
+                          <FileDown size={14} /> PDF
+                        </button>
+                        <button
+                          onClick={async () => { setShowSearchExportMenu(false); await exportSearchResults('markdown', searchResults); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                        >
+                          <Download size={14} /> Markdown
+                        </button>
+                        <button
+                          onClick={async () => { setShowSearchExportMenu(false); await exportSearchResults('docx', searchResults); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                        >
+                          <FileText size={14} /> Word (DOCX)
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={clearResults} className="text-sm text-slate-400 hover:text-rose-500 transition-colors">
+                    Clear all
+                  </button>
+                </div>
               </div>
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {searchResults.map((article, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 bg-gradient-to-r from-slate-50 to-white rounded-xl cursor-pointer hover:from-brand-50 hover:to-white border border-transparent hover:border-brand-100 transition-all group"
-                    onClick={() => setSelectedArticle(article)}
-                  >
-                    <div className="font-medium text-slate-800 text-sm group-hover:text-brand-700 transition-colors">{article.headline}</div>
-                    <div className="text-xs text-slate-500 mt-1">{article.sourceName}</div>
-                  </div>
-                ))}
+                {searchResults.map((article, idx) => {
+                  const pinned = isSearchResultPinned(article);
+                  return (
+                    <div
+                      key={idx}
+                      className="p-3 bg-gradient-to-r from-slate-50 to-white rounded-xl cursor-pointer hover:from-brand-50 hover:to-white border border-transparent hover:border-brand-100 transition-all group flex items-center gap-2"
+                      onClick={() => setSelectedArticle(article)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-slate-800 text-sm group-hover:text-brand-700 transition-colors">{article.headline}</div>
+                        <div className="text-xs text-slate-500 mt-1">{article.sourceName}</div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSearchTogglePin(article);
+                        }}
+                        className={`flex-shrink-0 p-1.5 rounded-lg transition-all ${
+                          pinned
+                            ? 'text-amber-500 bg-amber-50 hover:bg-amber-100'
+                            : 'text-slate-300 hover:text-amber-500 hover:bg-amber-50'
+                        }`}
+                        title={pinned ? 'Unpin' : 'Pin'}
+                      >
+                        <Pin size={14} className={pinned ? 'fill-current' : ''} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -867,16 +964,25 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
       )}
 
       {/* Article Detail Modal */}
-      {selectedArticle && (
-        <ArticleDetailModal
-          article={selectedArticle}
-          onClose={() => setSelectedArticle(null)}
-          onArchive={handleArchive}
-          onExport={handleArticleExport}
-          isPinned={isPinned(selectedArticle.id)}
-          onTogglePin={handleTogglePin}
-        />
-      )}
+      {selectedArticle && (() => {
+        const isFromSearch = searchResults.some(r => r.sourceUrl === selectedArticle.sourceUrl);
+        const articlePinned = isFromSearch
+          ? isSearchResultPinned(selectedArticle)
+          : isPinned(selectedArticle.id);
+        const handleModalTogglePin = isFromSearch
+          ? async (_id: string) => { await handleSearchTogglePin(selectedArticle); }
+          : handleTogglePin;
+        return (
+          <ArticleDetailModal
+            article={selectedArticle}
+            onClose={() => setSelectedArticle(null)}
+            onArchive={handleArchive}
+            onExport={handleArticleExport}
+            isPinned={articlePinned}
+            onTogglePin={handleModalTogglePin}
+          />
+        );
+      })()}
 
       {/* Deep Dive Search Progress Popup */}
       {showSearchProgress && (

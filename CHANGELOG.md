@@ -15,6 +15,9 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Fix `segmentAnalysisOutputSchema` to enforce S# regex on `sources_used` (was allowing any string).
 
 ### Added
+- Pin deep dive search results: save transient search results to DB and pin in one click.
+- New `POST /api/news/articles/pin-from-data` endpoint that upserts article by sourceUrl, links to user, and pins.
+- Pin button on each deep dive search result row and in the article detail modal for search results.
 - Architecture report (`docs/architecture-report.md`) and Mermaid architecture diagram.
 - SAMI mascot image on News Activity header (cropped from SSAMI_Admin asset).
 

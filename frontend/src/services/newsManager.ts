@@ -637,8 +637,56 @@ export const useUserPins = () => {
 };
 
 // ============================================================================
+// Pin Search Result (save to DB and pin)
+// ============================================================================
+
+export const pinSearchResult = async (article: NewsArticle): Promise<{ articleId: string }> => {
+  const data = await fetchJson('/news/articles/pin-from-data', {
+    method: 'POST',
+    body: JSON.stringify({
+      headline: article.headline,
+      sourceUrl: article.sourceUrl,
+      sourceName: article.sourceName,
+      company: article.company?.name ?? (article as any).company ?? null,
+      person: article.person?.name ?? (article as any).person ?? null,
+      category: article.tag?.name ?? null,
+      shortSummary: article.shortSummary,
+      longSummary: article.longSummary,
+      summary: article.summary,
+      whyItMatters: article.whyItMatters,
+      publishedAt: article.publishedAt,
+      matchType: article.matchType,
+      fetchLayer: article.fetchLayer,
+    }),
+  });
+  return { articleId: data.articleId };
+};
+
+// ============================================================================
 // Export Articles
 // ============================================================================
+
+export const exportSearchResults = async (format: 'pdf' | 'markdown' | 'docx', articles: any[]) => {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+  const base = API_BASE_URL.replace(/\/$/, '');
+  const url = `${base}/news/export/${format}/from-data`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ articles }),
+  });
+  if (!res.ok) throw new Error('Export failed');
+  const blob = await res.blob();
+  const ext = format === 'pdf' ? 'pdf' : format === 'docx' ? 'docx' : 'md';
+  const filename = `sami-deep-dive-${new Date().toISOString().split('T')[0]}.${ext}`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
 
 export const exportArticles = async (format: 'pdf' | 'markdown' | 'docx', articleIds: string[], userId?: string) => {
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
