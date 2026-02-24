@@ -972,12 +972,17 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
         const handleModalTogglePin = isFromSearch
           ? async (_id: string) => { await handleSearchTogglePin(selectedArticle); }
           : handleTogglePin;
+        const handleModalExport = isFromSearch
+          ? async (_id: string, format: 'pdf' | 'markdown' | 'docx') => {
+              await exportSearchResults(format, [selectedArticle]);
+            }
+          : handleArticleExport;
         return (
           <ArticleDetailModal
             article={selectedArticle}
             onClose={() => setSelectedArticle(null)}
-            onArchive={handleArchive}
-            onExport={handleArticleExport}
+            onArchive={isFromSearch ? undefined : handleArchive}
+            onExport={handleModalExport}
             isPinned={articlePinned}
             onTogglePin={handleModalTogglePin}
           />

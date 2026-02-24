@@ -20,7 +20,7 @@ import { useArticleViewTracker, trackEvent } from '../../services/activityTracke
 interface ArticleDetailModalProps {
   article: NewsArticle;
   onClose: () => void;
-  onArchive: (articleId: string) => void;
+  onArchive?: (articleId: string) => void;
   onExport?: (articleId: string, format: 'pdf' | 'markdown' | 'docx') => void;
   isPinned?: boolean;
   onTogglePin?: (articleId: string) => void;
@@ -180,7 +180,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
           {/* Action buttons */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              {!article.isArchived && (
+              {onArchive && !article.isArchived && (
                 <button
                   onClick={() => onArchive(article.id)}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all bg-slate-200 text-slate-600 hover:bg-slate-300"
