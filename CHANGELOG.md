@@ -7,6 +7,8 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 ## [Unreleased]
 
 ### Fixed
+- Fix news refresh LLM batch timeouts: deterministic pre-filtering, smaller parallel batches (10 articles, concurrency 5), and raised token limits yield 96% LLM success rate (up from 12%).
+- Raise article processing cap from 250 to 1000 so articles are no longer silently dropped.
 - Hide archive button in article detail modal for deep dive search results (no DB ID).
 - Fix single-article export for deep dive search results to use from-data endpoint.
 - Allow zero revenue in foundation schema for pre-revenue companies (Vyne Dental bug).

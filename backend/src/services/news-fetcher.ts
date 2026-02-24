@@ -16,7 +16,10 @@ import {
 import { prisma } from '../lib/prisma.js';
 import { withRetry, CircuitBreaker } from '../lib/retry.js';
 
-const anthropic = new Anthropic();
+const anthropic = new Anthropic({
+  timeout: 5 * 60 * 1000, // 5 minutes per request
+  maxRetries: 0,           // Disable SDK retries; withRetry wrapper handles retries where needed
+});
 
 // Circuit breaker for Layer 2 API calls (opens after 3 consecutive failures, 5-min cooldown)
 const layer2CircuitBreaker = new CircuitBreaker('layer2', 3, 5 * 60 * 1000);
@@ -61,6 +64,43 @@ export interface ProcessedArticle {
   matchType: 'exact' | 'contextual';
   fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm';
   userNames: string[];
+}
+
+/** Shape of an article object returned by the LLM in its JSON response */
+interface LLMArticleResponse {
+  id?: number;
+  headline?: string;
+  shortSummary?: string;
+  longSummary?: string;
+  summary?: string;
+  whyItMatters?: string;
+  sourceUrl?: string;
+  sourceName?: string;
+  sources?: ArticleSourceInfo[];
+  publishedAt?: string;
+  company?: string;
+  person?: string;
+  category?: string;
+  status?: string;
+  matchType?: string;
+  fetchLayer?: string;
+}
+
+// Runtime validators for LLM-provided enum-like fields
+const VALID_STATUSES = new Set<ProcessedArticle['status']>(['new_article', 'update']);
+const VALID_MATCH_TYPES = new Set<ProcessedArticle['matchType']>(['exact', 'contextual']);
+const VALID_FETCH_LAYERS = new Set<ProcessedArticle['fetchLayer']>(['layer1_rss', 'layer1_api', 'layer2_llm']);
+
+function validateStatus(value: string | undefined, fallback: ProcessedArticle['status'] = 'new_article'): ProcessedArticle['status'] {
+  return VALID_STATUSES.has(value as ProcessedArticle['status']) ? value as ProcessedArticle['status'] : fallback;
+}
+
+function validateMatchType(value: string | undefined, fallback: ProcessedArticle['matchType'] = 'contextual'): ProcessedArticle['matchType'] {
+  return VALID_MATCH_TYPES.has(value as ProcessedArticle['matchType']) ? value as ProcessedArticle['matchType'] : fallback;
+}
+
+function validateFetchLayer(value: string | undefined, fallback: ProcessedArticle['fetchLayer'] = 'layer2_llm'): ProcessedArticle['fetchLayer'] {
+  return VALID_FETCH_LAYERS.has(value as ProcessedArticle['fetchLayer']) ? value as ProcessedArticle['fetchLayer'] : fallback;
 }
 
 export interface CoverageGap {
@@ -442,12 +482,14 @@ Return maximum 25 results, prioritizing the most actionable and relevant news.`;
 }
 
 // Limits for article processing
-const ARTICLE_PROCESSING_LIMIT = 250;
-const ARTICLE_BATCH_SIZE = 80;
+const ARTICLE_PROCESSING_LIMIT = 1000;
+const ARTICLE_BATCH_SIZE = 10;
+const BATCH_CONCURRENCY = 5;
 
 /**
- * Process raw articles with LLM for filtering, categorization, and summarization
- * Batches large volumes to avoid token overflow
+ * Process raw articles with LLM for filtering, categorization, and summarization.
+ * Runs a deterministic pre-filter first (entity tagging, junk removal), then sends
+ * the slimmed-down payload to the LLM in batches.
  */
 async function processArticlesWithLLM(
   rawArticles: RawArticle[],
@@ -459,37 +501,54 @@ async function processArticlesWithLLM(
     return { articles: [], coverageGaps: [] };
   }
 
-  const articlesToProcess = rawArticles.slice(0, ARTICLE_PROCESSING_LIMIT);
+  const capped = rawArticles.slice(0, ARTICLE_PROCESSING_LIMIT);
 
-  // Split into batches to avoid token overflow
-  const batches: { articles: RawArticle[]; globalOffset: number }[] = [];
-  for (let i = 0; i < articlesToProcess.length; i += ARTICLE_BATCH_SIZE) {
+  if (rawArticles.length > ARTICLE_PROCESSING_LIMIT) {
+    console.warn(`[process] Capped at ${ARTICLE_PROCESSING_LIMIT} articles (dropped ${rawArticles.length - ARTICLE_PROCESSING_LIMIT})`);
+  }
+
+  // ── Deterministic pre-filter ──
+  const { articles: preTagged, stats: filterStats } = preFilterArticles(capped, companies, people);
+
+  if (preTagged.length === 0) {
+    console.log('[process] No articles survived pre-filter');
+    const coverageGaps: CoverageGap[] = companies.map(c => ({ company: c, note: 'No relevant news found' }));
+    return { articles: [], coverageGaps };
+  }
+
+  // ── Batch for LLM ──
+  const batches: { articles: PreTaggedArticle[]; globalOffset: number }[] = [];
+  for (let i = 0; i < preTagged.length; i += ARTICLE_BATCH_SIZE) {
     batches.push({
-      articles: articlesToProcess.slice(i, i + ARTICLE_BATCH_SIZE),
+      articles: preTagged.slice(i, i + ARTICLE_BATCH_SIZE),
       globalOffset: i,
     });
   }
 
-  console.log(`[process] Processing ${articlesToProcess.length} articles in ${batches.length} batch(es) of up to ${ARTICLE_BATCH_SIZE}`);
+  console.log(`[process] Processing ${preTagged.length} pre-filtered articles in ${batches.length} batch(es) of up to ${ARTICLE_BATCH_SIZE} (concurrency: ${BATCH_CONCURRENCY})`);
 
+  // Run batches in parallel with bounded concurrency
   const allProcessedArticles: ProcessedArticle[] = [];
+  for (let wave = 0; wave < batches.length; wave += BATCH_CONCURRENCY) {
+    const waveBatches = batches.slice(wave, wave + BATCH_CONCURRENCY);
+    const waveNum = Math.floor(wave / BATCH_CONCURRENCY) + 1;
+    const totalWaves = Math.ceil(batches.length / BATCH_CONCURRENCY);
+    console.log(`[process] Wave ${waveNum}/${totalWaves}: launching ${waveBatches.length} batch(es) in parallel`);
 
-  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
-    const { articles: batchArticles, globalOffset } = batches[batchIdx];
-    console.log(`[process] Batch ${batchIdx + 1}/${batches.length}: ${batchArticles.length} articles (offset ${globalOffset})`);
-
-    const batchResult = await processArticleBatch(
-      batchArticles,
-      globalOffset,
-      rawArticles,
-      callDiets,
-      companies,
-      people
+    const waveResults = await Promise.all(
+      waveBatches.map(({ articles: batchArticles, globalOffset }, i) => {
+        const batchIdx = wave + i;
+        console.log(`[process] Batch ${batchIdx + 1}/${batches.length}: ${batchArticles.length} articles (offset ${globalOffset})`);
+        return processArticleBatch(batchArticles, globalOffset, preTagged, callDiets);
+      })
     );
-    allProcessedArticles.push(...batchResult.articles);
+
+    for (const result of waveResults) {
+      allProcessedArticles.push(...result.articles);
+    }
   }
 
-  // Compute coverage gaps: companies with no articles across all batches
+  // ── Compute coverage gaps deterministically ──
   const coveredCompanies = new Set(
     allProcessedArticles
       .map((a) => a.company?.toLowerCase())
@@ -503,21 +562,212 @@ async function processArticlesWithLLM(
 }
 
 /**
- * Process a single batch of articles through the LLM for filtering and categorization
+ * Best-effort entity matching for fallback paths (when LLM processing fails).
+ * Checks headline + description against tracked company/people names via
+ * case-insensitive substring match. Since Layer 1 articles were fetched via
+ * Google News queries for these names, most headlines contain the entity name.
  */
-async function processArticleBatch(
-  batchArticles: RawArticle[],
-  globalOffset: number,
-  allRawArticles: RawArticle[],
-  callDiets: CallDietInput[],
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function containsEntity(text: string, name: string): boolean {
+  return new RegExp(`(?:^|\\W)${escapeRegex(name)}(?=\\W|$)`, 'i').test(text);
+}
+
+function matchArticleToEntity(
+  article: RawArticle,
   companies: string[],
   people: string[]
-): Promise<{ articles: ProcessedArticle[]; coverageGaps: CoverageGap[] }> {
-  if (batchArticles.length === 0) {
-    return { articles: [], coverageGaps: [] };
+): { company: string | null; person: string | null } {
+  const text = `${article.headline} ${article.description || ''}`;
+
+  for (const name of companies) {
+    if (containsEntity(text, name)) {
+      return { company: name, person: null };
+    }
   }
 
-  // Build article summaries for LLM (use global IDs for enrichment lookup)
+  for (const name of people) {
+    if (containsEntity(text, name)) {
+      return { company: null, person: name };
+    }
+  }
+
+  return { company: null, person: null };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DETERMINISTIC PRE-FILTER (runs before LLM)
+// ═══════════════════════════════════════════════════════════════════
+
+/** Junk headline patterns — articles matching these are filtered deterministically */
+const JUNK_HEADLINE_PATTERNS = [
+  // Analyst ratings & stock commentary
+  /\b(price target|upgrades?|downgrades?|buy rating|sell rating|hold rating|outperform|underperform|overweight|underweight)\b/i,
+  // Earnings scheduling (NOT actual results)
+  /\b(to report .* earnings|scheduled to release|earnings call scheduled|will report (Q[1-4]|earnings)|earnings (preview|schedule))\b/i,
+  // Stock transactions
+  /\b(insider (buy|sell|purchas)|stock buyback|share repurchase|secondary offering|block trade)\b/i,
+];
+
+interface PreTaggedArticle extends RawArticle {
+  /** Pre-matched company name (null if unmatched) */
+  taggedCompany: string | null;
+  /** Pre-matched person name (null if unmatched) */
+  taggedPerson: string | null;
+}
+
+interface PreFilterStats {
+  total: number;
+  taggedByQuery: number;
+  taggedByMatch: number;
+  droppedJunk: number;
+  droppedUnmatched: number;
+  kept: number;
+}
+
+/**
+ * Deterministic pre-filter: tag entities, drop junk headlines, drop unmatched articles.
+ * Runs BEFORE LLM processing to dramatically reduce the payload sent to the API.
+ */
+function preFilterArticles(
+  articles: RawArticle[],
+  companies: string[],
+  people: string[]
+): { articles: PreTaggedArticle[]; stats: PreFilterStats } {
+  const stats: PreFilterStats = {
+    total: articles.length,
+    taggedByQuery: 0,
+    taggedByMatch: 0,
+    droppedJunk: 0,
+    droppedUnmatched: 0,
+    kept: 0,
+  };
+
+  const result: PreTaggedArticle[] = [];
+
+  // Build lookup maps for queryUsed → entity matching
+  const companyLower = new Map(companies.map(c => [c.toLowerCase(), c]));
+  const personLower = new Map(people.map(p => [p.toLowerCase(), p]));
+
+  for (const article of articles) {
+    // Step 1: Junk headline filter
+    const textToCheck = `${article.headline} ${article.description || ''}`;
+    if (JUNK_HEADLINE_PATTERNS.some(pattern => pattern.test(textToCheck))) {
+      stats.droppedJunk++;
+      continue;
+    }
+
+    // Step 2: Entity tagging — try queryUsed first, then substring match
+    let taggedCompany: string | null = null;
+    let taggedPerson: string | null = null;
+
+    if (article.queryUsed) {
+      const queryLower = article.queryUsed.toLowerCase().replace(/"/g, '');
+      // Check if queryUsed matches a company
+      for (const [key, name] of companyLower) {
+        if (queryLower.includes(key) || key.includes(queryLower)) {
+          taggedCompany = name;
+          stats.taggedByQuery++;
+          break;
+        }
+      }
+      // If not a company, check people
+      if (!taggedCompany) {
+        for (const [key, name] of personLower) {
+          if (queryLower.includes(key) || key.includes(queryLower)) {
+            taggedPerson = name;
+            stats.taggedByQuery++;
+            break;
+          }
+        }
+      }
+    }
+
+    // Fallback to substring matching if queryUsed didn't match
+    if (!taggedCompany && !taggedPerson) {
+      const match = matchArticleToEntity(article, companies, people);
+      if (match.company || match.person) {
+        taggedCompany = match.company;
+        taggedPerson = match.person;
+        stats.taggedByMatch++;
+      }
+    }
+
+    // Step 3: Drop unmatched articles
+    if (!taggedCompany && !taggedPerson) {
+      stats.droppedUnmatched++;
+      continue;
+    }
+
+    result.push({ ...article, taggedCompany, taggedPerson });
+  }
+
+  stats.kept = result.length;
+  console.log(`[pre-filter] ${stats.total} articles → ${stats.kept} kept (${stats.taggedByQuery} tagged by query, ${stats.taggedByMatch} by match, ${stats.droppedJunk} junk, ${stats.droppedUnmatched} unmatched)`);
+
+  return { articles: result, stats };
+}
+
+/**
+ * Resolve userNames deterministically from entity match and call diets.
+ * For each article, find which users track the matched company or person.
+ */
+function resolveUserNames(
+  company: string | null,
+  person: string | null,
+  callDiets: CallDietInput[]
+): string[] {
+  const userNames: string[] = [];
+
+  for (const cd of callDiets) {
+    if (company) {
+      const tracksCompany = cd.companies.some(
+        c => c.name.toLowerCase() === company.toLowerCase()
+      );
+      if (tracksCompany) {
+        userNames.push(cd.userName);
+        continue;
+      }
+    }
+    if (person) {
+      const tracksPerson = cd.people.some(
+        p => p.name.toLowerCase() === person.toLowerCase()
+      );
+      if (tracksPerson) {
+        userNames.push(cd.userName);
+      }
+    }
+  }
+
+  return userNames;
+}
+
+/**
+ * Process a single batch of pre-tagged articles through the LLM.
+ * Articles are already entity-tagged and junk-filtered; the LLM focuses on
+ * nuanced filtering, summarization, and categorization.
+ */
+async function processArticleBatch(
+  batchArticles: PreTaggedArticle[],
+  globalOffset: number,
+  allPreTagged: PreTaggedArticle[],
+  callDiets: CallDietInput[]
+): Promise<{ articles: ProcessedArticle[] }> {
+  if (batchArticles.length === 0) {
+    return { articles: [] };
+  }
+
+  // Collect only entities that appear in THIS batch (not all tracked entities)
+  const batchCompanies = new Set<string>();
+  const batchPeople = new Set<string>();
+  for (const a of batchArticles) {
+    if (a.taggedCompany) batchCompanies.add(a.taggedCompany);
+    if (a.taggedPerson) batchPeople.add(a.taggedPerson);
+  }
+
+  // Build article summaries for LLM — include the pre-matched entity
   const articleSummaries = batchArticles.map((a, i) => ({
     id: globalOffset + i,
     headline: a.headline,
@@ -526,110 +776,84 @@ async function processArticleBatch(
     url: a.sourceUrl,
     date: a.publishedAt.toISOString().split('T')[0],
     layer: a.fetchLayer,
+    matchedCompany: a.taggedCompany || undefined,
+    matchedPerson: a.taggedPerson || undefined,
   }));
 
-  const prompt = `You are a news intelligence analyst helping consultants prepare for client engagements. Process these raw news articles for revenue owners tracking PE and industrial companies.
+  const prompt = `You are a news intelligence analyst. Process these pre-tagged articles: confirm relevance, summarize, and categorize.
 
-## Raw Articles
+Each article has a pre-matched entity (matchedCompany or matchedPerson). Your job:
+1. **Confirm or reject** the entity match — the article must be primarily ABOUT that entity
+2. **Summarize** and **categorize** relevant articles
+3. **Filter out** low-quality articles (see rules below)
+
+## Articles (pre-tagged with matched entity)
 ${JSON.stringify(articleSummaries, null, 2)}
 
-## Companies Being Tracked
-${companies.join(', ')}
+## Entities in this batch
+Companies: ${[...batchCompanies].join(', ') || 'none'}
+People: ${[...batchPeople].join(', ') || 'none'}
 
-## People Being Tracked
-${people.join(', ')}
+## Filter Rules — EXCLUDE (when in doubt, EXCLUDE):
+- Entity mentioned only tangentially or for context (not the main subject)
+- Different entity with a similar name
+- General industry news without specific entity focus
+- Generic press releases or routine product updates without strategic significance
+- Event sponsorship, award/recognition announcements
+- Minor personnel changes (non-executive level)
+- Rehashed information from prior announcements
+- Opinion pieces without new factual information
+- Speculation without substantive basis
+- Entity is the ANALYST providing ratings/commentary about OTHER companies (not the subject)
+- ALL marketing, advertising, promotional content or content with promotional tone
+- News about the entity being an underwriter/bookrunner (not the company going public)
 
-## User Mapping
-${callDiets.map((cd) => `- ${cd.userName}: tracks ${cd.companies.map((c) => c.name).concat(cd.people.map((p) => p.name)).join(', ')}`).join('\n')}
+## KEEP articles where the entity is the PRIMARY subject covering:
+- M&A, divestitures, strategic partnerships
+- C-suite appointments/departures, board changes
+- Published earnings results with actual financial figures
+- Major contract wins/losses, facility changes
+- PE/VC investments, debt refinancing, IPOs
+- Market share changes, competitive threats
+- Technology implementations, workforce restructuring
 
-## Instructions
+## For each KEPT article:
+- Assign category: M&A / Deal Activity, Leadership Changes, Earnings & Operational Performance, Strategy, Value Creation / Cost Initiatives, Digital & Technology Modernization, Fundraising / New Funds, Operating Partner Activity, Supply Chain & Logistics, Plant & Footprint Changes
+- Generate shortSummary (1-2 sentences for card preview)
+- Generate longSummary (3-5 sentences for detailed view)
+- Generate whyItMatters (1-2 sentences for consultant engagement)
+- Set matchType: "exact" if article explicitly names the entity, "contextual" if related indirectly
+- If multiple articles cover the SAME story, merge them and list all sources
 
-1. **STRICTLY filter out** (when in doubt, EXCLUDE the article — be aggressive about filtering):
-   - Articles where the tracked entity is mentioned only tangentially or for context
-   - Articles about a different entity with a similar name
-   - General industry news without specific entity focus
-   - Generic press releases with no substantive news
-   - Routine product updates without strategic significance
-   - Event sponsorship or award/recognition announcements
-   - Minor personnel changes (non-executive level)
-   - Rehashed information from prior announcements
-   - Opinion pieces without new factual information
-   - Historical references without current relevance
-   - Speculation without substantive basis
-   - **IMPORTANT: Analyst ratings, upgrades, or downgrades where the tracked company is the ANALYST (not the subject)** - e.g., if tracking "Morgan Stanley" and they downgrade another company's stock, EXCLUDE this because Morgan Stanley is just the analyst, not the subject of the news
-   - Articles where the tracked company is providing analysis, ratings, or commentary about OTHER companies
-   - **ALL marketing, advertising, promotional, and brand content** — this includes but is not limited to: marketing campaign launches, advertising initiatives, brand promotion activities, product launch announcements that are purely promotional, sponsorship deals, influencer partnerships, social media campaigns, brand awareness initiatives, promotional partnerships, customer engagement programs, loyalty programs, seasonal promotions, and any article that reads like an advertisement or press release promoting products/services rather than reporting substantive business news
-   - **ALL content that is promotional in tone or purpose** — if the article's primary intent is to promote, market, or advertise a product, service, event, or brand rather than report on material business developments, EXCLUDE it regardless of the specific category
-   - Price target changes, analyst price target updates, or stock rating changes for the company's shares
-   - **ALL earnings date announcements and scheduling notices** — EXCLUDE any article about UPCOMING quarterly/annual earnings (e.g., "Company X to report Q3 earnings on DATE", "Company X scheduled to release earnings", "earnings call scheduled for", "reports earnings next week"). Only include articles that contain ACTUAL published earnings results with specific financial figures
-   - **ALL routine share transactions** — EXCLUDE share purchases, stock buybacks, insider trading/selling, secondary offerings, block trades, share repurchase programs, and insider ownership changes UNLESS the transaction represents a complete sale of a business/division, a controlling share acquisition (>50% stake), a hostile or friendly takeover attempt, or a significant activist stake (>10%) with stated intent to influence corporate strategy
-   - News about banks being underwriters or bookrunners for IPOs where the tracked entity is the underwriter, not the company going public
-   - Analyst recommendations, "buy/sell/hold" ratings, or stock picks where the tracked company's stock is being rated (not actionable business news)
-
-   **KEEP only articles that are definitively ABOUT a tracked company/person as the main subject and cover:**
-   - Mergers, acquisitions, divestitures, strategic partnerships
-   - C-suite appointments/departures, board changes
-   - Earnings releases with actual financial results, significant revenue/profit changes
-   - Major contract wins/losses, facility changes
-   - PE/VC investments, debt refinancing, IPOs
-   - Market share changes, competitive threats
-   - Technology implementations, workforce restructuring
-   - Complete business/division sales, controlling share acquisitions or takeovers
-
-2. **For each relevant article**:
-   - Match to tracked company/person
-   - Assign category: M&A / Deal Activity, Leadership Changes, Earnings & Operational Performance, Strategy, Value Creation / Cost Initiatives, Digital & Technology Modernization, Fundraising / New Funds, Operating Partner Activity, Supply Chain & Logistics, Plant & Footprint Changes
-   - Generate shortSummary: 1-2 sentences for card preview
-   - Generate longSummary: 3-5 sentences for detailed view
-   - Generate "Why It Matters": 1-2 sentences explaining relevance for consultant engagement
-   - Determine matchType: "exact" if article explicitly names the entity, "contextual" if related indirectly
-   - Identify which revenue owner(s) this is relevant to
-   - If multiple articles cover the SAME story, merge them: use the best headline, combine information in summaries, and list all sources
-
-3. **Identify coverage gaps**: Companies with no relevant news found
-
-## Output Format
-Return ONLY valid JSON:
+## Output — ONLY valid JSON:
 {
   "articles": [
     {
       "id": 0,
-      "headline": "Original headline",
-      "shortSummary": "1-2 sentence preview",
-      "longSummary": "3-5 sentence detailed summary",
-      "whyItMatters": "Why this matters for client engagement",
-      "sourceUrl": "primary url from input",
-      "sourceName": "primary source from input",
-      "sources": [
-        {"sourceUrl": "url1", "sourceName": "Source 1", "fetchLayer": "layer1_rss"},
-        {"sourceUrl": "url2", "sourceName": "Source 2", "fetchLayer": "layer1_rss"}
-      ],
+      "headline": "headline",
+      "shortSummary": "...",
+      "longSummary": "...",
+      "whyItMatters": "...",
+      "sourceUrl": "url from input",
+      "sourceName": "source from input",
+      "sources": [{"sourceUrl": "url", "sourceName": "name", "fetchLayer": "layer1_rss"}],
       "publishedAt": "date from input",
-      "company": "matched company or null",
-      "person": "matched person or null",
-      "category": "topic category",
+      "company": "confirmed company or null",
+      "person": "confirmed person or null",
+      "category": "category",
       "status": "new_article",
       "matchType": "exact|contextual",
-      "fetchLayer": "layer from input",
-      "userNames": ["User Name 1"]
-    }
-  ],
-  "coverageGaps": [
-    {
-      "company": "Company name",
-      "note": "No relevant news found"
+      "fetchLayer": "layer from input"
     }
   ]
-}
-
-Return ALL relevant articles, sorted by recency (most recent first).`;
+}`;
 
   try {
-    console.log('[process] Sending articles to Claude for processing...');
+    console.log(`[process] Sending ${batchArticles.length} pre-tagged articles to Claude (entities: ${batchCompanies.size} companies, ${batchPeople.size} people)...`);
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 16000,
+      max_tokens: 8000,
       temperature: 0,
       messages: [
         {
@@ -642,7 +866,7 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
     const textContent = response.content.find((c) => c.type === 'text');
     if (!textContent || textContent.type !== 'text') {
       console.error('[process] No text response');
-      // Fall back to raw articles with basic formatting
+      // Fall back: use pre-tagged data directly
       return {
         articles: batchArticles.map((a) => ({
           headline: a.headline,
@@ -654,15 +878,14 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
           sourceName: a.sourceName,
           sources: [{ sourceUrl: a.sourceUrl, sourceName: a.sourceName, fetchLayer: a.fetchLayer }],
           publishedAt: a.publishedAt.toISOString().split('T')[0],
-          company: null,
-          person: null,
+          company: a.taggedCompany,
+          person: a.taggedPerson,
           category: 'News',
           status: 'new_article' as const,
           matchType: 'contextual' as const,
           fetchLayer: a.fetchLayer,
-          userNames: callDiets.map((cd) => cd.userName),
+          userNames: resolveUserNames(a.taggedCompany, a.taggedPerson, callDiets),
         })),
-        coverageGaps: [],
       };
     }
 
@@ -678,17 +901,15 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
       cleaned = jsonMatch[0];
     }
 
-    let result;
+    let result: { articles: LLMArticleResponse[] };
     try {
       result = JSON.parse(cleaned);
     } catch (parseError) {
       // Try to fix truncated JSON by closing the arrays/objects
       console.log('[process] Attempting to fix truncated JSON...');
 
-      // Find where the articles array might be truncated
       const articlesMatch = cleaned.match(/"articles"\s*:\s*\[/);
       if (articlesMatch) {
-        // Count brackets to find incomplete structure
         let bracketCount = 0;
         let braceCount = 0;
         let lastValidIndex = 0;
@@ -699,20 +920,18 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
           if (cleaned[i] === '{') braceCount++;
           if (cleaned[i] === '}') braceCount--;
 
-          // Track last position where we had a complete article object
           if (bracketCount === 1 && braceCount === 0 && cleaned[i] === '}') {
             lastValidIndex = i + 1;
           }
         }
 
-        // Truncate to last valid article and close the structure
         if (lastValidIndex > 0) {
-          cleaned = cleaned.substring(0, lastValidIndex) + '], "coverageGaps": []}';
+          cleaned = cleaned.substring(0, lastValidIndex) + ']}';
           try {
             result = JSON.parse(cleaned);
             console.log('[process] Fixed truncated JSON successfully');
           } catch {
-            throw parseError; // Re-throw original error if fix didn't work
+            throw parseError;
           }
         } else {
           throw parseError;
@@ -722,9 +941,14 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
       }
     }
 
-    // Enrich with original URLs if IDs provided and ensure all fields exist
-    const processedArticles: ProcessedArticle[] = result.articles.map((a: any) => {
-      const original = typeof a.id === 'number' ? allRawArticles[a.id] : null;
+    console.log(`[process] LLM OK: ${result.articles?.length ?? 0} articles returned`);
+
+    // Enrich with original data and resolve userNames deterministically
+    const processedArticles: ProcessedArticle[] = result.articles.map((a: LLMArticleResponse) => {
+      const original = typeof a.id === 'number' ? allPreTagged[a.id] : null;
+      const company = a.company || original?.taggedCompany || null;
+      const person = a.person || original?.taggedPerson || null;
+      const layer = validateFetchLayer(a.fetchLayer || original?.fetchLayer);
       return {
         headline: a.headline || original?.headline || '',
         shortSummary: a.shortSummary || a.summary?.substring(0, 150) || null,
@@ -733,26 +957,27 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
         whyItMatters: a.whyItMatters || null,
         sourceUrl: a.sourceUrl || original?.sourceUrl || '',
         sourceName: a.sourceName || original?.sourceName || '',
-        sources: a.sources || [{ sourceUrl: a.sourceUrl || original?.sourceUrl || '', sourceName: a.sourceName || original?.sourceName || '', fetchLayer: a.fetchLayer || original?.fetchLayer || 'layer2_llm' }],
+        sources: a.sources || [{ sourceUrl: a.sourceUrl || original?.sourceUrl || '', sourceName: a.sourceName || original?.sourceName || '', fetchLayer: layer }],
         publishedAt: a.publishedAt || original?.publishedAt?.toISOString().split('T')[0] || '',
-        company: a.company || null,
-        person: a.person || null,
+        company,
+        person,
         category: a.category || 'News',
-        status: a.status || 'new_article',
-        matchType: a.matchType || 'contextual',
-        fetchLayer: a.fetchLayer || original?.fetchLayer || 'layer2_llm',
-        userNames: a.revenueOwners || a.userNames || [],
+        status: validateStatus(a.status),
+        matchType: validateMatchType(a.matchType),
+        fetchLayer: layer,
+        userNames: resolveUserNames(company, person, callDiets),
       };
     });
 
-    return {
-      articles: processedArticles,
-      coverageGaps: result.coverageGaps || [],
-    };
-  } catch (error) {
-    console.error('[process] Error processing articles:', error);
-    // Fall back to raw articles with basic formatting
-    console.log('[process] Falling back to raw articles...');
+    return { articles: processedArticles };
+  } catch (error: unknown) {
+    const err = error as Record<string, unknown> | null;
+    const errType = err?.constructor?.name || 'Unknown';
+    const errStatus = (err?.status ?? err?.statusCode ?? 'N/A') as string;
+    const errCode = ((err?.error as Record<string, unknown>)?.type ?? err?.code ?? 'N/A') as string;
+    const errMsg = typeof err?.message === 'string' ? err.message.substring(0, 300) : String(error);
+    console.error(`[process] Batch error (${errType}, status=${errStatus}, code=${errCode}): ${errMsg}`);
+    console.log('[process] Falling back to pre-tagged articles...');
     return {
       articles: batchArticles.map((a) => ({
         headline: a.headline,
@@ -764,15 +989,14 @@ Return ALL relevant articles, sorted by recency (most recent first).`;
         sourceName: a.sourceName,
         sources: [{ sourceUrl: a.sourceUrl, sourceName: a.sourceName, fetchLayer: a.fetchLayer }],
         publishedAt: a.publishedAt.toISOString().split('T')[0],
-        company: null,
-        person: null,
+        company: a.taggedCompany,
+        person: a.taggedPerson,
         category: 'News',
         status: 'new_article' as const,
         matchType: 'contextual' as const,
         fetchLayer: a.fetchLayer,
-        userNames: callDiets.map((cd) => cd.userName),
+        userNames: resolveUserNames(a.taggedCompany, a.taggedPerson, callDiets),
       })),
-      coverageGaps: [],
     };
   }
 }
