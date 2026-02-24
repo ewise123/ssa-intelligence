@@ -101,4 +101,32 @@ orchestrator.processQueue().catch((err) => {
   console.error('Failed to start queue processor:', err);
 });
 
+// ONE-TIME: Trigger news refresh on startup after deploying new LLM pipeline
+// Remove this block after the first successful deploy
+(async () => {
+  try {
+    // Wait 10s for server to be fully ready
+    await new Promise(r => setTimeout(r, 10_000));
+    const flag = await prisma.newsConfig.findUnique({ where: { key: 'one_time_refresh_done' } });
+    if (!flag) {
+      console.log('[startup] Triggering one-time news refresh after pipeline upgrade...');
+      const res = await fetch(`http://localhost:${PORT}/api/news/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days: 1 }),
+      });
+      if (res.ok) {
+        await prisma.newsConfig.create({ data: { key: 'one_time_refresh_done', value: 'true' } });
+        console.log('[startup] One-time news refresh triggered successfully');
+      } else {
+        console.error('[startup] One-time refresh failed:', res.status, await res.text());
+      }
+    } else {
+      console.log('[startup] One-time refresh already completed, skipping');
+    }
+  } catch (err) {
+    console.error('[startup] One-time refresh error:', err);
+  }
+})();
+
 export default app;
