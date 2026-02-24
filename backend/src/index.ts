@@ -110,9 +110,14 @@ orchestrator.processQueue().catch((err) => {
     const flag = await prisma.newsConfig.findUnique({ where: { key: 'one_time_refresh_done' } });
     if (!flag) {
       console.log('[startup] Triggering one-time news refresh after pipeline upgrade...');
+      // Use admin email for auth (production requires auth headers)
+      const adminEmail = (process.env.ADMIN_EMAILS || '').split(',')[0]?.trim() || 'dev-admin@ssaandco.com';
       const res = await fetch(`http://localhost:${PORT}/api/news/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-request-email': adminEmail,
+        },
         body: JSON.stringify({ days: 1 }),
       });
       if (res.ok) {

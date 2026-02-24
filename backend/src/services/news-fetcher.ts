@@ -18,7 +18,7 @@ import { withRetry, CircuitBreaker } from '../lib/retry.js';
 
 const anthropic = new Anthropic({
   timeout: 5 * 60 * 1000, // 5 minutes per request
-  maxRetries: 1,           // 2 total attempts (down from SDK default of 3)
+  maxRetries: 0,           // Disable SDK retries; withRetry wrapper handles retries where needed
 });
 
 // Circuit breaker for Layer 2 API calls (opens after 3 consecutive failures, 5-min cooldown)
@@ -64,6 +64,26 @@ export interface ProcessedArticle {
   matchType: 'exact' | 'contextual';
   fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm';
   userNames: string[];
+}
+
+/** Shape of an article object returned by the LLM in its JSON response */
+interface LLMArticleResponse {
+  id?: number;
+  headline?: string;
+  shortSummary?: string;
+  longSummary?: string;
+  summary?: string;
+  whyItMatters?: string;
+  sourceUrl?: string;
+  sourceName?: string;
+  sources?: ArticleSourceInfo[];
+  publishedAt?: string;
+  company?: string;
+  person?: string;
+  category?: string;
+  status?: string;
+  matchType?: string;
+  fetchLayer?: string;
 }
 
 export interface CoverageGap {
@@ -561,7 +581,7 @@ const JUNK_HEADLINE_PATTERNS = [
   // Analyst ratings & stock commentary
   /\b(price target|upgrades?|downgrades?|buy rating|sell rating|hold rating|outperform|underperform|overweight|underweight)\b/i,
   // Earnings scheduling (NOT actual results)
-  /\b(to report .* earnings|scheduled to release|earnings call scheduled|reports Q[1-4])\b/i,
+  /\b(to report .* earnings|scheduled to release|earnings call scheduled|will report (Q[1-4]|earnings)|earnings (preview|schedule))\b/i,
   // Stock transactions
   /\b(insider (buy|sell|purchas)|stock buyback|share repurchase|secondary offering|block trade)\b/i,
 ];
@@ -856,7 +876,7 @@ People: ${[...batchPeople].join(', ') || 'none'}
       cleaned = jsonMatch[0];
     }
 
-    let result;
+    let result: { articles: LLMArticleResponse[] };
     try {
       result = JSON.parse(cleaned);
     } catch (parseError) {
@@ -899,10 +919,11 @@ People: ${[...batchPeople].join(', ') || 'none'}
     console.log(`[process] LLM OK: ${result.articles?.length ?? 0} articles returned`);
 
     // Enrich with original data and resolve userNames deterministically
-    const processedArticles: ProcessedArticle[] = result.articles.map((a: any) => {
+    const processedArticles: ProcessedArticle[] = result.articles.map((a: LLMArticleResponse) => {
       const original = typeof a.id === 'number' ? allPreTagged[a.id] : null;
       const company = a.company || original?.taggedCompany || null;
       const person = a.person || original?.taggedPerson || null;
+      const layer = (a.fetchLayer || original?.fetchLayer || 'layer2_llm') as ProcessedArticle['fetchLayer'];
       return {
         headline: a.headline || original?.headline || '',
         shortSummary: a.shortSummary || a.summary?.substring(0, 150) || null,
@@ -911,24 +932,26 @@ People: ${[...batchPeople].join(', ') || 'none'}
         whyItMatters: a.whyItMatters || null,
         sourceUrl: a.sourceUrl || original?.sourceUrl || '',
         sourceName: a.sourceName || original?.sourceName || '',
-        sources: a.sources || [{ sourceUrl: a.sourceUrl || original?.sourceUrl || '', sourceName: a.sourceName || original?.sourceName || '', fetchLayer: a.fetchLayer || original?.fetchLayer || 'layer2_llm' }],
+        sources: a.sources || [{ sourceUrl: a.sourceUrl || original?.sourceUrl || '', sourceName: a.sourceName || original?.sourceName || '', fetchLayer: layer }],
         publishedAt: a.publishedAt || original?.publishedAt?.toISOString().split('T')[0] || '',
         company,
         person,
         category: a.category || 'News',
-        status: a.status || 'new_article',
-        matchType: a.matchType || 'contextual',
-        fetchLayer: a.fetchLayer || original?.fetchLayer || 'layer2_llm',
+        status: (a.status || 'new_article') as ProcessedArticle['status'],
+        matchType: (a.matchType || 'contextual') as ProcessedArticle['matchType'],
+        fetchLayer: layer,
         userNames: resolveUserNames(company, person, callDiets),
       };
     });
 
     return { articles: processedArticles };
-  } catch (error: any) {
-    const errType = error?.constructor?.name || 'Unknown';
-    const errStatus = error?.status ?? error?.statusCode ?? 'N/A';
-    const errCode = error?.error?.type ?? error?.code ?? 'N/A';
-    console.error(`[process] Batch error (${errType}, status=${errStatus}, code=${errCode}): ${error?.message?.substring(0, 300)}`);
+  } catch (error: unknown) {
+    const err = error as Record<string, unknown> | null;
+    const errType = err?.constructor?.name || 'Unknown';
+    const errStatus = (err?.status ?? err?.statusCode ?? 'N/A') as string;
+    const errCode = ((err?.error as Record<string, unknown>)?.type ?? err?.code ?? 'N/A') as string;
+    const errMsg = typeof err?.message === 'string' ? err.message.substring(0, 300) : String(error);
+    console.error(`[process] Batch error (${errType}, status=${errStatus}, code=${errCode}): ${errMsg}`);
     console.log('[process] Falling back to pre-tagged articles...');
     return {
       articles: batchArticles.map((a) => ({
