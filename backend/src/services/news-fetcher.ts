@@ -86,6 +86,23 @@ interface LLMArticleResponse {
   fetchLayer?: string;
 }
 
+// Runtime validators for LLM-provided enum-like fields
+const VALID_STATUSES = new Set<ProcessedArticle['status']>(['new_article', 'update']);
+const VALID_MATCH_TYPES = new Set<ProcessedArticle['matchType']>(['exact', 'contextual']);
+const VALID_FETCH_LAYERS = new Set<ProcessedArticle['fetchLayer']>(['layer1_rss', 'layer1_api', 'layer2_llm']);
+
+function validateStatus(value: string | undefined, fallback: ProcessedArticle['status'] = 'new_article'): ProcessedArticle['status'] {
+  return VALID_STATUSES.has(value as ProcessedArticle['status']) ? value as ProcessedArticle['status'] : fallback;
+}
+
+function validateMatchType(value: string | undefined, fallback: ProcessedArticle['matchType'] = 'contextual'): ProcessedArticle['matchType'] {
+  return VALID_MATCH_TYPES.has(value as ProcessedArticle['matchType']) ? value as ProcessedArticle['matchType'] : fallback;
+}
+
+function validateFetchLayer(value: string | undefined, fallback: ProcessedArticle['fetchLayer'] = 'layer2_llm'): ProcessedArticle['fetchLayer'] {
+  return VALID_FETCH_LAYERS.has(value as ProcessedArticle['fetchLayer']) ? value as ProcessedArticle['fetchLayer'] : fallback;
+}
+
 export interface CoverageGap {
   company: string;
   userName?: string;
@@ -550,21 +567,29 @@ async function processArticlesWithLLM(
  * case-insensitive substring match. Since Layer 1 articles were fetched via
  * Google News queries for these names, most headlines contain the entity name.
  */
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function containsEntity(text: string, name: string): boolean {
+  return new RegExp(`(?:^|\\W)${escapeRegex(name)}(?=\\W|$)`, 'i').test(text);
+}
+
 function matchArticleToEntity(
   article: RawArticle,
   companies: string[],
   people: string[]
 ): { company: string | null; person: string | null } {
-  const text = `${article.headline} ${article.description || ''}`.toLowerCase();
+  const text = `${article.headline} ${article.description || ''}`;
 
   for (const name of companies) {
-    if (text.includes(name.toLowerCase())) {
+    if (containsEntity(text, name)) {
       return { company: name, person: null };
     }
   }
 
   for (const name of people) {
-    if (text.includes(name.toLowerCase())) {
+    if (containsEntity(text, name)) {
       return { company: null, person: name };
     }
   }
@@ -923,7 +948,7 @@ People: ${[...batchPeople].join(', ') || 'none'}
       const original = typeof a.id === 'number' ? allPreTagged[a.id] : null;
       const company = a.company || original?.taggedCompany || null;
       const person = a.person || original?.taggedPerson || null;
-      const layer = (a.fetchLayer || original?.fetchLayer || 'layer2_llm') as ProcessedArticle['fetchLayer'];
+      const layer = validateFetchLayer(a.fetchLayer || original?.fetchLayer);
       return {
         headline: a.headline || original?.headline || '',
         shortSummary: a.shortSummary || a.summary?.substring(0, 150) || null,
@@ -937,8 +962,8 @@ People: ${[...batchPeople].join(', ') || 'none'}
         company,
         person,
         category: a.category || 'News',
-        status: (a.status || 'new_article') as ProcessedArticle['status'],
-        matchType: (a.matchType || 'contextual') as ProcessedArticle['matchType'],
+        status: validateStatus(a.status),
+        matchType: validateMatchType(a.matchType),
         fetchLayer: layer,
         userNames: resolveUserNames(company, person, callDiets),
       };
