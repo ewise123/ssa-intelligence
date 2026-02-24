@@ -974,7 +974,11 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
           : handleTogglePin;
         const handleModalExport = isFromSearch
           ? async (_id: string, format: 'pdf' | 'markdown' | 'docx') => {
-              await exportSearchResults(format, [selectedArticle]);
+              try {
+                await exportSearchResults(format, [selectedArticle]);
+              } catch (err) {
+                logger.error('Failed to export search result:', err);
+              }
             }
           : handleArticleExport;
         return (
