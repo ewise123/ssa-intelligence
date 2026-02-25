@@ -7,6 +7,8 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 ## [Unreleased]
 
 ### Fixed
+- Sort news articles alphabetically by company/person name so grouped entities stay together instead of being split across pages.
+- Remove pagination from news dashboard; all articles load on a single scrollable page.
 - Fix news refresh LLM batch timeouts: deterministic pre-filtering, smaller parallel batches (10 articles, concurrency 5), and raised token limits yield 96% LLM success rate (up from 12%).
 - Raise article processing cap from 250 to 1000 so articles are no longer silently dropped.
 - Hide archive button in article detail modal for deep dive search results (no DB ID).
