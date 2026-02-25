@@ -468,6 +468,8 @@ model NewsArticle {
 
   @@index([publishedAt(sort: Desc)])
   @@index([companyId])
+  @@index([personId])
+  @@index([companyId, personId, publishedAt(sort: Desc)])
   @@index([tagId])
   @@index([isSent])
   @@index([isArchived])

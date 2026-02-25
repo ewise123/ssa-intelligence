@@ -90,29 +90,25 @@ router.get('/', async (req: Request, res: Response) => {
       prisma.newsArticle.findMany({
         where,
         orderBy: [
+          { company: { name: 'asc' } },
+          { person: { name: 'asc' } },
           { publishedAt: 'desc' },
           { fetchedAt: 'desc' },
+          { id: 'asc' },
         ],
-        take: Math.min(parseInt(limit as string, 10), 100),
+        take: Math.min(parseInt(limit as string, 10), 5000),
         skip: parseInt(offset as string, 10),
         include: {
           company: true,
           person: true,
           tag: true,
           sources: true,
-          articleUsers: {
-            include: {
-              user: {
-                select: { id: true, name: true, email: true },
-              },
-            },
-          },
         },
       }),
       prisma.newsArticle.count({ where }),
     ]);
 
-    // Transform for easier consumption
+    // Transform for easier consumption (lean: no articleUsers for list)
     const transformedArticles = articles.map(article => ({
       id: article.id,
       headline: article.headline,
@@ -132,7 +128,6 @@ router.get('/', async (req: Request, res: Response) => {
       company: article.company,
       person: article.person,
       tag: article.tag,
-      users: article.articleUsers.map(au => au.user),
     }));
 
     res.json({

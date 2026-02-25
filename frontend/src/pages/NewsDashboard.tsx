@@ -121,7 +121,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
   }, []);
 
   // Data hooks
-  const { articles, total, loading: articlesLoading, fetchArticles, page, setPage, totalPages } = useNewsArticles(filters);
+  const { articles, total, loading: articlesLoading, error: articlesError, fetchArticles } = useNewsArticles(filters);
   const { tags } = useNewsTags();
   const { companies } = useTrackedCompanies();
   const { people } = useTrackedPeople();
@@ -929,8 +929,16 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
         />
       )}
 
+      {/* Error State */}
+      {articlesError && !articlesLoading && (
+        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700">
+          <AlertCircle size={18} />
+          <span>Failed to load articles: {articlesError}</span>
+        </div>
+      )}
+
       {/* Empty State */}
-      {!articlesLoading && articles.length === 0 && (
+      {!articlesLoading && !articlesError && articles.length === 0 && (
         <div className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-white to-brand-50 border border-slate-200 rounded-2xl p-12 text-center">
           <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-brand-100/30 to-violet-100/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
           <div className="relative">
@@ -1050,28 +1058,6 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
             );
           })}
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm">
-              <button
-                onClick={() => { setSelectedArticleIds(new Set()); setPage(Math.max(0, page - 1)); }}
-                disabled={page === 0}
-                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <span className="text-sm text-slate-600">
-                Page {page + 1} of {totalPages} ({total} articles)
-              </span>
-              <button
-                onClick={() => { setSelectedArticleIds(new Set()); setPage(Math.min(totalPages - 1, page + 1)); }}
-                disabled={page >= totalPages - 1}
-                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
-          )}
         </div>
       )}
 
