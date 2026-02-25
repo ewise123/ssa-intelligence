@@ -7,8 +7,12 @@ import {
   Check,
   Link2,
   Pin,
+  X,
 } from 'lucide-react';
 import type { NewsArticle } from '../../services/newsManager';
+
+/** Strip <cite index="...">…</cite> wrappers, keeping inner text */
+const stripCitations = (text: string) => text.replace(/<cite[^>]*>([\s\S]*?)<\/cite>/g, '$1');
 
 interface ArticleCardProps {
   article: NewsArticle;
@@ -61,7 +65,13 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
               Sent
             </span>
           )}
-          {article.isArchived && !article.isSent && (
+          {article.isDismissed && !article.isSent && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-orange-400 to-orange-500 text-white rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm shadow-orange-500/25 border border-orange-400/50">
+              <X size={9} />
+              Dismissed
+            </span>
+          )}
+          {article.isArchived && !article.isSent && !article.isDismissed && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-slate-400 to-slate-500 text-white rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm shadow-slate-500/25 border border-slate-400/50">
               <Check size={9} />
               Archived
@@ -74,8 +84,8 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
               onClick={(e) => { e.stopPropagation(); onTogglePin(article.id); }}
               className={`p-1.5 rounded-lg transition-all ${
                 isPinned
-                  ? 'text-brand-500 bg-brand-50 hover:bg-brand-100'
-                  : 'text-slate-300 hover:text-slate-500 hover:bg-slate-50'
+                  ? 'text-amber-500 bg-amber-50 hover:bg-amber-100'
+                  : 'text-slate-300 hover:text-amber-500 hover:bg-amber-50'
               }`}
               title={isPinned ? 'Unpin article' : 'Pin article'}
             >
@@ -92,12 +102,12 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
       </div>
 
       {/* Headline */}
-      <h4 className="font-bold text-slate-800 line-clamp-2 mb-2 group-hover:text-brand-700 transition-colors">{article.headline}</h4>
+      <h4 className="font-bold text-slate-800 line-clamp-2 mb-2 group-hover:text-brand-700 transition-colors">{stripCitations(article.headline)}</h4>
 
       {/* Short Summary */}
       {(article.shortSummary || article.summary) && (
         <p className="text-sm text-slate-500 line-clamp-2 mb-4 leading-relaxed">
-          {article.shortSummary || article.summary}
+          {stripCitations(article.shortSummary || article.summary || '')}
         </p>
       )}
 

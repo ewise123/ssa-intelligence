@@ -19,6 +19,14 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Fix `segmentAnalysisOutputSchema` to enforce S# regex on `sources_used` (was allowing any string).
 
 ### Added
+- Article dismiss feature: new `isDismissed` field, bulk dismiss endpoint, and dismiss filter in news dashboard.
+- Deep dive search: background company/person search with inline progress, resolution modal, and result pinning.
+- Group selection checkboxes on company/person group headers (tri-state: all, some, none) for bulk article selection.
+- Gradient-styled dismiss (red) and pin (amber) buttons in article detail modal matching export button styling.
+- Pinned indicator icon in article detail modal tags row (amber/orange gradient, top-right).
+- Amber-themed pin button on article cards matching pinned articles bar styling.
+- Restrict research dashboard, new research, and research detail pages to admin users; members land on news dashboard.
+- News scheduler with configurable refresh intervals and admin activity dashboard.
 - Pin deep dive search results: save transient search results to DB and pin in one click.
 - New `POST /api/news/articles/pin-from-data` endpoint that upserts article by sourceUrl, links to user, and pins.
 - Pin button on each deep dive search result row and in the article detail modal for search results.

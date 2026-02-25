@@ -152,14 +152,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, activePath
           {!isCollapsed && (
             <div className="flex items-center gap-3 cursor-pointer overflow-hidden" onClick={() => onNavigate('/')}>
               <div className="w-8 h-8 bg-white border border-slate-200 rounded-lg flex-shrink-0 flex items-center justify-center">
-                <img src="/SSA%20Logo%20Square.svg" alt="SSA & Co Marketing Hub" className="w-7 h-7 object-contain" />
+                <img src="/SSA%20Logo%20Square.svg" alt="SSA Market Intelligence" className="w-7 h-7 object-contain" />
               </div>
-              <span className="font-bold text-lg tracking-tight text-slate-800 whitespace-nowrap">SSA & Co Marketing Hub</span>
+              <span className="font-bold text-lg tracking-tight text-slate-800 whitespace-nowrap">SSA Market Intelligence</span>
             </div>
           )}
           {isCollapsed && (
              <div className="w-8 h-8 bg-white border border-slate-200 rounded-lg flex-shrink-0 flex items-center justify-center cursor-pointer" onClick={() => onNavigate('/')}>
-               <img src="/SSA%20Logo%20Square.svg" alt="SSA & Co Marketing Hub" className="w-7 h-7 object-contain" />
+               <img src="/SSA%20Logo%20Square.svg" alt="SSA Market Intelligence" className="w-7 h-7 object-contain" />
              </div>
           )}
         </div>
@@ -176,20 +176,24 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, activePath
          </div>
 
         <nav ref={navRef} className="p-4 space-y-1 flex-1 overflow-y-auto sidebar-nav">
-          {!isCollapsed && (
-            <div className="pb-2">
-              <span className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Research Reports</span>
-            </div>
+          {isAdmin && (
+            <>
+              {!isCollapsed && (
+                <div className="pb-2">
+                  <span className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Research Reports</span>
+                </div>
+              )}
+              <button
+                onClick={() => onNavigate('/')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activePath === '/' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${isCollapsed ? 'justify-center px-2' : ''}`}
+                title={isCollapsed ? "Research Dashboard" : undefined}
+              >
+                <Home size={18} className="flex-shrink-0" />
+                {!isCollapsed && <span className="whitespace-nowrap">Research Dashboard</span>}
+              </button>
+            </>
           )}
-          <button 
-            onClick={() => onNavigate('/')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activePath === '/' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${isCollapsed ? 'justify-center px-2' : ''}`}
-            title={isCollapsed ? "Research Dashboard" : undefined}
-          >
-            <Home size={18} className="flex-shrink-0" />
-            {!isCollapsed && <span className="whitespace-nowrap">Research Dashboard</span>}
-          </button>
-          
+
           {/* News Intelligence Section */}
           {!isCollapsed && (
             <div className="pt-4 pb-2">

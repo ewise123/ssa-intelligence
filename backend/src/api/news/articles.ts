@@ -5,7 +5,20 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
+
+const articleIdParamSchema = z.object({
+  id: z.string().uuid(),
+});
+
+const dismissBodySchema = z.object({
+  isDismissed: z.boolean().optional(),
+});
+
+const bulkDismissBodySchema = z.object({
+  articleIds: z.array(z.string().uuid()).min(1).max(500),
+});
 
 const router = Router();
 
@@ -19,6 +32,7 @@ router.get('/', async (req: Request, res: Response) => {
       tagId,
       isSent,
       isArchived,
+      isDismissed,
       limit = '50',
       offset = '0',
     } = req.query;
@@ -66,7 +80,11 @@ router.get('/', async (req: Request, res: Response) => {
     if (isArchived !== undefined) {
       where.isArchived = isArchived === 'true';
     }
-    // No default filter - "All" shows everything
+
+    // Filter by dismissed status
+    if (isDismissed !== undefined) {
+      where.isDismissed = isDismissed === 'true';
+    }
 
     const [articles, total] = await Promise.all([
       prisma.newsArticle.findMany({
@@ -110,6 +128,7 @@ router.get('/', async (req: Request, res: Response) => {
       status: article.status,
       isSent: article.isSent,
       isArchived: article.isArchived,
+      isDismissed: article.isDismissed,
       company: article.company,
       person: article.person,
       tag: article.tag,
@@ -248,6 +267,74 @@ router.post('/bulk-archive', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error bulk archiving articles:', error);
     res.status(500).json({ error: 'Failed to archive articles' });
+  }
+});
+
+// PATCH /api/news/articles/:id/dismiss - Dismiss article (user manually tossed)
+router.patch('/:id/dismiss', async (req: Request, res: Response) => {
+  try {
+    const idParsed = articleIdParamSchema.safeParse(req.params);
+    if (!idParsed.success) {
+      res.status(400).json({ error: idParsed.error.issues[0]?.message ?? 'Invalid article id' });
+      return;
+    }
+    const { id } = idParsed.data;
+    const parsed = dismissBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
+      return;
+    }
+
+    // Scope to user's visibility for non-admins
+    const accessScope = req.auth && !req.auth.isAdmin
+      ? { articleUsers: { some: { userId: req.auth.userId } } }
+      : {};
+    const article = await prisma.newsArticle.findFirst({ where: { id, ...accessScope } });
+    if (!article) {
+      res.status(404).json({ error: 'Article not found' });
+      return;
+    }
+
+    const newIsDismissed = parsed.data.isDismissed ?? !article.isDismissed;
+
+    const updated = await prisma.newsArticle.update({
+      where: { id },
+      data: {
+        isDismissed: newIsDismissed,
+        isSent: newIsDismissed ? false : article.isSent,
+        isArchived: newIsDismissed ? false : article.isArchived,
+      },
+    });
+
+    res.json({ success: true, isDismissed: updated.isDismissed });
+  } catch (error) {
+    console.error('Error updating article dismiss status:', error);
+    res.status(500).json({ error: 'Failed to update article' });
+  }
+});
+
+// POST /api/news/articles/bulk-dismiss - Dismiss multiple articles
+router.post('/bulk-dismiss', async (req: Request, res: Response) => {
+  try {
+    const parsed = bulkDismissBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
+      return;
+    }
+
+    // Scope to user's visibility for non-admins
+    const accessScope = req.auth && !req.auth.isAdmin
+      ? { articleUsers: { some: { userId: req.auth.userId } } }
+      : {};
+    const result = await prisma.newsArticle.updateMany({
+      where: { id: { in: parsed.data.articleIds }, ...accessScope },
+      data: { isDismissed: true, isSent: false, isArchived: false },
+    });
+
+    res.json({ success: true, count: result.count });
+  } catch (error) {
+    console.error('Error bulk dismissing articles:', error);
+    res.status(500).json({ error: 'Failed to dismiss articles' });
   }
 });
 

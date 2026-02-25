@@ -444,6 +444,7 @@ model NewsArticle {
   rawContent    String?          @map("raw_content")
   isSent        Boolean          @default(false) @map("is_sent")
   isArchived    Boolean          @default(false) @map("is_archived")
+  isDismissed   Boolean          @default(false) @map("is_dismissed")
 
   // Primary source (for backward compatibility)
   sourceUrl    String           @unique @map("source_url")
@@ -470,6 +471,7 @@ model NewsArticle {
   @@index([tagId])
   @@index([isSent])
   @@index([isArchived])
+  @@index([isDismissed])
   @@map("news_articles")
 }
 

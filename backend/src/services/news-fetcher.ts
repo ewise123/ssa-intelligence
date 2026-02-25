@@ -281,7 +281,7 @@ export async function fetchNewsHybrid(
 
   // Phase 1: Fast heuristic dedup (URL, fingerprint, similarity)
   const heuristicDeduped = deduplicateArticles(allRawArticles);
-  const recentArticles = filterRecentArticles(heuristicDeduped, 1); // 24 hours
+  const recentArticles = filterRecentArticles(heuristicDeduped, days);
 
   console.log(`[hybrid] After heuristic dedup: ${recentArticles.length} articles`);
 
