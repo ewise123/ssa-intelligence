@@ -90,10 +90,12 @@ router.get('/', async (req: Request, res: Response) => {
       prisma.newsArticle.findMany({
         where,
         orderBy: [
+          { company: { name: 'asc' } },
+          { person: { name: 'asc' } },
           { publishedAt: 'desc' },
           { fetchedAt: 'desc' },
         ],
-        take: Math.min(parseInt(limit as string, 10), 100),
+        take: Math.min(parseInt(limit as string, 10), 5000),
         skip: parseInt(offset as string, 10),
         include: {
           company: true,
