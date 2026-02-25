@@ -366,6 +366,21 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
     }
   };
 
+  // Handle bulk pin of selected articles
+  const handleBulkPin = async () => {
+    if (selectedArticleIds.size === 0) return;
+    try {
+      for (const id of selectedArticleIds) {
+        if (!isPinned(id)) {
+          await pinArticle(id);
+        }
+      }
+      setSelectedArticleIds(new Set());
+    } catch (err) {
+      logger.error('Failed to bulk pin articles:', err);
+    }
+  };
+
   // Handle export with scope: all, pinned, or selected
   const handleExport = async (format: 'pdf' | 'markdown' | 'docx', scope: 'all' | 'pinned' | 'selected') => {
     try {
@@ -459,126 +474,6 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
                 <span className="text-white font-semibold">{total}</span> curated articles from your tracked companies and people, refreshed and updated in real time
               </p>
             </div>
-            <div className="flex items-center gap-3 justify-start pointer-events-auto">
-            {/* Selection count */}
-            {selectedArticleIds.size > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-white/70 font-medium">{selectedArticleIds.size} selected</span>
-                <button
-                  onClick={() => setSelectedArticleIds(new Set())}
-                  className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                  title="Clear selection"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            )}
-
-            {/* Export dropdown - always available */}
-            <div className="relative" ref={exportMenuRef}>
-              <button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                className="flex items-center gap-2 px-6 py-3 rounded-lg font-semibold bg-white text-brand-700 shadow-lg hover:bg-brand-50 transition-all"
-              >
-                <Download size={18} />
-                <span className="hidden sm:inline">Export News</span>
-                <ChevronDown size={14} />
-              </button>
-              {showExportMenu && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 max-h-80 overflow-y-auto">
-                  {/* All Articles */}
-                  <div className="px-3 py-1.5">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">All Articles ({total})</p>
-                  </div>
-                  <button
-                    onClick={() => handleExport('pdf', 'all')}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
-                  >
-                    <FileDown size={15} /> PDF
-                  </button>
-                  <button
-                    onClick={() => handleExport('markdown', 'all')}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
-                  >
-                    <Download size={15} /> Markdown
-                  </button>
-                  <button
-                    onClick={() => handleExport('docx', 'all')}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
-                  >
-                    <FileText size={15} /> Word (DOCX)
-                  </button>
-
-                  {/* Pinned Articles */}
-                  {pinnedIds.size > 0 && (
-                    <>
-                      <div className="border-t border-slate-100 my-1" />
-                      <div className="px-3 py-1.5">
-                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Pinned ({pinnedIds.size})</p>
-                      </div>
-                      <button
-                        onClick={() => handleExport('pdf', 'pinned')}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
-                      >
-                        <FileDown size={15} /> PDF
-                      </button>
-                      <button
-                        onClick={() => handleExport('markdown', 'pinned')}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
-                      >
-                        <Download size={15} /> Markdown
-                      </button>
-                      <button
-                        onClick={() => handleExport('docx', 'pinned')}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
-                      >
-                        <FileText size={15} /> Word (DOCX)
-                      </button>
-                    </>
-                  )}
-
-                  {/* Selected Articles - always shown */}
-                  <div className="border-t border-slate-100 my-1" />
-                  <div className="px-3 py-1.5">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Selected ({selectedArticleIds.size})</p>
-                  </div>
-                  <button
-                    onClick={() => handleExport('pdf', 'selected')}
-                    disabled={selectedArticleIds.size === 0}
-                    className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${selectedArticleIds.size === 0 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-700 hover:bg-brand-50 hover:text-brand-700'}`}
-                  >
-                    <FileDown size={15} /> PDF
-                  </button>
-                  <button
-                    onClick={() => handleExport('markdown', 'selected')}
-                    disabled={selectedArticleIds.size === 0}
-                    className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${selectedArticleIds.size === 0 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-700 hover:bg-brand-50 hover:text-brand-700'}`}
-                  >
-                    <Download size={15} /> Markdown
-                  </button>
-                  <button
-                    onClick={() => handleExport('docx', 'selected')}
-                    disabled={selectedArticleIds.size === 0}
-                    className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${selectedArticleIds.size === 0 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-700 hover:bg-brand-50 hover:text-brand-700'}`}
-                  >
-                    <FileText size={15} /> Word (DOCX)
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Dismiss selected */}
-            {selectedArticleIds.size > 0 && (
-              <button
-                onClick={handleBulkDismiss}
-                className="flex items-center gap-2 px-4 py-2.5 bg-slate-600 text-white rounded-xl hover:bg-slate-700 transition-all font-medium shadow-md"
-              >
-                <X size={18} />
-                <span className="hidden sm:inline">Dismiss</span>
-              </button>
-            )}
-
-          </div>
           </div>
           <div className="hidden lg:flex flex-1 items-center justify-center pointer-events-none">
             <img
@@ -876,19 +771,152 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
         </div>
       </div>
 
-      {/* Last Updated Info - Always visible */}
+      {/* Action Bar — last refresh info + bulk actions */}
       {!refreshing && (
-        <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl w-fit border border-slate-200/80 shadow-sm">
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <Clock size={14} className="text-slate-400" />
-            <span>Last refreshed: <span className="font-medium">{formatTimestamp(status.lastRefreshedAt)}</span></span>
+        <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <Clock size={14} className="text-slate-400" />
+              <span>Last refreshed: <span className="font-medium">{formatTimestamp(status.lastRefreshedAt)}</span></span>
+            </div>
+            {status.lastRefreshedAt && status.articlesFound > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-xs font-bold shadow-md shadow-emerald-500/25 border border-emerald-400/30">
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                {status.articlesFound} articles
+              </span>
+            )}
           </div>
-          {status.lastRefreshedAt && status.articlesFound > 0 && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-xs font-bold shadow-md shadow-emerald-500/25 border border-emerald-400/30">
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
-              {status.articlesFound} articles
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Selection count */}
+            {selectedArticleIds.size > 0 && (
+              <div className="flex items-center gap-2 mr-1">
+                <span className="text-sm text-slate-500 font-medium">{selectedArticleIds.size} selected</span>
+                <button
+                  onClick={() => setSelectedArticleIds(new Set())}
+                  className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                  title="Clear selection"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            {/* Bulk Pin */}
+            {selectedArticleIds.size > 0 && (
+              <button
+                onClick={handleBulkPin}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-md shadow-amber-500/25 hover:from-amber-500 hover:to-orange-600"
+              >
+                <Pin size={14} />
+                Pin
+              </button>
+            )}
+
+            {/* Bulk Dismiss */}
+            {selectedArticleIds.size > 0 && (
+              <button
+                onClick={handleBulkDismiss}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-md shadow-red-500/25 hover:from-red-600 hover:to-rose-700"
+              >
+                <X size={14} />
+                Dismiss
+              </button>
+            )}
+
+            {/* Export dropdown */}
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-md shadow-brand-500/25 hover:from-brand-600 hover:to-brand-700"
+              >
+                <Download size={14} />
+                Export
+                <ChevronDown size={12} />
+              </button>
+              {showExportMenu && (
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 max-h-80 overflow-y-auto">
+                  {/* All Articles */}
+                  <div className="px-3 py-1.5">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">All Articles ({total})</p>
+                  </div>
+                  <button
+                    onClick={() => handleExport('pdf', 'all')}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                  >
+                    <FileDown size={15} /> PDF
+                  </button>
+                  <button
+                    onClick={() => handleExport('markdown', 'all')}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                  >
+                    <Download size={15} /> Markdown
+                  </button>
+                  <button
+                    onClick={() => handleExport('docx', 'all')}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                  >
+                    <FileText size={15} /> Word (DOCX)
+                  </button>
+
+                  {/* Pinned Articles */}
+                  {pinnedIds.size > 0 && (
+                    <>
+                      <div className="border-t border-slate-100 my-1" />
+                      <div className="px-3 py-1.5">
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Pinned ({pinnedIds.size})</p>
+                      </div>
+                      <button
+                        onClick={() => handleExport('pdf', 'pinned')}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                      >
+                        <FileDown size={15} /> PDF
+                      </button>
+                      <button
+                        onClick={() => handleExport('markdown', 'pinned')}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                      >
+                        <Download size={15} /> Markdown
+                      </button>
+                      <button
+                        onClick={() => handleExport('docx', 'pinned')}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                      >
+                        <FileText size={15} /> Word (DOCX)
+                      </button>
+                    </>
+                  )}
+
+                  {/* Selected Articles */}
+                  {selectedArticleIds.size > 0 && (
+                    <>
+                      <div className="border-t border-slate-100 my-1" />
+                      <div className="px-3 py-1.5">
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Selected ({selectedArticleIds.size})</p>
+                      </div>
+                      <button
+                        onClick={() => handleExport('pdf', 'selected')}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                      >
+                        <FileDown size={15} /> PDF
+                      </button>
+                      <button
+                        onClick={() => handleExport('markdown', 'selected')}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                      >
+                        <Download size={15} /> Markdown
+                      </button>
+                      <button
+                        onClick={() => handleExport('docx', 'selected')}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                      >
+                        <FileText size={15} /> Word (DOCX)
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
