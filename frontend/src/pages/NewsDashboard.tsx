@@ -347,7 +347,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
     try {
       await bulkDismissArticles(Array.from(selectedArticleIds));
       setSelectedArticleIds(new Set());
-      await fetchArticles();
+      await Promise.all([fetchArticles(), fetchDeepDiveArticles()]);
     } catch (err) {
       logger.error('Failed to bulk dismiss articles:', err);
     }
@@ -757,6 +757,9 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
                   return (
                     <div
                       key={article.id}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedArticle(article); } }}
                       className="p-3 bg-gradient-to-r from-slate-50 to-white rounded-xl cursor-pointer hover:from-brand-50 hover:to-white border border-transparent hover:border-brand-100 transition-all group flex items-center gap-2"
                       onClick={() => setSelectedArticle(article)}
                     >

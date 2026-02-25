@@ -36,6 +36,7 @@ export const CompanyArticleGroup: React.FC<CompanyArticleGroupProps> = ({
 
   const isPerson = groupType === 'person';
   const Icon = isPerson ? User : Building2;
+  const panelId = `article-group-${groupType}-${companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
   const articleIds = articles.map(a => a.id);
   const allSelected = selectedIds ? articleIds.length > 0 && articleIds.every(id => selectedIds.has(id)) : false;
@@ -47,6 +48,8 @@ export const CompanyArticleGroup: React.FC<CompanyArticleGroupProps> = ({
       <div className={`flex items-center justify-between mb-4 p-4 rounded-xl bg-gradient-to-r ${isPerson ? 'from-purple-50 to-pink-50 border border-purple-100' : 'from-brand-50 to-violet-50 border border-brand-100'}`}>
         <button
           onClick={() => setCollapsed(!collapsed)}
+          aria-expanded={!collapsed}
+          aria-controls={panelId}
           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
         >
           <div className={`p-1.5 rounded-lg transition-transform ${collapsed ? 'rotate-0' : 'rotate-90'}`}>
@@ -82,7 +85,7 @@ export const CompanyArticleGroup: React.FC<CompanyArticleGroupProps> = ({
 
       {/* Cards Grid */}
       {!collapsed && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div id={panelId} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {articles.map((article) => (
             <ArticleCard
               key={article.id}
