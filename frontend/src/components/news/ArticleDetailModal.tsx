@@ -178,7 +178,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
                 Dismissed
               </span>
             )}
-            {article.isArchived && (
+            {article.isArchived && !article.isDismissed && (
               <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-sm font-medium">
                 <Check size={14} />
                 Archived

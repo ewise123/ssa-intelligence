@@ -95,11 +95,16 @@ export default function App() {
     );
   }
 
+  const isAdmin = !!userContext.user?.isAdmin;
+  const memberNewsDashboard = <NewsDashboard onNavigate={navigate} isAdmin={false} currentUserId={userContext.user?.id || ''} />;
+
   const renderContent = () => {
+    // Non-admin users: redirect research and admin routes to news dashboard
+    if (!isAdmin && (currentPath === '/' || currentPath === '/new' || currentPath.startsWith('/research/') || currentPath.startsWith('/admin'))) {
+      return memberNewsDashboard;
+    }
+
     if (currentPath === '/') {
-      if (!userContext.user?.isAdmin) {
-        return <NewsDashboard onNavigate={navigate} isAdmin={false} currentUserId={userContext.user?.id || ''} />;
-      }
       return (
         <Home
           jobs={jobs}
@@ -113,9 +118,6 @@ export default function App() {
       );
     }
     if (currentPath === '/new') {
-      if (!userContext.user?.isAdmin) {
-        return <NewsDashboard onNavigate={navigate} isAdmin={false} currentUserId={userContext.user?.id || ''} />;
-      }
       return (
         <NewResearch
           key={navResetKey}
@@ -142,7 +144,7 @@ export default function App() {
       return <AdminPrompts isAdmin={userContext.user?.isAdmin} />;
     }
     if (currentPath === '/news') {
-      return <NewsDashboard onNavigate={navigate} isAdmin={!!userContext.user?.isAdmin} currentUserId={userContext.user?.id || ''} />;
+      return <NewsDashboard onNavigate={navigate} isAdmin={isAdmin} currentUserId={userContext.user?.id || ''} />;
     }
     if (currentPath === '/admin/news-activity') {
       return <AdminNewsActivity isAdmin={userContext.user?.isAdmin} />;
@@ -151,9 +153,6 @@ export default function App() {
       return <AdminBugReports isAdmin={userContext.user?.isAdmin} />;
     }
     if (currentPath.startsWith('/research/')) {
-      if (!userContext.user?.isAdmin) {
-        return <NewsDashboard onNavigate={navigate} isAdmin={false} currentUserId={userContext.user?.id || ''} />;
-      }
       return (
         <ResearchDetail
           jobs={jobs}
@@ -164,9 +163,6 @@ export default function App() {
           onRefreshDetail={refreshJobDetail}
         />
       );
-    }
-    if (!userContext.user?.isAdmin) {
-      return <NewsDashboard onNavigate={navigate} isAdmin={false} currentUserId={userContext.user?.id || ''} />;
     }
     return <Home jobs={jobs} loading={jobsLoading} reportBlueprints={reportBlueprints.blueprints} onNavigate={navigate} onCancel={cancelJob} onDelete={deleteJob} logoToken={logoToken} />;
   };

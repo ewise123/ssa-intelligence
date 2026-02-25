@@ -65,6 +65,9 @@ export const CompanyArticleGroup: React.FC<CompanyArticleGroupProps> = ({
         {onToggleGroupSelection && (
           <button
             onClick={(e) => { e.stopPropagation(); onToggleGroupSelection(articleIds, e); }}
+            role="checkbox"
+            aria-checked={allSelected ? true : someSelected ? 'mixed' : false}
+            aria-label={`Select all articles for ${companyName}`}
             className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
               allSelected || someSelected
                 ? 'bg-brand-500 border-brand-500 text-white'

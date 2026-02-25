@@ -234,7 +234,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
       // Start polling
       await fetchDeepDiveStatus();
     } catch (err) {
-      console.error('Failed to start deep dive:', err);
+      logger.error('Failed to start deep dive:', err);
     }
   };
 
@@ -290,20 +290,20 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
     setFilters(isAdmin ? { isArchived: false, isDismissed: false } : { isArchived: false, isDismissed: false, userId: currentUserId });
   };
 
-  // Check if any filters are active beyond the default
+  // Check if any filters are active beyond the default (new = isArchived:false, isDismissed:false)
   const hasActiveFilters = !!(
     filters.companyId ||
     filters.personId ||
     filters.tagId ||
-    filters.isArchived === true ||
-    filters.isDismissed === true
+    filters.isArchived !== false ||
+    filters.isDismissed !== false
   );
 
   // Handle dismissing (user manually tossed)
   const handleDismiss = async (articleId: string) => {
     try {
       await dismissArticle(articleId, true);
-      await fetchArticles();
+      await Promise.all([fetchArticles(), fetchDeepDiveArticles()]);
       if (selectedArticle && selectedArticle.id === articleId) {
         setSelectedArticle({ ...selectedArticle, isDismissed: true });
       }
@@ -362,7 +362,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
         await pinArticle(articleId);
       }
     } catch (err) {
-      console.error('Failed to toggle pin:', err);
+      logger.error('Failed to toggle pin:', err);
     }
   };
 
@@ -381,7 +381,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
       await exportArticles(format, ids, currentUserId);
       setShowExportMenu(false);
     } catch (err) {
-      console.error('Failed to export articles:', err);
+      logger.error('Failed to export articles:', err);
     }
   };
 
@@ -390,7 +390,37 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
     try {
       await exportArticles(format, [articleId], currentUserId);
     } catch (err) {
-      console.error('Failed to export article:', err);
+      logger.error('Failed to export article:', err);
+    }
+  };
+
+  // Handle deep-dive search export
+  const handleDeepDiveExport = async (format: 'pdf' | 'markdown' | 'docx') => {
+    setShowSearchExportMenu(false);
+    try {
+      await exportArticles(format, deepDiveArticles.map(a => a.id), currentUserId);
+    } catch (err) {
+      logger.error(`Failed to export deep-dive articles (${format}):`, err);
+    }
+  };
+
+  // Handle clearing deep dive results
+  const handleClearDeepDive = async () => {
+    try {
+      await clearDeepDive();
+      await Promise.all([fetchDeepDiveArticles(), fetchDeepDiveStatus()]);
+    } catch (err) {
+      logger.error('Failed to clear deep dive:', err);
+    }
+  };
+
+  // Handle clearing deep dive error
+  const handleClearDeepDiveError = async () => {
+    try {
+      await clearDeepDive();
+      await fetchDeepDiveStatus();
+    } catch (err) {
+      logger.error('Failed to clear deep dive error:', err);
     }
   };
 
@@ -649,7 +679,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
                 <AlertCircle className="text-rose-500 flex-shrink-0" size={18} />
                 <p className="text-sm text-rose-700 flex-1">{deepDiveStatus.lastError}</p>
                 <button
-                  onClick={async () => { await clearDeepDive(); await fetchDeepDiveStatus(); }}
+                  onClick={handleClearDeepDiveError}
                   className="text-sm text-slate-400 hover:text-slate-600 flex-shrink-0"
                 >
                   Dismiss
@@ -693,19 +723,19 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
                     {showSearchExportMenu && (
                       <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1 z-50">
                         <button
-                          onClick={async () => { setShowSearchExportMenu(false); await exportArticles('pdf', deepDiveArticles.map(a => a.id), currentUserId); }}
+                          onClick={() => handleDeepDiveExport('pdf')}
                           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
                         >
                           <FileDown size={14} /> PDF
                         </button>
                         <button
-                          onClick={async () => { setShowSearchExportMenu(false); await exportArticles('markdown', deepDiveArticles.map(a => a.id), currentUserId); }}
+                          onClick={() => handleDeepDiveExport('markdown')}
                           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
                         >
                           <Download size={14} /> Markdown
                         </button>
                         <button
-                          onClick={async () => { setShowSearchExportMenu(false); await exportArticles('docx', deepDiveArticles.map(a => a.id), currentUserId); }}
+                          onClick={() => handleDeepDiveExport('docx')}
                           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
                         >
                           <FileText size={14} /> Word (DOCX)
@@ -714,7 +744,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({ onNavigate, isAdmi
                     )}
                   </div>
                   <button
-                    onClick={async () => { await clearDeepDive(); await fetchDeepDiveArticles(); await fetchDeepDiveStatus(); }}
+                    onClick={handleClearDeepDive}
                     className="text-sm text-slate-400 hover:text-rose-500 transition-colors"
                   >
                     Clear all

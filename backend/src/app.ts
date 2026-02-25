@@ -280,7 +280,7 @@ app.post('/api/company/resolve', ...applyLimiter(writeLimiter), authMiddleware, 
 // ============================================================================
 app.use('/api/news/articles', authMiddleware, requireActiveUser, newsArticlesRouter);
 app.use('/api/news/search', authMiddleware, requireActiveUser, newsSearchRouter);
-app.use('/api/news/deep-dive', authMiddleware, requireActiveUser, newsDeepDiveRouter);
+app.use('/api/news/deep-dive', ...applyLimiter(writeLimiter), authMiddleware, requireActiveUser, newsDeepDiveRouter);
 app.use('/api/news/export', authMiddleware, requireActiveUser, newsExportRouter);
 app.use('/api/news/refresh', authMiddleware, requireActiveUser, requireAdmin, newsRefreshRouter);
 app.use('/api/news/tags', authMiddleware, requireActiveUser, requireAdmin, newsTagsRouter);

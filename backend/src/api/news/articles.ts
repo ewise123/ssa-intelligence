@@ -5,7 +5,16 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
+
+const dismissBodySchema = z.object({
+  isDismissed: z.boolean().optional(),
+});
+
+const bulkDismissBodySchema = z.object({
+  articleIds: z.array(z.string().uuid()).min(1).max(500),
+});
 
 const router = Router();
 
@@ -261,7 +270,11 @@ router.post('/bulk-archive', async (req: Request, res: Response) => {
 router.patch('/:id/dismiss', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { isDismissed } = req.body;
+    const parsed = dismissBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
+      return;
+    }
 
     const article = await prisma.newsArticle.findUnique({ where: { id } });
     if (!article) {
@@ -269,13 +282,14 @@ router.patch('/:id/dismiss', async (req: Request, res: Response) => {
       return;
     }
 
-    const newIsDismissed = typeof isDismissed === 'boolean' ? isDismissed : !article.isDismissed;
+    const newIsDismissed = parsed.data.isDismissed ?? !article.isDismissed;
 
     const updated = await prisma.newsArticle.update({
       where: { id },
       data: {
         isDismissed: newIsDismissed,
         isSent: newIsDismissed ? false : article.isSent,
+        isArchived: newIsDismissed ? false : article.isArchived,
       },
     });
 
@@ -289,16 +303,15 @@ router.patch('/:id/dismiss', async (req: Request, res: Response) => {
 // POST /api/news/articles/bulk-dismiss - Dismiss multiple articles
 router.post('/bulk-dismiss', async (req: Request, res: Response) => {
   try {
-    const { articleIds } = req.body;
-
-    if (!Array.isArray(articleIds) || articleIds.length === 0) {
-      res.status(400).json({ error: 'articleIds must be a non-empty array' });
+    const parsed = bulkDismissBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
       return;
     }
 
     const result = await prisma.newsArticle.updateMany({
-      where: { id: { in: articleIds } },
-      data: { isDismissed: true, isSent: false },
+      where: { id: { in: parsed.data.articleIds } },
+      data: { isDismissed: true, isSent: false, isArchived: false },
     });
 
     res.json({ success: true, count: result.count });

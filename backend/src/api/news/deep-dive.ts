@@ -7,10 +7,19 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 import { fetchNewsHybrid, CallDietInput } from '../../services/news-fetcher.js';
 import { ArticleStatus, MatchType, FetchLayer } from '@prisma/client';
 import { safeErrorMessage } from '../../lib/error-utils.js';
+
+const startDeepDiveSchema = z.object({
+  company: z.string().trim().min(1).optional(),
+  person: z.string().trim().min(1).optional(),
+  days: z.number().int().min(1).max(30).default(1),
+}).refine(d => d.company || d.person, {
+  message: 'At least one of company or person is required',
+});
 
 const router = Router();
 
@@ -346,13 +355,12 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const { company, person, days = 1 } = req.body;
-    const daysNum = Math.min(Math.max(Number(days) || 1, 1), 30);
-
-    if (!company && !person) {
-      res.status(400).json({ error: 'At least one of company or person is required' });
+    const parsed = startDeepDiveSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
       return;
     }
+    const { company, person, days: daysNum } = parsed.data;
 
     const userId = req.auth.userId;
     const lockId = lockIdForUser(userId);
@@ -367,7 +375,10 @@ router.post('/', async (req: Request, res: Response) => {
       const config = await tx.newsConfig.findUnique({
         where: { key: statusKey(userId) },
       });
-      const currentState: DeepDiveState = config ? JSON.parse(config.value) : { ...DEFAULT_STATE };
+      let currentState: DeepDiveState = { ...DEFAULT_STATE };
+      if (config) {
+        try { currentState = JSON.parse(config.value); } catch { /* use default */ }
+      }
 
       if (currentState.isSearching) {
         // Stale detection: if searching for >5 min, auto-recover
