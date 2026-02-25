@@ -50,6 +50,7 @@ import newsUserCallDietRouter from './api/news/user-call-diet.js';
 import newsArticlesRouter from './api/news/articles.js';
 import newsRefreshRouter from './api/news/refresh.js';
 import newsSearchRouter from './api/news/search.js';
+import newsDeepDiveRouter from './api/news/deep-dive.js';
 import newsExportRouter from './api/news/export.js';
 import newsPinsRouter from './api/news/pins.js';
 import newsActivityRouter from './api/news/activity.js';
@@ -279,6 +280,7 @@ app.post('/api/company/resolve', ...applyLimiter(writeLimiter), authMiddleware, 
 // ============================================================================
 app.use('/api/news/articles', authMiddleware, requireActiveUser, newsArticlesRouter);
 app.use('/api/news/search', authMiddleware, requireActiveUser, newsSearchRouter);
+app.use('/api/news/deep-dive', authMiddleware, requireActiveUser, newsDeepDiveRouter);
 app.use('/api/news/export', authMiddleware, requireActiveUser, newsExportRouter);
 app.use('/api/news/refresh', authMiddleware, requireActiveUser, requireAdmin, newsRefreshRouter);
 app.use('/api/news/tags', authMiddleware, requireActiveUser, requireAdmin, newsTagsRouter);

@@ -97,6 +97,9 @@ export default function App() {
 
   const renderContent = () => {
     if (currentPath === '/') {
+      if (!userContext.user?.isAdmin) {
+        return <NewsDashboard onNavigate={navigate} isAdmin={false} currentUserId={userContext.user?.id || ''} />;
+      }
       return (
         <Home
           jobs={jobs}
@@ -110,6 +113,9 @@ export default function App() {
       );
     }
     if (currentPath === '/new') {
+      if (!userContext.user?.isAdmin) {
+        return <NewsDashboard onNavigate={navigate} isAdmin={false} currentUserId={userContext.user?.id || ''} />;
+      }
       return (
         <NewResearch
           key={navResetKey}
@@ -145,6 +151,9 @@ export default function App() {
       return <AdminBugReports isAdmin={userContext.user?.isAdmin} />;
     }
     if (currentPath.startsWith('/research/')) {
+      if (!userContext.user?.isAdmin) {
+        return <NewsDashboard onNavigate={navigate} isAdmin={false} currentUserId={userContext.user?.id || ''} />;
+      }
       return (
         <ResearchDetail
           jobs={jobs}
@@ -155,6 +164,9 @@ export default function App() {
           onRefreshDetail={refreshJobDetail}
         />
       );
+    }
+    if (!userContext.user?.isAdmin) {
+      return <NewsDashboard onNavigate={navigate} isAdmin={false} currentUserId={userContext.user?.id || ''} />;
     }
     return <Home jobs={jobs} loading={jobsLoading} reportBlueprints={reportBlueprints.blueprints} onNavigate={navigate} onCancel={cancelJob} onDelete={deleteJob} logoToken={logoToken} />;
   };

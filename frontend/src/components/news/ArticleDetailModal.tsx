@@ -9,7 +9,6 @@ import {
   Newspaper,
   Sparkles,
   Link2,
-  Archive,
   Pin,
   Check,
   FileDown,
@@ -17,10 +16,13 @@ import {
 import type { NewsArticle } from '../../services/newsManager';
 import { useArticleViewTracker, trackEvent } from '../../services/activityTracker';
 
+/** Strip <cite index="...">…</cite> wrappers, keeping inner text */
+const stripCitations = (text: string) => text.replace(/<cite[^>]*>([\s\S]*?)<\/cite>/g, '$1');
+
 interface ArticleDetailModalProps {
   article: NewsArticle;
   onClose: () => void;
-  onArchive?: (articleId: string) => void;
+  onDismiss?: (articleId: string) => void;
   onExport?: (articleId: string, format: 'pdf' | 'markdown' | 'docx') => void;
   isPinned?: boolean;
   onTogglePin?: (articleId: string) => void;
@@ -29,7 +31,7 @@ interface ArticleDetailModalProps {
 export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
   article,
   onClose,
-  onArchive,
+  onDismiss,
   onExport,
   isPinned = false,
   onTogglePin,
@@ -47,7 +49,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
           <div className="relative">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                <h2 className="text-xl font-bold text-white leading-tight">{article.headline}</h2>
+                <h2 className="text-xl font-bold text-white leading-tight">{stripCitations(article.headline)}</h2>
                 <div className="flex items-center gap-3 mt-3">
                   <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white/90 rounded-lg text-sm font-medium">
                     {article.sourceName}
@@ -69,23 +71,30 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
         {/* Body */}
         <div className="p-6 space-y-5">
           {/* Tags Row */}
-          <div className="flex flex-wrap gap-2.5">
-            {article.company && (
-              <span className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full text-sm font-semibold shadow-lg shadow-blue-500/25 border border-blue-400/30">
-                <Building2 size={14} />
-                {article.company.name}
-              </span>
-            )}
-            {article.person && (
-              <span className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-sm font-semibold shadow-lg shadow-purple-500/25 border border-purple-400/30">
-                <User size={14} />
-                {article.person.name}
-              </span>
-            )}
-            {article.tag && (
-              <span className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-sm font-semibold shadow-lg shadow-emerald-500/25 border border-emerald-400/30">
-                <Tag size={14} />
-                {article.tag.name}
+          <div className="flex items-start justify-between gap-2.5">
+            <div className="flex flex-wrap gap-2.5">
+              {article.company && (
+                <span className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full text-sm font-semibold shadow-lg shadow-blue-500/25 border border-blue-400/30">
+                  <Building2 size={14} />
+                  {article.company.name}
+                </span>
+              )}
+              {article.person && (
+                <span className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-sm font-semibold shadow-lg shadow-purple-500/25 border border-purple-400/30">
+                  <User size={14} />
+                  {article.person.name}
+                </span>
+              )}
+              {article.tag && (
+                <span className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-sm font-semibold shadow-lg shadow-emerald-500/25 border border-emerald-400/30">
+                  <Tag size={14} />
+                  {article.tag.name}
+                </span>
+              )}
+            </div>
+            {isPinned && (
+              <span className="flex-shrink-0 p-2 bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-full shadow-lg shadow-amber-500/25 border border-amber-400/30">
+                <Pin size={16} className="fill-current" />
               </span>
             )}
           </div>
@@ -98,7 +107,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
                 Summary
               </h3>
               <p className="text-slate-600 leading-relaxed">
-                {article.longSummary || article.shortSummary || article.summary}
+                {stripCitations(article.longSummary || article.shortSummary || article.summary || '')}
               </p>
             </div>
           )}
@@ -110,7 +119,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
                 <Sparkles size={16} className="text-brand-500" />
                 Why It Matters
               </h3>
-              <p className="text-brand-700 leading-relaxed">{article.whyItMatters}</p>
+              <p className="text-brand-700 leading-relaxed">{stripCitations(article.whyItMatters)}</p>
             </div>
           )}
 
@@ -163,16 +172,16 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
         <div className="p-6 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-slate-100 space-y-4">
           {/* Status badges */}
           <div className="flex items-center gap-2">
+            {article.isDismissed && (
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-sm font-medium">
+                <X size={14} />
+                Dismissed
+              </span>
+            )}
             {article.isArchived && (
               <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-sm font-medium">
                 <Check size={14} />
                 Archived
-              </span>
-            )}
-            {isPinned && (
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-100 text-brand-700 rounded-lg text-sm font-medium">
-                <Pin size={14} className="fill-current" />
-                Pinned
               </span>
             )}
           </div>
@@ -180,13 +189,13 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
           {/* Action buttons */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              {onArchive && !article.isArchived && (
+              {onDismiss && !article.isDismissed && (
                 <button
-                  onClick={() => onArchive(article.id)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all bg-slate-200 text-slate-600 hover:bg-slate-300"
+                  onClick={() => onDismiss(article.id)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/30 hover:from-red-600 hover:to-rose-700"
                 >
-                  <Archive size={16} />
-                  Archive
+                  <X size={16} />
+                  Dismiss
                 </button>
               )}
               {onTogglePin && (
@@ -194,8 +203,8 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({
                   onClick={() => onTogglePin(article.id)}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all ${
                     isPinned
-                      ? 'bg-brand-100 text-brand-700 hover:bg-brand-200'
-                      : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30 hover:from-amber-600 hover:to-orange-700'
+                      : 'bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/30 hover:from-amber-500 hover:to-orange-600'
                   }`}
                 >
                   <Pin size={16} className={isPinned ? 'fill-current' : ''} />

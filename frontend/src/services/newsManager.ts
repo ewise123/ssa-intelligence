@@ -75,6 +75,7 @@ export interface NewsArticle {
   status: 'new_article' | 'update' | null;
   isSent: boolean;
   isArchived: boolean;
+  isDismissed: boolean;
   matchType: 'exact' | 'contextual' | null;
   fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm' | null;
   company: TrackedCompany | null;
@@ -285,6 +286,7 @@ export interface ArticleFilters {
   tagId?: string;
   isSent?: boolean;
   isArchived?: boolean;
+  isDismissed?: boolean;
 }
 
 export const useNewsArticles = (filters?: ArticleFilters) => {
@@ -311,6 +313,7 @@ export const useNewsArticles = (filters?: ArticleFilters) => {
       if (filters?.tagId) params.set('tagId', filters.tagId);
       if (filters?.isSent !== undefined) params.set('isSent', String(filters.isSent));
       if (filters?.isArchived !== undefined) params.set('isArchived', String(filters.isArchived));
+      if (filters?.isDismissed !== undefined) params.set('isDismissed', String(filters.isDismissed));
 
       const currentPage = overridePage ?? page;
       params.set('limit', String(pageSize));
@@ -326,7 +329,7 @@ export const useNewsArticles = (filters?: ArticleFilters) => {
     } finally {
       setLoading(false);
     }
-  }, [filters?.userId, filters?.companyId, filters?.personId, filters?.tagId, filters?.isSent, filters?.isArchived, page, pageSize]);
+  }, [filters?.userId, filters?.companyId, filters?.personId, filters?.tagId, filters?.isSent, filters?.isArchived, filters?.isDismissed, page, pageSize]);
 
   useEffect(() => {
     fetchArticles();
@@ -392,36 +395,84 @@ export const useNewsRefresh = () => {
 };
 
 // ============================================================================
-// Ad-Hoc Search Hook
+// Deep Dive Background Search
 // ============================================================================
 
-export const useNewsSearch = () => {
-  const [results, setResults] = useState<NewsArticle[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export interface DeepDiveStatus {
+  isSearching: boolean;
+  startedAt: string | null;
+  completedAt: string | null;
+  lastError: string | null;
+  articlesFound: number;
+  progress: number;
+  progressMessage: string;
+  currentStep: 'init' | 'verifying' | 'searching' | 'saving' | 'complete' | 'error' | '';
+  searchParams: { company?: string; person?: string; days: number } | null;
+}
 
-  const search = async (params: { company?: string; person?: string; topics?: string[]; days?: number }) => {
-    setSearching(true);
-    setError(null);
+const DEFAULT_DEEP_DIVE_STATUS: DeepDiveStatus = {
+  isSearching: false,
+  startedAt: null,
+  completedAt: null,
+  lastError: null,
+  articlesFound: 0,
+  progress: 0,
+  progressMessage: '',
+  currentStep: '',
+  searchParams: null,
+};
+
+export const useDeepDiveStatus = () => {
+  const [status, setStatus] = useState<DeepDiveStatus>({ ...DEFAULT_DEEP_DIVE_STATUS });
+
+  const fetchStatus = useCallback(async () => {
     try {
-      const data = await fetchJson('/news/search', {
-        method: 'POST',
-        body: JSON.stringify({ ...params, days: params.days || 1 }),
-      });
-      setResults(data.articles || []);
-      return data;
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Search failed';
-      setError(errorMsg);
-      throw err;
-    } finally {
-      setSearching(false);
+      const data = await fetchJson('/news/deep-dive/status');
+      setStatus(data);
+    } catch {
+      // Ignore status fetch errors
     }
-  };
+  }, []);
 
-  const clearResults = () => setResults([]);
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
 
-  return { results, searching, error, search, clearResults };
+  return { status, fetchStatus };
+};
+
+export const useDeepDiveArticles = () => {
+  const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [searchParams, setSearchParams] = useState<{ company?: string; person?: string; days: number } | null>(null);
+  const [completedAt, setCompletedAt] = useState<string | null>(null);
+
+  const fetchArticles = useCallback(async () => {
+    try {
+      const data = await fetchJson('/news/deep-dive/articles');
+      setArticles(data.articles || []);
+      setSearchParams(data.searchParams || null);
+      setCompletedAt(data.completedAt || null);
+    } catch {
+      // Ignore fetch errors
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchArticles();
+  }, [fetchArticles]);
+
+  return { articles, searchParams, completedAt, fetchArticles };
+};
+
+export const startDeepDive = async (params: { company?: string; person?: string; days?: number }) => {
+  return fetchJson('/news/deep-dive', {
+    method: 'POST',
+    body: JSON.stringify({ ...params, days: params.days || 1 }),
+  });
+};
+
+export const clearDeepDive = async () => {
+  return fetchJson('/news/deep-dive/clear', { method: 'POST' });
 };
 
 // ============================================================================
@@ -454,6 +505,30 @@ export const archiveArticle = async (articleId: string, isArchived?: boolean): P
 
 export const bulkArchiveArticles = async (articleIds: string[]): Promise<number> => {
   const data = await fetchJson('/news/articles/bulk-archive', {
+    method: 'POST',
+    body: JSON.stringify({ articleIds }),
+  });
+  return data.count;
+};
+
+// ============================================================================
+// Dismiss Article (user manually tossed)
+// ============================================================================
+
+export const dismissArticle = async (articleId: string, isDismissed?: boolean): Promise<boolean> => {
+  const data = await fetchJson(`/news/articles/${articleId}/dismiss`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isDismissed }),
+  });
+  return data.isDismissed;
+};
+
+// ============================================================================
+// Bulk Dismiss Articles
+// ============================================================================
+
+export const bulkDismissArticles = async (articleIds: string[]): Promise<number> => {
+  const data = await fetchJson('/news/articles/bulk-dismiss', {
     method: 'POST',
     body: JSON.stringify({ articleIds }),
   });
@@ -637,56 +712,8 @@ export const useUserPins = () => {
 };
 
 // ============================================================================
-// Pin Search Result (save to DB and pin)
-// ============================================================================
-
-export const pinSearchResult = async (article: NewsArticle): Promise<{ articleId: string }> => {
-  const data = await fetchJson('/news/articles/pin-from-data', {
-    method: 'POST',
-    body: JSON.stringify({
-      headline: article.headline,
-      sourceUrl: article.sourceUrl,
-      sourceName: article.sourceName,
-      company: article.company?.name ?? (article as any).company ?? null,
-      person: article.person?.name ?? (article as any).person ?? null,
-      category: article.tag?.name ?? null,
-      shortSummary: article.shortSummary,
-      longSummary: article.longSummary,
-      summary: article.summary,
-      whyItMatters: article.whyItMatters,
-      publishedAt: article.publishedAt,
-      matchType: article.matchType,
-      fetchLayer: article.fetchLayer,
-    }),
-  });
-  return { articleId: data.articleId };
-};
-
-// ============================================================================
 // Export Articles
 // ============================================================================
-
-export const exportSearchResults = async (format: 'pdf' | 'markdown' | 'docx', articles: any[]) => {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-  const base = API_BASE_URL.replace(/\/$/, '');
-  const url = `${base}/news/export/${format}/from-data`;
-
-  const res = await fetch(url, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ articles }),
-  });
-  if (!res.ok) throw new Error('Export failed');
-  const blob = await res.blob();
-  const ext = format === 'pdf' ? 'pdf' : format === 'docx' ? 'docx' : 'md';
-  const filename = `sami-deep-dive-${new Date().toISOString().split('T')[0]}.${ext}`;
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
-};
 
 export const exportArticles = async (format: 'pdf' | 'markdown' | 'docx', articleIds: string[], userId?: string) => {
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';

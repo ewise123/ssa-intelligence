@@ -462,29 +462,31 @@ export const AdminNewsActivity: React.FC<AdminNewsActivityProps> = ({ isAdmin })
             enableMouseInteraction
           />
         </div>
-        <div className="relative z-10 p-10 text-white pointer-events-none flex flex-col justify-between gap-6 min-h-[15rem]">
-          <div className="hidden lg:flex absolute left-[50%] right-0 top-1/2 -translate-y-1/2 items-center justify-center pointer-events-none">
+        <div className="relative z-10 p-10 text-white pointer-events-none flex gap-6 min-h-[15rem]">
+          <div className="flex-1 min-w-0 flex flex-col justify-between gap-6">
+            <div>
+              <h2 className="text-3xl font-bold mb-3">Understand how your team engages with news.</h2>
+              <p className="text-brand-100 text-lg">Track how your team engages with news content across reads, exports, and link clicks</p>
+            </div>
+            <div className="flex justify-start">
+              <select
+                value={days}
+                onChange={e => setDays(Number(e.target.value))}
+                className="pointer-events-auto px-6 py-3 rounded-lg font-semibold bg-white text-brand-700 shadow-lg hover:bg-brand-50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-300 [&>option]:text-slate-700 [&>option]:bg-white"
+              >
+                <option value={7}>Last 7 days</option>
+                <option value={14}>Last 14 days</option>
+                <option value={30}>Last 30 days</option>
+                <option value={90}>Last 90 days</option>
+              </select>
+            </div>
+          </div>
+          <div className="hidden lg:flex flex-1 items-center justify-center pointer-events-none">
             <img
               src="/SAMI_Activity.png"
               alt="SAMI"
-              className="h-56 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
+              className="h-44 xl:h-56 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
             />
-          </div>
-          <div className="max-w-2xl">
-            <h2 className="text-3xl font-bold mb-3">Understand how your team engages with news.</h2>
-            <p className="text-brand-100 text-lg">Track how your team engages with news content across reads, exports, and link clicks</p>
-          </div>
-          <div className="flex justify-start">
-            <select
-              value={days}
-              onChange={e => setDays(Number(e.target.value))}
-              className="pointer-events-auto px-6 py-3 rounded-lg font-semibold bg-white text-brand-700 shadow-lg hover:bg-brand-50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-300 [&>option]:text-slate-700 [&>option]:bg-white"
-            >
-              <option value={7}>Last 7 days</option>
-              <option value={14}>Last 14 days</option>
-              <option value={30}>Last 30 days</option>
-              <option value={90}>Last 90 days</option>
-            </select>
           </div>
         </div>
       </div>
