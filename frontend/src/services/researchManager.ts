@@ -186,15 +186,13 @@ const stringifyContent = (value: unknown): string => {
 
 // Metric formatting — imported from shared module
 import { formatMetricValue, formatNumber } from '../utils/metric-formatter';
-
-// Simple Markdown table builder
-const normalizeCell = (cell: string | number | null | undefined): string => {
-  if (cell === null || cell === undefined) return '';
-  const s = String(cell).trim();
-  // Normalize dash placeholders and N/A to blank for consistent empty-cell display
-  if (s === '–' || s === '-' || s === '—' || /^n\/?a$/i.test(s)) return '';
-  return s;
-};
+import {
+  normalizeCell,
+  isEmptyValue,
+  stripInlineSource,
+  isPlaceholderName,
+  insufficientDataNotice,
+} from '../utils/rendering-helpers';
 
 const mdTable = (headers: string[], rows: (string | number | null | undefined)[][]): string => {
   if (!rows.length) return '';
@@ -204,32 +202,6 @@ const mdTable = (headers: string[], rows: (string | number | null | undefined)[]
     .map((r) => `| ${r.map(normalizeCell).join(' | ')} |`)
     .join('\n');
   return `${headerRow}\n${sepRow}\n${body}`;
-};
-
-/** Treat dashes, N/A, and similar placeholders as empty (no real data). */
-const isEmptyValue = (v: any): boolean => {
-  if (v == null || v === '') return true;
-  if (typeof v === 'string') {
-    const t = v.trim();
-    if (t === '' || t === '–' || t === '-' || t === '—' || /^n\/?a$/i.test(t)) return true;
-  }
-  return false;
-};
-
-/** Strip inline source references like "(S10)", "(S1, S2)", or "(S1, Section 2)" from display values.
- *  Preserves any trailing period after the source ref. */
-const stripInlineSource = (v: string): string =>
-  v.replace(/\s*\((?:S\d+|Section\s+\d+)(?:,\s*(?:S\d+|Section\s+\d+))*\)(\.?)\s*$/, '$1').trim();
-
-/** Detect placeholder names Claude fabricates when no real person can be identified. */
-const isPlaceholderName = (name: string): boolean => {
-  if (!name) return true;
-  const t = name.trim().toLowerCase();
-  return /not (publicly )?(available|disclosed|known|identified)/i.test(t) ||
-    /information not available/i.test(t) ||
-    /undisclosed/i.test(t) ||
-    /unknown/i.test(t) ||
-    t === '–' || t === '-' || t === '—' || /^n\/?a$/i.test(t);
 };
 
 const FX_SOURCE_LABELS: Record<string, string> = {
@@ -246,12 +218,6 @@ const resolveSourceLabel = (code: string, labels: Record<string, string>): strin
 
 const stripSourceMetadata = (summary: string): string =>
   summary.replace(/\s*FX rate source:\s*[A-C]\.?\s*Industry average source:\s*[A-C]\.?\s*$/i, '').trim();
-
-const insufficientDataNotice = (reason?: string): string => {
-  const lines = ['> **Limited public information available**'];
-  if (reason) lines.push('>', `> ${reason}`);
-  return lines.join('\n');
-};
 
 // Section-specific content formatter to produce readable Markdown
 const formatSectionContent = (sectionId: SectionId, data: any): string => {

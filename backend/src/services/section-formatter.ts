@@ -1,6 +1,15 @@
 // Utilities to format section content into Markdown (ported from frontend)
 
 import { formatMetricValue, formatNumber } from './metric-formatter.js';
+import {
+  normalizeCell,
+  isEmptyValue,
+  stripInlineSource,
+  isPlaceholderName,
+  insufficientDataNotice,
+} from './rendering-helpers.js';
+// Re-export for consumers that import from section-formatter
+export { stripInlineSource, insufficientDataNotice };
 
 export type SectionId =
   | 'exec_summary'
@@ -24,14 +33,6 @@ export type SectionId =
   | 'conversation_starters'
   | 'appendix';
 
-const normalizeCell = (cell: string | number | null | undefined): string => {
-  if (cell === null || cell === undefined) return '';
-  const s = String(cell).trim();
-  // Normalize dash placeholders and N/A to blank for consistent empty-cell display
-  if (s === '–' || s === '-' || s === '—' || /^n\/?a$/i.test(s)) return '';
-  return s;
-};
-
 const mdTable = (headers: string[], rows: (string | number | null | undefined)[][]): string => {
   if (!rows.length) return '';
   const headerRow = `| ${headers.join(' | ')} |`;
@@ -40,32 +41,6 @@ const mdTable = (headers: string[], rows: (string | number | null | undefined)[]
     .map((r) => `| ${r.map(normalizeCell).join(' | ')} |`)
     .join('\n');
   return `${headerRow}\n${sepRow}\n${body}`;
-};
-
-/** Treat dashes, N/A, and similar placeholders as empty (no real data). */
-const isEmptyValue = (v: any): boolean => {
-  if (v == null || v === '') return true;
-  if (typeof v === 'string') {
-    const t = v.trim();
-    if (t === '' || t === '–' || t === '-' || t === '—' || /^n\/?a$/i.test(t)) return true;
-  }
-  return false;
-};
-
-/** Strip inline source references like "(S10)", "(S1, S2)", or "(S1, Section 2)" from display values.
- *  Preserves any trailing period after the source ref. */
-export const stripInlineSource = (v: string): string =>
-  v.replace(/\s*\((?:S\d+|Section\s+\d+)(?:,\s*(?:S\d+|Section\s+\d+))*\)(\.?)\s*$/, '$1').trim();
-
-/** Detect placeholder names Claude fabricates when no real person can be identified. */
-const isPlaceholderName = (name: string): boolean => {
-  if (!name) return true;
-  const t = name.trim().toLowerCase();
-  return /not (publicly )?(available|disclosed|known|identified)/i.test(t) ||
-    /information not available/i.test(t) ||
-    /undisclosed/i.test(t) ||
-    /unknown/i.test(t) ||
-    t === '–' || t === '-' || t === '—' || /^n\/?a$/i.test(t);
 };
 
 const FX_SOURCE_LABELS: Record<string, string> = {
@@ -82,12 +57,6 @@ const resolveSourceLabel = (code: string, labels: Record<string, string>): strin
 
 const stripSourceMetadata = (summary: string): string =>
   summary.replace(/\s*FX rate source:[\s\S]*$/i, '').trim();
-
-export const insufficientDataNotice = (reason?: string): string => {
-  const lines = ['> **Limited public information available**'];
-  if (reason) lines.push('>', `> ${reason}`);
-  return lines.join('\n');
-};
 
 export const formatSectionContent = (sectionId: SectionId, data: any): string => {
   if (!data || typeof data !== 'object') return '';

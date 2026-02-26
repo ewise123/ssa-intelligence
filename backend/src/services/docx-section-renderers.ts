@@ -11,7 +11,7 @@ import {
   ShadingType,
 } from 'docx';
 import { formatMetricValue, formatNumber } from './metric-formatter.js';
-import { stripInlineSource } from './section-formatter.js';
+import { stripInlineSource, isEmptyValue, isPlaceholderName } from './rendering-helpers.js';
 
 // SSA brand colors
 const BRAND_BLUE = '003399';
@@ -236,17 +236,6 @@ export function brandedTable(
 }
 
 type DocxElement = Paragraph | Table;
-
-/** Detect placeholder names Claude fabricates when no real person can be identified. */
-function isPlaceholderName(name: string): boolean {
-  if (!name) return true;
-  const t = name.trim().toLowerCase();
-  return /not (publicly )?(available|disclosed|known|identified)/i.test(t) ||
-    /information not available/i.test(t) ||
-    /undisclosed/i.test(t) ||
-    /unknown/i.test(t) ||
-    t === '–' || t === '-' || t === '—' || /^n\/?a$/i.test(t);
-}
 
 /** Styled notice paragraph for sections with insufficient data. */
 function insufficientDataParagraph(reason?: string): Paragraph {
@@ -973,14 +962,3 @@ export function renderSection(sectionId: string, data: unknown): DocxElement[] {
   }
 }
 
-// ── Helpers ──
-
-/** Treat dashes, N/A, and similar placeholders as empty (no real data). */
-function isEmptyValue(v: any): boolean {
-  if (v == null || v === '') return true;
-  if (typeof v === 'string') {
-    const t = v.trim();
-    if (t === '' || t === '–' || t === '-' || t === '—' || /^n\/?a$/i.test(t)) return true;
-  }
-  return false;
-}
