@@ -214,7 +214,7 @@ const INDUSTRY_SOURCE_LABELS: Record<string, string> = {
   B: 'Peer set average (comparable firms)',
 };
 const resolveSourceLabel = (code: string, labels: Record<string, string>): string =>
-  labels[code] || code;
+  labels[code.toUpperCase()] || code;
 
 const stripSourceMetadata = (summary: string): string =>
   summary.replace(/\s*FX rate source:[\s\S]*$/i, '').trim();

@@ -247,6 +247,12 @@ describe('resolveMetricUnit', () => {
     expect(resolveMetricUnit('Revenue', 'JPY thousands')).toEqual({ type: 'currency', scale: 'K' });
   });
 
+  it('detects plain non-USD currency hints without scale', () => {
+    expect(resolveMetricUnit('Revenue', 'EUR')).toEqual({ type: 'currency' });
+    expect(resolveMetricUnit('Revenue', 'GBP')).toEqual({ type: 'currency' });
+    expect(resolveMetricUnit('Revenue', 'JPY')).toEqual({ type: 'currency' });
+  });
+
   it('returns null for unrecognized metrics', () => {
     expect(resolveMetricUnit('Something')).toBeNull();
   });
@@ -291,6 +297,12 @@ describe('parseNumeric', () => {
   it('does not treat non-wrapping parens as negative', () => {
     expect(parseNumeric('(partial 123')).toBe(123);
     expect(parseNumeric('123)')).toBe(123);
+  });
+
+  it('handles leading-decimal numbers', () => {
+    expect(parseNumeric('.5')).toBe(0.5);
+    expect(parseNumeric('-.5')).toBe(-0.5);
+    expect(parseNumeric('$.75')).toBe(0.75);
   });
 });
 

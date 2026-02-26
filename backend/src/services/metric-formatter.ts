@@ -170,7 +170,7 @@ export function resolveMetricUnit(
     if (hasCurrencyIndicator && /\bbillion/.test(normalizedUnit)) return { type: 'currency', scale: 'B' };
     if (hasCurrencyIndicator && /\bmillion/.test(normalizedUnit)) return { type: 'currency', scale: 'M' };
     if (hasCurrencyIndicator && /\bthousand/.test(normalizedUnit)) return { type: 'currency', scale: 'K' };
-    if (normalizedUnit.includes('usd') || normalizedUnit.includes('$')) return { type: 'currency' };
+    if (hasCurrencyIndicator) return { type: 'currency' };
   }
 
   const normalizedType = valueType?.toLowerCase();
@@ -193,7 +193,7 @@ export function parseNumeric(raw: string): number | null {
   const isParenNegative = /^\(.+\)$/.test(trimmed);
   const normalized = isParenNegative ? trimmed.slice(1, -1) : trimmed;
   const cleaned = normalized.replace(/,/g, '');
-  const match = cleaned.match(/-?\d+(\.\d+)?/);
+  const match = cleaned.match(/-?(?:\d+\.?\d*|\.\d+)/);
   if (!match) return null;
   const num = Number.parseFloat(match[0]);
   if (Number.isNaN(num)) return null;
