@@ -121,7 +121,7 @@ export interface StrategicPriority {
   priority: string;
   description: string;
   geography_relevance: string;
-  geography_relevance_rating: 'High' | 'Medium' | 'Low';
+  geography_relevance_rating?: 'High' | 'Medium' | 'Low' | null;
   source: string;
 }
 
@@ -190,7 +190,7 @@ export interface BoardMember {
   role: string;
   committees: string[];
   background: string;
-  tenure: string;
+  tenure?: string | null;
   other_boards: string[];
   source: string;
 }
@@ -200,7 +200,7 @@ export interface CSuiteExecutive {
   title: string;
   role_description: string;
   background: string;
-  tenure: string;
+  tenure?: string | null;
   performance_actions: string[];
   geography_relevance?: 'High' | 'Medium' | 'Low';
   source: string;
@@ -291,7 +291,7 @@ export interface Section4Input {
   foundation: FoundationOutput;
   companyName: string;
   geography: string;
-  section2Context?: Section2Output;
+  section2?: Section2Output;
 }
 
 // ============================================================================
@@ -336,8 +336,8 @@ export interface Section5Input {
   foundation: FoundationOutput;
   companyName: string;
   geography: string;
-  section3Context?: Section3Output;
-  section4Context?: Section4Output;
+  section3?: Section3Output;
+  section4?: Section4Output;
 }
 
 // ============================================================================
@@ -398,7 +398,7 @@ export interface Section6Input {
   foundation: FoundationOutput;
   companyName: string;
   geography: string;
-  section2Context: Section2Output; // REQUIRED
+  section2: Section2Output; // REQUIRED
 }
 
 // ============================================================================
@@ -415,8 +415,8 @@ export interface Section7Input {
   foundation: FoundationOutput;
   companyName: string;
   geography: string;
-  section5Context?: Section5Output;
-  section6Context?: Section6Output;
+  section5?: Section5Output;
+  section6?: Section6Output;
 }
 
 // ============================================================================

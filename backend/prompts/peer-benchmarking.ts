@@ -14,8 +14,8 @@ export interface Section2Context {
   kpi_table: {
     metrics: Array<{
       metric: string;
-      company: number | string;
-      industry_avg: number | string;
+      company: number | string | null;
+      industry_avg: number | string | null;
       source: string;
     }>;
   };
@@ -27,7 +27,7 @@ export interface Section6Input {
   foundation: FoundationOutput;
   companyName: string;
   geography: string;
-  section2Context: Section2Context; // REQUIRED
+  section2: Section2Context; // REQUIRED
   reportType?: ReportTypeId;
 }
 
@@ -44,12 +44,12 @@ export interface PeerInfo {
 
 export interface PeerMetric {
   metric: string;
-  company: number | string;
-  peer1: number | string;
-  peer2: number | string;
-  peer3: number | string;
-  peer4?: number | string;
-  industry_avg: number | string;
+  company: number | string | null;
+  peer1: number | string | null;
+  peer2: number | string | null;
+  peer3: number | string | null;
+  peer4?: number | string | null;
+  industry_avg: number | string | null;
   source: string;
 }
 
@@ -93,10 +93,10 @@ export interface Section6Output {
 // ============================================================================
 
 export function buildPeerBenchmarkingPrompt(input: Section6Input): string {
-  const { foundation, companyName, geography, section2Context } = input;
+  const { foundation, companyName, geography, section2 } = input;
   
   const foundationJson = JSON.stringify(foundation, null, 2);
-  const section2Json = JSON.stringify(section2Context, null, 2);
+  const section2Json = JSON.stringify(section2, null, 2);
   
   const basePrompt = `# Section 6: Peer Benchmarking - Research Prompt
 
@@ -208,12 +208,12 @@ interface Section6Output {
     }>;
     metrics: Array<{
       metric: string;
-      company: number | string;
-      peer1: number | string;
-      peer2: number | string;
-      peer3: number | string;
-      peer4?: number | string;
-      industry_avg: number | string;
+      company: number | string | null;
+      peer1: number | string | null;
+      peer2: number | string | null;
+      peer3: number | string | null;
+      peer4?: number | string | null;
+      industry_avg: number | string | null;
       source: string;
     }>;
   };
@@ -252,7 +252,7 @@ interface Section6Output {
 ## NUMBER FORMATTING (STRICT)
 
 - **Units belong in the metric name** (matching Section 2 KPI labels).
-- **Table values must be numeric only** (or \`-\`), with no \`$\`, \`%\`, \`M/B\`, or \`x\` suffixes.
+- **Table values must be numeric only** (or null), with no \`$\`, \`%\`, \`M/B\`, or \`x\` suffixes.
 - **Renderer will apply formatting** based on units in the metric name.
 
 ---
@@ -267,7 +267,7 @@ interface Section6Output {
 
 **Critical requirements:**
 - Use exact metric names from Section 2
-- Include ALL Section 2 metrics (use "–" if peer data unavailable)
+- Include ALL Section 2 metrics (use null if peer data unavailable)
 - Format consistently using units in metric names (e.g., ($M), (%), (x), (days))
 - Currency default: USD millions unless stated
 - Source every metric
@@ -321,6 +321,16 @@ Focus on ${geography}-specific competitive standing
 - [ ] Competitive positioning focused on ${geography}
 - [ ] 75-80% of content emphasizes ${geography}
 - [ ] Sources_used array complete
+
+---
+
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent peer companies, metrics, strengths, or gaps that cannot be confirmed from public sources.
+- **Return empty arrays** for \`peers\`, \`metrics\`, \`key_strengths\`, and/or \`key_gaps\` if no real data can be identified.
+- **Use \`overall_assessment\`** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- **Use \`null\`** for unavailable metric values (not "–" or "N/A"). Use "–" only for text fields where data genuinely cannot be determined.
 
 ---
 
@@ -440,7 +450,8 @@ export function formatSection6ForDocument(output: Section6Output): string {
     return 'currency';
   };
 
-  const formatTableValue = (metricName: string, value: number | string) => {
+  const formatTableValue = (metricName: string, value: number | string | null) => {
+    if (value === null || value === undefined) return '–';
     if (typeof value !== 'number') return value;
     const unit = resolveMetricUnit(metricName);
     const formatted = formatNumber(value);
@@ -477,7 +488,7 @@ export function formatSection6ForDocument(output: Section6Output): string {
     markdown += `- **Peer ${i + 1}: ${peer.name}**`;
     if (peer.ticker) markdown += ` (${peer.ticker})`;
     markdown += `: ${peer.geography_presence}`;
-    if (peer.geography_revenue_pct) {
+    if (peer.geography_revenue_pct != null) {
       markdown += ` Geography revenue: ${peer.geography_revenue_pct}% of total.`;
     }
     markdown += `
@@ -562,11 +573,11 @@ export function compareMetric(
   output: Section6Output,
   metricName: string
 ): {
-  company: number | string;
-  peerMin: number | string;
-  peerMax: number | string;
-  peerAvg: number | string;
-  industryAvg: number | string;
+  company: number | string | null;
+  peerMin: number | string | null;
+  peerMax: number | string | null;
+  peerAvg: number | string | null;
+  industryAvg: number | string | null;
 } | null {
   const metric = output.peer_comparison_table.metrics.find(m => m.metric === metricName);
   if (!metric) return null;

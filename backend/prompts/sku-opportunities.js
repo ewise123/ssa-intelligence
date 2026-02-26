@@ -1,3 +1,14 @@
+/**
+ * Section 7: SKU-Relevant Opportunity Mapping - TypeScript Implementation
+ * Generates prompt and types for SKU Opportunity Mapping section
+ */
+// ============================================================================
+// INPUT TYPES
+// ============================================================================
+import { appendReportTypeAddendum } from './report-type-addendums.js';
+// ============================================================================
+// SKU PRACTICE AREAS (for reference)
+// ============================================================================
 export const SKU_PRACTICE_AREAS = {
     CAPACITY_THROUGHPUT: '1. Capacity & Throughput Enhancement',
     DIGITAL_LEAN: '2. Cost Optimization Through Digital Lean',
@@ -25,12 +36,14 @@ export const SKU_SUB_OFFERINGS = {
     DIGITAL_OPS: 'Digital Operations',
     ENTERPRISE_ENABLE: 'Enterprise Enablement'
 };
-import { appendReportTypeAddendum } from './report-type-addendums.js';
+// ============================================================================
+// PROMPT BUILDER
+// ============================================================================
 export function buildSkuOpportunitiesPrompt(input) {
-    const { foundation, companyName, geography, section5Context, section6Context } = input;
+    const { foundation, companyName, geography, section5, section6 } = input;
     const foundationJson = JSON.stringify(foundation, null, 2);
-    const section5Json = section5Context ? JSON.stringify(section5Context, null, 2) : 'Not provided';
-    const section6Json = section6Context ? JSON.stringify(section6Context, null, 2) : 'Not provided';
+    const section5Json = section5 ? JSON.stringify(section5, null, 2) : 'Not provided';
+    const section6Json = section6 ? JSON.stringify(section6, null, 2) : 'Not provided';
     const basePrompt = `# Section 7: SKU-Relevant Opportunity Mapping - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
@@ -171,12 +184,12 @@ interface Section7Output {
     source: string;
     aligned_sku: string;
     priority: 'High' | 'Medium' | 'Low';
-    severity: number;
+    severity: number | null;  // 1-10, null if cannot be assessed
     severity_rationale: string;
     geography_relevance: string;
     potential_value_levers: string[];
   }>;
-  
+
   sources_used: string[];
 }
 \`\`\`
@@ -241,6 +254,14 @@ interface Section7Output {
 
 ---
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate opportunities.** Never invent problems, SKU alignments, or value levers that cannot be confirmed from public sources.
+- **Return an empty \`opportunities\` array** if no genuine alignments can be identified — this is explicitly acceptable.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+
+---
+
 ## CRITICAL REMINDERS
 
 1. **Only genuine alignments** - do not force fit
@@ -266,19 +287,25 @@ interface Section7Output {
 `;
     return appendReportTypeAddendum('sku_opportunities', input.reportType, basePrompt);
 }
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
 export function validateSection7Output(output) {
     if (!output || typeof output !== 'object')
         return false;
+    // Check confidence
     if (!output.confidence ||
         !['HIGH', 'MEDIUM', 'LOW'].includes(output.confidence.level)) {
         return false;
     }
+    // Check opportunities (can be empty array)
     if (!Array.isArray(output.opportunities))
         return false;
+    // Validate each opportunity
     for (const opp of output.opportunities) {
         if (!opp.issue_area || !opp.public_problem || !opp.source ||
             !opp.aligned_sku || !opp.priority ||
-            typeof opp.severity !== 'number' ||
+            (opp.severity !== null && typeof opp.severity !== 'number') ||
             !opp.severity_rationale || !opp.geography_relevance ||
             !Array.isArray(opp.potential_value_levers)) {
             return false;
@@ -286,13 +313,14 @@ export function validateSection7Output(output) {
         if (!['High', 'Medium', 'Low'].includes(opp.priority)) {
             return false;
         }
-        if (opp.severity < 1 || opp.severity > 10) {
+        if (opp.severity !== null && (opp.severity < 1 || opp.severity > 10)) {
             return false;
         }
         if (opp.potential_value_levers.length < 2) {
             return false;
         }
     }
+    // Check sources
     if (!Array.isArray(output.sources_used))
         return false;
     return true;
@@ -304,18 +332,20 @@ export function formatSection7ForDocument(output) {
         markdown += `No genuine SKU alignments identified based on available public information.\n\n`;
         return markdown;
     }
+    // Build table
     markdown += `| Issue Area | Public Problem Identified | Aligned SKU | Priority | Severity | Potential Value Levers |\n`;
     markdown += `|------------|---------------------------|-------------|----------|----------|------------------------|\n`;
     for (const opp of output.opportunities) {
         const valueLeversList = opp.potential_value_levers.map(vl => `• ${vl}`).join('<br>');
-        markdown += `| ${opp.issue_area} | ${opp.public_problem} (${opp.source}) | ${opp.aligned_sku} | ${opp.priority} | ${opp.severity}/10 | ${valueLeversList} |\n`;
+        markdown += `| ${opp.issue_area} | ${opp.public_problem} (${opp.source}) | ${opp.aligned_sku} | ${opp.priority} | ${opp.severity !== null ? `${opp.severity}/10` : 'N/A'} | ${valueLeversList} |\n`;
     }
     markdown += `\n`;
+    // Add detailed context for each opportunity
     markdown += `## Opportunity Details\n\n`;
     for (let i = 0; i < output.opportunities.length; i++) {
         const opp = output.opportunities[i];
         markdown += `### ${i + 1}. ${opp.issue_area}\n\n`;
-        markdown += `**Priority:** ${opp.priority} | **Severity:** ${opp.severity}/10\n\n`;
+        markdown += `**Priority:** ${opp.priority} | **Severity:** ${opp.severity !== null ? `${opp.severity}/10` : 'N/A'}\n\n`;
         markdown += `**Problem:** ${opp.public_problem}\n\n`;
         markdown += `**Severity Rationale:** ${opp.severity_rationale}\n\n`;
         markdown += `**Geography Relevance:** ${opp.geography_relevance}\n\n`;
@@ -328,14 +358,23 @@ export function formatSection7ForDocument(output) {
     }
     return markdown;
 }
+/**
+ * Filters opportunities by priority
+ */
 export function filterByPriority(output, priority) {
     return output.opportunities.filter(o => o.priority === priority);
 }
+/**
+ * Gets high-severity opportunities (7+)
+ */
 export function getHighSeverityOpportunities(output, minSeverity = 7) {
     return output.opportunities
-        .filter(o => o.severity >= minSeverity)
-        .sort((a, b) => b.severity - a.severity);
+        .filter(o => o.severity !== null && o.severity >= minSeverity)
+        .sort((a, b) => (b.severity ?? 0) - (a.severity ?? 0));
 }
+/**
+ * Groups opportunities by SKU practice area
+ */
 export function groupBySKU(output) {
     const grouped = {};
     for (const opp of output.opportunities) {
@@ -347,10 +386,14 @@ export function groupBySKU(output) {
     }
     return grouped;
 }
+/**
+ * Calculates average severity score
+ */
 export function calculateAverageSeverity(output) {
-    if (output.opportunities.length === 0)
+    const scored = output.opportunities.filter(o => o.severity !== null);
+    if (scored.length === 0)
         return 0;
-    const sum = output.opportunities.reduce((acc, o) => acc + o.severity, 0);
-    return Math.round((sum / output.opportunities.length) * 10) / 10;
+    const sum = scored.reduce((acc, o) => acc + o.severity, 0);
+    return Math.round((sum / scored.length) * 10) / 10;
 }
 //# sourceMappingURL=sku-opportunities.js.map
