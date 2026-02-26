@@ -105,7 +105,7 @@ export function formatCurrency(
     case 'K': {
       if (abs >= 1_000_000) return `${sign}${symbol}${trimDecimal(abs / 1_000_000)}B`;
       if (abs >= 1_000) return `${sign}${symbol}${trimDecimal(abs / 1_000)}M`;
-      return `${sign}${symbol}${trimDecimal(abs, 0)}K`;
+      return `${sign}${symbol}${trimDecimal(abs, abs < 1 ? 1 : 0)}K`;
     }
     case 'M': {
       if (abs >= 1_000) return `${sign}${symbol}${trimDecimal(abs / 1_000)}B`;
@@ -123,7 +123,7 @@ export function formatCurrency(
  * Uses 1 decimal, strips trailing zero for whole numbers.
  */
 export function formatPercent(value: number): string {
-  const pct = Math.abs(value) > 0 && Math.abs(value) <= 1 ? value * 100 : value;
+  const pct = Math.abs(value) > 0 && Math.abs(value) < 1 ? value * 100 : value;
   const fixed = pct.toFixed(1);
   const display = fixed.endsWith('.0') ? String(Math.round(pct)) : fixed;
   return `${display}%`;
@@ -145,9 +145,9 @@ export function resolveMetricUnit(
   const token = match?.[1]?.toLowerCase();
 
   if (token) {
-    if (token.includes('bps') || token.includes('bp')) return { type: 'bps', suffix: ' bps' };
+    if (token.includes('bps') || token === 'bp') return { type: 'bps', suffix: ' bps' };
     if (token.includes('%') || token.includes('percent')) return { type: 'percent', suffix: '%' };
-    if (token.includes('x')) return { type: 'ratio', suffix: 'x' };
+    if (token === 'x') return { type: 'ratio', suffix: 'x' };
     if (token.includes('day')) return { type: 'days', suffix: ' days' };
     if (token.includes('year')) return { type: 'years', suffix: ' years' };
     if (token.includes('count') || token.includes('score')) return { type: 'number' };
@@ -160,13 +160,13 @@ export function resolveMetricUnit(
   const normalizedUnit = unitHint?.toLowerCase();
   if (normalizedUnit) {
     if (normalizedUnit.includes('%') || normalizedUnit.includes('percent')) return { type: 'percent', suffix: '%' };
-    if (normalizedUnit.includes('bps') || normalizedUnit.includes('bp')) return { type: 'bps', suffix: ' bps' };
+    if (/\bbps?\b/.test(normalizedUnit)) return { type: 'bps', suffix: ' bps' };
     if (normalizedUnit.includes('day')) return { type: 'days', suffix: ' days' };
     if (normalizedUnit.includes('year')) return { type: 'years', suffix: ' years' };
     if (normalizedUnit.includes('count') || normalizedUnit.includes('score')) return { type: 'number' };
-    if (normalizedUnit.includes('usd') && normalizedUnit.includes('b')) return { type: 'currency', scale: 'B' };
-    if (normalizedUnit.includes('usd') && normalizedUnit.includes('m')) return { type: 'currency', scale: 'M' };
-    if (normalizedUnit.includes('usd') && normalizedUnit.includes('k')) return { type: 'currency', scale: 'K' };
+    if (normalizedUnit.includes('usd') && /\bbillion/.test(normalizedUnit)) return { type: 'currency', scale: 'B' };
+    if (normalizedUnit.includes('usd') && /\bmillion/.test(normalizedUnit)) return { type: 'currency', scale: 'M' };
+    if (normalizedUnit.includes('usd') && /\bthousand/.test(normalizedUnit)) return { type: 'currency', scale: 'K' };
     if (normalizedUnit.includes('usd') || normalizedUnit.includes('$')) return { type: 'currency' };
   }
 

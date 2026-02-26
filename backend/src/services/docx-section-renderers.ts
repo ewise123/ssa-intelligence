@@ -237,6 +237,36 @@ export function brandedTable(
 
 type DocxElement = Paragraph | Table;
 
+/** Detect placeholder names Claude fabricates when no real person can be identified. */
+function isPlaceholderName(name: string): boolean {
+  if (!name) return true;
+  const t = name.trim().toLowerCase();
+  return /not (publicly )?(available|disclosed|known|identified)/i.test(t) ||
+    /information not available/i.test(t) ||
+    /undisclosed/i.test(t) ||
+    /unknown/i.test(t) ||
+    t === '–' || t === '-' || t === '—' || /^n\/?a$/i.test(t);
+}
+
+/** Styled notice paragraph for sections with insufficient data. */
+function insufficientDataParagraph(reason?: string): Paragraph {
+  const text = reason
+    ? `Limited public information available — ${reason}`
+    : 'Limited public information available';
+  return new Paragraph({
+    children: [
+      new TextRun({
+        text,
+        font: 'Avenir Next LT Pro',
+        size: 22,
+        color: '92400E', // amber-900
+        italics: true,
+      }),
+    ],
+    spacing: { before: 120, after: 120 },
+  });
+}
+
 // ── Individual section renderers ──
 
 export function renderExecSummary(data: any): DocxElement[] {
@@ -358,6 +388,95 @@ export function renderCompanyOverview(data: any): DocxElement[] {
   return elements;
 }
 
+export function renderKeyExecsAndBoard(data: any): DocxElement[] {
+  if (!data || typeof data !== 'object') return [];
+  const elements: DocxElement[] = [];
+
+  const realExecs = (data.c_suite?.executives || []).filter((e: any) => !isPlaceholderName(e.name));
+  const realBoard = (data.board_of_directors?.members || []).filter((m: any) => !isPlaceholderName(m.name));
+  const realLeaders = (data.business_unit_leaders?.leaders || []).filter((l: any) => !isPlaceholderName(l.name));
+  const hasAnyPeople = realExecs.length + realBoard.length + realLeaders.length > 0;
+
+  if (!hasAnyPeople) {
+    return [insufficientDataParagraph(data.confidence?.reason)];
+  }
+
+  if (data.board_of_directors?.summary) {
+    elements.push(boldParagraph('Board of Directors'));
+    elements.push(styledParagraph(data.board_of_directors.summary));
+  }
+  if (realBoard.length) {
+    if (!data.board_of_directors?.summary) elements.push(boldParagraph('Board of Directors'));
+    elements.push(
+      brandedTable(
+        ['Name', 'Role', 'Committees', 'Tenure', 'Background', 'Source'],
+        realBoard.map((m: any) => [
+          m.name,
+          m.role,
+          Array.isArray(m.committees) ? m.committees.join(', ') : (m.committees || ''),
+          m.tenure || '',
+          m.background || '',
+          m.source || '',
+        ]),
+      ),
+    );
+  }
+  if (data.c_suite?.summary) {
+    elements.push(boldParagraph('C-Suite Leadership'));
+    elements.push(styledParagraph(data.c_suite.summary));
+  }
+  if (realExecs.length) {
+    if (!data.c_suite?.summary) elements.push(boldParagraph('C-Suite Leadership'));
+    elements.push(
+      brandedTable(
+        ['Name', 'Title', 'Tenure', 'Background', 'Source'],
+        realExecs.map((e: any) => [
+          e.name,
+          e.title,
+          e.tenure || '',
+          e.background || '',
+          e.source || '',
+        ]),
+      ),
+    );
+  }
+  if (data.business_unit_leaders?.summary) {
+    elements.push(boldParagraph('Business Unit Leaders'));
+    elements.push(styledParagraph(data.business_unit_leaders.summary));
+  }
+  if (realLeaders.length) {
+    if (!data.business_unit_leaders?.summary) elements.push(boldParagraph('Business Unit Leaders'));
+    elements.push(
+      brandedTable(
+        ['Name', 'Title', 'Business Unit', 'Background', 'Source'],
+        realLeaders.map((l: any) => [
+          l.name,
+          l.title,
+          l.business_unit || '',
+          l.background || '',
+          l.source || '',
+        ]),
+      ),
+    );
+  }
+  if (Array.isArray(data.recent_leadership_changes) && data.recent_leadership_changes.length) {
+    elements.push(boldParagraph('Recent Leadership Changes'));
+    elements.push(
+      brandedTable(
+        ['Date', 'Type', 'Description', 'Implications', 'Source'],
+        data.recent_leadership_changes.map((c: any) => [
+          c.date || '',
+          c.change_type || '',
+          c.description || '',
+          c.implications || '',
+          c.source || '',
+        ]),
+      ),
+    );
+  }
+  return elements;
+}
+
 export function renderInvestmentStrategy(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
   const elements: DocxElement[] = [];
@@ -419,6 +538,9 @@ export function renderDealActivity(data: any): DocxElement[] {
 export function renderDealTeam(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
   const elements: DocxElement[] = [];
+  if (!data.stakeholders?.length && !data.notes) {
+    return [insufficientDataParagraph(data.confidence?.reason)];
+  }
   if (Array.isArray(data.stakeholders) && data.stakeholders.length) {
     elements.push(boldParagraph('Stakeholders'));
     elements.push(
@@ -466,6 +588,9 @@ export function renderPortfolioMaturity(data: any): DocxElement[] {
 export function renderLeadershipAndGovernance(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
   const elements: DocxElement[] = [];
+  if (!data.leadership?.length && !data.governance_notes) {
+    return [insufficientDataParagraph(data.confidence?.reason)];
+  }
   if (Array.isArray(data.leadership) && data.leadership.length) {
     elements.push(boldParagraph('Leadership'));
     elements.push(
@@ -711,6 +836,9 @@ export function renderPeerBenchmarking(data: any): DocxElement[] {
 
 export function renderSkuOpportunities(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
+  if (!data.opportunities?.length) {
+    return [insufficientDataParagraph(data.confidence?.reason)];
+  }
   const elements: DocxElement[] = [];
   if (data.opportunities?.length) {
     elements.push(
@@ -734,6 +862,9 @@ export function renderSkuOpportunities(data: any): DocxElement[] {
 
 export function renderRecentNews(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
+  if (!data.news_items?.length) {
+    return [insufficientDataParagraph(data.confidence?.reason)];
+  }
   if (data.news_items?.length) {
     return [
       brandedTable(
@@ -813,6 +944,7 @@ const renderers: Record<string, (data: any) => DocxElement[]> = {
   exec_summary: renderExecSummary,
   financial_snapshot: renderFinancialSnapshot,
   company_overview: renderCompanyOverview,
+  key_execs_and_board: renderKeyExecsAndBoard,
   investment_strategy: renderInvestmentStrategy,
   portfolio_snapshot: renderPortfolioSnapshot,
   deal_activity: renderDealActivity,

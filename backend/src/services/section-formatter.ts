@@ -236,11 +236,11 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
       }
 
       if (data.board_of_directors?.summary) parts.push(`**Board of Directors**\n${data.board_of_directors.summary}`);
-      if (Array.isArray(data.board_of_directors?.members) && data.board_of_directors.members.length) {
+      if (realBoard.length) {
         parts.push(
           mdTable(
             ['Name', 'Role', 'Committees', 'Tenure', 'Background', 'Source'],
-            data.board_of_directors.members.map((m: any) => [
+            realBoard.map((m: any) => [
               m.name,
               m.role,
               Array.isArray(m.committees) ? m.committees.join(', ') : (m.committees || ''),
@@ -252,11 +252,11 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
         );
       }
       if (data.c_suite?.summary) parts.push(`**C-Suite Leadership**\n${data.c_suite.summary}`);
-      if (Array.isArray(data.c_suite?.executives) && data.c_suite.executives.length) {
+      if (realExecs.length) {
         parts.push(
           mdTable(
             ['Name', 'Title', 'Tenure', 'Background', 'Performance Actions', 'Source'],
-            data.c_suite.executives.map((e: any) => [
+            realExecs.map((e: any) => [
               e.name,
               e.title,
               e.tenure || '',
@@ -268,11 +268,11 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
         );
       }
       if (data.business_unit_leaders?.summary) parts.push(`**Business Unit Leaders**\n${data.business_unit_leaders.summary}`);
-      if (Array.isArray(data.business_unit_leaders?.leaders) && data.business_unit_leaders.leaders.length) {
+      if (realLeaders.length) {
         parts.push(
           mdTable(
             ['Name', 'Title', 'Business Unit', 'Background', 'Performance Actions', 'Source'],
-            data.business_unit_leaders.leaders.map((l: any) => [
+            realLeaders.map((l: any) => [
               l.name,
               l.title,
               l.business_unit || '',

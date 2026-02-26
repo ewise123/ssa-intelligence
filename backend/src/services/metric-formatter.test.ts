@@ -105,6 +105,10 @@ describe('formatCurrency', () => {
       expect(formatCurrency(500, 'K')).toBe('$500K');
     });
 
+    it('formats sub-1 values with 1 decimal', () => {
+      expect(formatCurrency(0.5, 'K')).toBe('$0.5K');
+    });
+
     it('promotes >= 1000 to millions', () => {
       expect(formatCurrency(1200, 'K')).toBe('$1.2M');
       expect(formatCurrency(5000, 'K')).toBe('$5M');
@@ -141,9 +145,14 @@ describe('formatPercent', () => {
     expect(formatPercent(100)).toBe('100%');
   });
 
-  it('detects ratios (|value| <= 1) and converts', () => {
+  it('detects ratios (0 < |value| < 1) and converts', () => {
     expect(formatPercent(0.15)).toBe('15%');
     expect(formatPercent(0.853)).toBe('85.3%');
+  });
+
+  it('treats exactly 1.0 as 1% not 100%', () => {
+    expect(formatPercent(1.0)).toBe('1%');
+    expect(formatPercent(-1.0)).toBe('-1%');
   });
 
   it('handles zero', () => {
@@ -203,6 +212,33 @@ describe('resolveMetricUnit', () => {
     expect(resolveMetricUnit('Revenue', null, 'ratio')).toEqual({ type: 'ratio', suffix: 'x' });
     expect(resolveMetricUnit('Revenue', null, 'currency')).toEqual({ type: 'currency' });
     expect(resolveMetricUnit('Revenue', null, 'number')).toEqual({ type: 'number' });
+  });
+
+  it('does not false-positive on tokens containing "x"', () => {
+    // "max" contains "x" but should not be treated as ratio
+    expect(resolveMetricUnit('Expense (max)')).toBeNull();
+    expect(resolveMetricUnit('Tax Rate (approx)')).toBeNull();
+  });
+
+  it('requires exact "x" token for ratio detection', () => {
+    expect(resolveMetricUnit('Net Leverage (x)')).toEqual({ type: 'ratio', suffix: 'x' });
+  });
+
+  it('does not false-positive on unitHint substrings', () => {
+    // "usd amount" contains "m" in "amount" but should not be scale M
+    expect(resolveMetricUnit('Revenue', 'usd amount')).toEqual({ type: 'currency' });
+    // "usd combined" contains "b" in "combined" but should not be scale B
+    expect(resolveMetricUnit('Revenue', 'usd combined')).toEqual({ type: 'currency' });
+  });
+
+  it('does not false-positive "bp" substring in unitHint', () => {
+    expect(resolveMetricUnit('Revenue', 'subpart')).toBeNull();
+  });
+
+  it('matches full scale words in unitHint', () => {
+    expect(resolveMetricUnit('Revenue', 'USD millions')).toEqual({ type: 'currency', scale: 'M' });
+    expect(resolveMetricUnit('Revenue', 'USD billions')).toEqual({ type: 'currency', scale: 'B' });
+    expect(resolveMetricUnit('Revenue', 'USD thousands')).toEqual({ type: 'currency', scale: 'K' });
   });
 
   it('returns null for unrecognized metrics', () => {
