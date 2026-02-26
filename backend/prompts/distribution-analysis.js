@@ -131,7 +131,7 @@ interface DistributionAnalysisOutput {
 - **Return empty arrays** for \`channels\` if no real distribution data can be identified.
 - **Use the \`summary\` field** to explain what information is missing and why.
 - **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
-- **Use \`null\`** for unavailable numeric data (not 0, not -1, not "–").
+- **Omit optional numeric fields** (e.g., \`premium_share_pct\`, \`commission_rates\`) when data is unavailable — do not use placeholder values like 0, -1, or "–".
 
 ---
 

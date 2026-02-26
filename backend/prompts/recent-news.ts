@@ -339,6 +339,7 @@ interface Section8Output {
 - **Do NOT fabricate news.** Never invent news items, events, or headlines that cannot be confirmed from public sources.
 - **Return an empty \`news_items\` array** if no real news can be found within the time horizon.
 - **Set confidence.level to "LOW"** with a clear reason (e.g., "Private company with no recent news coverage in public sources").
+- **This rule supersedes the "3-5 items" target** when no verifiable news exists.
 
 ---
 
@@ -382,8 +383,14 @@ export function validateSection8Output(output: any): output is Section8Output {
   }
   
   // Check news_items
-  if (!Array.isArray(output.news_items) || output.news_items.length === 0) {
+  if (!Array.isArray(output.news_items)) {
     return false;
+  }
+  // Allow empty news_items only when confidence is LOW (no verifiable news)
+  if (output.news_items.length === 0) {
+    return output.confidence?.level === 'LOW' &&
+      typeof output.confidence?.reason === 'string' &&
+      output.confidence.reason.trim().length > 0;
   }
   
   const validCategories: NewsCategory[] = [

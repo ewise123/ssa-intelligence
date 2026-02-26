@@ -62,7 +62,7 @@ export interface Section10Input {
 export interface SourceReference {
   id: string;
   citation: string;
-  url?: string;
+  url?: string | null;
   type: string;
   date: string;
   sections_used_in: string[];

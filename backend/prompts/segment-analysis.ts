@@ -273,7 +273,7 @@ interface Section4Output {
 
 ### 4.X.1 Financial Snapshot
 - Table with metrics (use null if unavailable)
-- Units belong in metric names; table values must be numeric only (or -)
+- Units belong in metric names; table values must be numeric only (use null when unavailable)
 - Geography notes (2-3 sentences on ${geography} performance)
 
 ### 4.X.2 Performance Analysis

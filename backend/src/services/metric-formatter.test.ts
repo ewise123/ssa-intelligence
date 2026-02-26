@@ -275,6 +275,17 @@ describe('parseNumeric', () => {
     expect(parseNumeric('abc')).toBeNull();
     expect(parseNumeric('')).toBeNull();
   });
+
+  it('handles accounting-format negatives with parentheses', () => {
+    expect(parseNumeric('(1,234.5)')).toBe(-1234.5);
+    expect(parseNumeric('(42)')).toBe(-42);
+    expect(parseNumeric('(0.5)')).toBe(-0.5);
+  });
+
+  it('does not treat non-wrapping parens as negative', () => {
+    expect(parseNumeric('(partial 123')).toBe(123);
+    expect(parseNumeric('123)')).toBe(123);
+  });
 });
 
 // ── formatMetricValue (main entry point) ───────────────────────────────────

@@ -18,7 +18,7 @@ export interface Confidence {
 export interface SourceReference {
     id: string;
     citation: string;
-    url?: string;
+    url?: string | null;
     type: SourceType;
     date: string;
 }
@@ -38,7 +38,7 @@ export interface Trend {
 }
 export interface Competitor {
     name: string;
-    market_share?: string;
+    market_share?: string | null;
     geography: string;
 }
 export interface FacilityInfo {
@@ -74,6 +74,7 @@ export interface FinancialMetric {
     source: string;
     unit?: string;
     value_type?: 'currency' | 'percent' | 'ratio' | 'number';
+    currency?: string | null;
 }
 export interface SegmentFinancialMetric {
     metric: string;
@@ -81,6 +82,9 @@ export interface SegmentFinancialMetric {
     company_avg: number | string | null;
     industry_avg: number | string | null;
     source: string;
+    currency?: string | null;
+    unit?: string;
+    value_type?: 'currency' | 'percent' | 'ratio' | 'number';
 }
 export interface DerivedMetric {
     metric: string;

@@ -63,7 +63,7 @@ export interface Confidence {
 export interface SourceReference {
   id: string;              // "S1", "S2", "S3", etc.
   citation: string;
-  url?: string;
+  url?: string | null;
   type: SourceType;
   date: string;
 }
@@ -86,7 +86,7 @@ export interface Trend {
 
 export interface Competitor {
   name: string;
-  market_share?: string;
+  market_share?: string | null;
   geography: string;
 }
 

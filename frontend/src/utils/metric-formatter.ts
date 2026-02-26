@@ -183,13 +183,18 @@ export function resolveMetricUnit(
 
 /**
  * Extract a numeric value from a string, ignoring commas and non-numeric chars.
+ * Handles accounting-format negatives like (1,234.5).
  */
 export function parseNumeric(raw: string): number | null {
-  const cleaned = raw.replace(/,/g, '');
+  const trimmed = raw.trim();
+  const isParenNegative = /^\(.+\)$/.test(trimmed);
+  const normalized = isParenNegative ? trimmed.slice(1, -1) : trimmed;
+  const cleaned = normalized.replace(/,/g, '');
   const match = cleaned.match(/-?\d+(\.\d+)?/);
   if (!match) return null;
   const num = Number.parseFloat(match[0]);
-  return Number.isNaN(num) ? null : num;
+  if (Number.isNaN(num)) return null;
+  return isParenNegative ? -Math.abs(num) : num;
 }
 
 // ── Main Entry Point ───────────────────────────────────────────────────────
@@ -204,7 +209,7 @@ export function parseNumeric(raw: string): number | null {
  */
 export function formatMetricValue(
   metricName: string,
-  raw: any,
+  raw: unknown,
   options?: FormatMetricOptions,
 ): string {
   if (raw === null || raw === undefined) return '';

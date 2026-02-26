@@ -217,7 +217,7 @@ const resolveSourceLabel = (code: string, labels: Record<string, string>): strin
   labels[code] || code;
 
 const stripSourceMetadata = (summary: string): string =>
-  summary.replace(/\s*FX rate source:\s*[A-C]\.?\s*Industry average source:\s*[A-C]\.?\s*$/i, '').trim();
+  summary.replace(/\s*FX rate source:[\s\S]*$/i, '').trim();
 
 // Section-specific content formatter to produce readable Markdown
 const formatSectionContent = (sectionId: SectionId, data: any): string => {
