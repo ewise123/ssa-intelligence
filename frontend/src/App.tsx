@@ -95,7 +95,15 @@ export default function App() {
     );
   }
 
+  const isAdmin = !!userContext.user?.isAdmin;
+  const memberNewsDashboard = <NewsDashboard onNavigate={navigate} isAdmin={false} currentUserId={userContext.user?.id || ''} />;
+
   const renderContent = () => {
+    // Non-admin users: redirect research and admin routes to news dashboard
+    if (!isAdmin && (currentPath === '/' || currentPath === '/new' || currentPath.startsWith('/research/') || currentPath.startsWith('/admin'))) {
+      return memberNewsDashboard;
+    }
+
     if (currentPath === '/') {
       return (
         <Home
@@ -136,7 +144,7 @@ export default function App() {
       return <AdminPrompts isAdmin={userContext.user?.isAdmin} />;
     }
     if (currentPath === '/news') {
-      return <NewsDashboard onNavigate={navigate} isAdmin={!!userContext.user?.isAdmin} currentUserId={userContext.user?.id || ''} />;
+      return <NewsDashboard onNavigate={navigate} isAdmin={isAdmin} currentUserId={userContext.user?.id || ''} />;
     }
     if (currentPath === '/admin/news-activity') {
       return <AdminNewsActivity isAdmin={userContext.user?.isAdmin} />;

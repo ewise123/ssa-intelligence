@@ -29,6 +29,7 @@ async function runAutoArchive(): Promise<void> {
         fetchedAt: { lt: cutoffDate },
         isSent: false,
         isArchived: false,
+        isDismissed: false,
         pinnedBy: { none: {} },
       },
       data: {

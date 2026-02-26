@@ -39,44 +39,51 @@ interface ExportOptions {
   articleIds?: string[];
   dateFrom?: Date;
   dateTo?: Date;
+  articles?: import('./pdf-export.js').ExportArticle[];
+  userName?: string;
 }
 
 export async function generateNewsDigestDocx(options: ExportOptions): Promise<Buffer> {
   const { userId, articleIds, dateFrom, dateTo } = options;
 
-  let userName = 'User';
+  let userName = options.userName || 'User';
 
-  if (userId) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new Error('User not found');
-    userName = user.name || user.email;
-  }
-
-  // Fetch articles — by IDs or by user (all non-archived)
+  // If pre-loaded articles provided, use them directly (no DB access)
   let articles;
-  if (articleIds && articleIds.length > 0) {
-    articles = await prisma.newsArticle.findMany({
-      where: { id: { in: articleIds } },
-      include: { company: true, person: true, tag: true },
-      orderBy: [{ publishedAt: 'desc' }],
-    });
-  } else if (userId) {
-    const where: any = {
-      articleUsers: { some: { userId } },
-      isArchived: false,
-    };
-    if (dateFrom || dateTo) {
-      where.publishedAt = {};
-      if (dateFrom) where.publishedAt.gte = dateFrom;
-      if (dateTo) where.publishedAt.lte = dateTo;
-    }
-    articles = await prisma.newsArticle.findMany({
-      where,
-      include: { company: true, person: true, tag: true },
-      orderBy: [{ publishedAt: 'desc' }],
-    });
+  if (options.articles) {
+    articles = options.articles;
   } else {
-    throw new Error('Either userId or articleIds must be provided');
+    if (userId && !options.userName) {
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) throw new Error('User not found');
+      userName = user.name || user.email;
+    }
+
+    // Fetch articles — by IDs or by user (all non-archived)
+    if (articleIds && articleIds.length > 0) {
+      articles = await prisma.newsArticle.findMany({
+        where: { id: { in: articleIds } },
+        include: { company: true, person: true, tag: true },
+        orderBy: [{ publishedAt: 'desc' }],
+      });
+    } else if (userId) {
+      const where: any = {
+        articleUsers: { some: { userId } },
+        isArchived: false,
+      };
+      if (dateFrom || dateTo) {
+        where.publishedAt = {};
+        if (dateFrom) where.publishedAt.gte = dateFrom;
+        if (dateTo) where.publishedAt.lte = dateTo;
+      }
+      articles = await prisma.newsArticle.findMany({
+        where,
+        include: { company: true, person: true, tag: true },
+        orderBy: [{ publishedAt: 'desc' }],
+      });
+    } else {
+      throw new Error('Either userId, articleIds, or articles must be provided');
+    }
   }
 
   // Group articles by company
@@ -132,7 +139,7 @@ export async function generateNewsDigestDocx(options: ExportOptions): Promise<Bu
     new Paragraph({
       alignment: AlignmentType.CENTER,
       heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: 'SAMI News Digest' })],
+      children: [new TextRun({ text: 'SSAMI News Digest' })],
       spacing: { before: 0, after: 120 },
     }),
   );
@@ -341,7 +348,7 @@ export async function generateNewsDigestDocx(options: ExportOptions): Promise<Bu
 
   const doc = new Document({
     creator: 'SSA & Company',
-    title: `SAMI News Digest - ${userName}`,
+    title: `SSAMI News Digest - ${userName}`,
     description: `News digest for ${userName}`,
     styles: DOCUMENT_STYLES,
     sections: [

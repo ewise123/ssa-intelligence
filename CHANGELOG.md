@@ -17,6 +17,12 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Add DOCX renderer for `key_execs_and_board` section with placeholder name filtering.
 - Add "insufficient data" notices to DOCX sections (deal_team, leadership, news, sku, execs) for parity with markdown/frontend.
 - Show yellow warning icon (AlertCircle) instead of green checkmark for sections with only "Limited public information available" notice.
+- Sort news articles alphabetically by company/person name so grouped entities stay together instead of being split across pages.
+- Remove pagination from news dashboard; all articles load on a single scrollable page.
+- Fix news refresh LLM batch timeouts: deterministic pre-filtering, smaller parallel batches (10 articles, concurrency 5), and raised token limits yield 96% LLM success rate (up from 12%).
+- Raise article processing cap from 250 to 1000 so articles are no longer silently dropped.
+- Hide archive button in article detail modal for deep dive search results (no DB ID).
+- Fix single-article export for deep dive search results to use from-data endpoint.
 - Allow zero revenue in foundation schema for pre-revenue companies (Vyne Dental bug).
 - Allow zero employees in foundation schema for undisclosed private companies (Vyne Dental bug).
 - Add foundation sanitizer to clamp negative sentinel values (e.g. -1) to 0 before validation.
@@ -29,6 +35,17 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Shared `rendering-helpers.ts` module extracting duplicated helpers (`isEmptyValue`, `isPlaceholderName`, `stripInlineSource`, `normalizeCell`, `insufficientDataNotice`).
 - `scripts/check-shared-drift.sh` CI drift check for backend/frontend shared module copies.
 - `currency`, `unit`, `value_type` fields to peer benchmarking and segment analysis schemas for richer metric formatting.
+- Article dismiss feature: new `isDismissed` field, bulk dismiss endpoint, and dismiss filter in news dashboard.
+- Deep dive search: background company/person search with inline progress, resolution modal, and result pinning.
+- Group selection checkboxes on company/person group headers (tri-state: all, some, none) for bulk article selection.
+- Gradient-styled dismiss (red) and pin (amber) buttons in article detail modal matching export button styling.
+- Pinned indicator icon in article detail modal tags row (amber/orange gradient, top-right).
+- Amber-themed pin button on article cards matching pinned articles bar styling.
+- Restrict research dashboard, new research, and research detail pages to admin users; members land on news dashboard.
+- News scheduler with configurable refresh intervals and admin activity dashboard.
+- Pin deep dive search results: save transient search results to DB and pin in one click.
+- New `POST /api/news/articles/pin-from-data` endpoint that upserts article by sourceUrl, links to user, and pins.
+- Pin button on each deep dive search result row and in the article detail modal for search results.
 - Architecture report (`docs/architecture-report.md`) and Mermaid architecture diagram.
 - SAMI mascot image on News Activity header (cropped from SSAMI_Admin asset).
 

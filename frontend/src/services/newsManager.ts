@@ -75,6 +75,7 @@ export interface NewsArticle {
   status: 'new_article' | 'update' | null;
   isSent: boolean;
   isArchived: boolean;
+  isDismissed: boolean;
   matchType: 'exact' | 'contextual' | null;
   fetchLayer: 'layer1_rss' | 'layer1_api' | 'layer2_llm' | null;
   company: TrackedCompany | null;
@@ -285,6 +286,7 @@ export interface ArticleFilters {
   tagId?: string;
   isSent?: boolean;
   isArchived?: boolean;
+  isDismissed?: boolean;
 }
 
 export const useNewsArticles = (filters?: ArticleFilters) => {
@@ -292,16 +294,8 @@ export const useNewsArticles = (filters?: ArticleFilters) => {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [pageSize] = useState(50);
 
-  // Reset page when filters change
-  const filtersKey = JSON.stringify(filters);
-  useEffect(() => {
-    setPage(0);
-  }, [filtersKey]);
-
-  const fetchArticles = useCallback(async (overridePage?: number) => {
+  const fetchArticles = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -311,10 +305,9 @@ export const useNewsArticles = (filters?: ArticleFilters) => {
       if (filters?.tagId) params.set('tagId', filters.tagId);
       if (filters?.isSent !== undefined) params.set('isSent', String(filters.isSent));
       if (filters?.isArchived !== undefined) params.set('isArchived', String(filters.isArchived));
+      if (filters?.isDismissed !== undefined) params.set('isDismissed', String(filters.isDismissed));
 
-      const currentPage = overridePage ?? page;
-      params.set('limit', String(pageSize));
-      params.set('offset', String(currentPage * pageSize));
+      params.set('limit', '5000');
 
       const queryString = params.toString();
       const data = await fetchJson(`/news/articles${queryString ? `?${queryString}` : ''}`);
@@ -326,15 +319,13 @@ export const useNewsArticles = (filters?: ArticleFilters) => {
     } finally {
       setLoading(false);
     }
-  }, [filters?.userId, filters?.companyId, filters?.personId, filters?.tagId, filters?.isSent, filters?.isArchived, page, pageSize]);
+  }, [filters?.userId, filters?.companyId, filters?.personId, filters?.tagId, filters?.isSent, filters?.isArchived, filters?.isDismissed]);
 
   useEffect(() => {
     fetchArticles();
   }, [fetchArticles]);
 
-  const totalPages = Math.ceil(total / pageSize);
-
-  return { articles, total, loading, error, fetchArticles, page, pageSize, setPage, totalPages };
+  return { articles, total, loading, error, fetchArticles };
 };
 
 // ============================================================================
@@ -392,36 +383,84 @@ export const useNewsRefresh = () => {
 };
 
 // ============================================================================
-// Ad-Hoc Search Hook
+// Deep Dive Background Search
 // ============================================================================
 
-export const useNewsSearch = () => {
-  const [results, setResults] = useState<NewsArticle[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export interface DeepDiveStatus {
+  isSearching: boolean;
+  startedAt: string | null;
+  completedAt: string | null;
+  lastError: string | null;
+  articlesFound: number;
+  progress: number;
+  progressMessage: string;
+  currentStep: 'init' | 'verifying' | 'searching' | 'saving' | 'complete' | 'error' | '';
+  searchParams: { company?: string; person?: string; days: number } | null;
+}
 
-  const search = async (params: { company?: string; person?: string; topics?: string[]; days?: number }) => {
-    setSearching(true);
-    setError(null);
+const DEFAULT_DEEP_DIVE_STATUS: DeepDiveStatus = {
+  isSearching: false,
+  startedAt: null,
+  completedAt: null,
+  lastError: null,
+  articlesFound: 0,
+  progress: 0,
+  progressMessage: '',
+  currentStep: '',
+  searchParams: null,
+};
+
+export const useDeepDiveStatus = () => {
+  const [status, setStatus] = useState<DeepDiveStatus>({ ...DEFAULT_DEEP_DIVE_STATUS });
+
+  const fetchStatus = useCallback(async () => {
     try {
-      const data = await fetchJson('/news/search', {
-        method: 'POST',
-        body: JSON.stringify({ ...params, days: params.days || 1 }),
-      });
-      setResults(data.articles || []);
-      return data;
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Search failed';
-      setError(errorMsg);
-      throw err;
-    } finally {
-      setSearching(false);
+      const data = await fetchJson('/news/deep-dive/status');
+      setStatus(data);
+    } catch {
+      // Ignore status fetch errors
     }
-  };
+  }, []);
 
-  const clearResults = () => setResults([]);
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
 
-  return { results, searching, error, search, clearResults };
+  return { status, fetchStatus };
+};
+
+export const useDeepDiveArticles = () => {
+  const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [searchParams, setSearchParams] = useState<{ company?: string; person?: string; days: number } | null>(null);
+  const [completedAt, setCompletedAt] = useState<string | null>(null);
+
+  const fetchArticles = useCallback(async () => {
+    try {
+      const data = await fetchJson('/news/deep-dive/articles');
+      setArticles(data.articles || []);
+      setSearchParams(data.searchParams || null);
+      setCompletedAt(data.completedAt || null);
+    } catch {
+      // Ignore fetch errors
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchArticles();
+  }, [fetchArticles]);
+
+  return { articles, searchParams, completedAt, fetchArticles };
+};
+
+export const startDeepDive = async (params: { company?: string; person?: string; days?: number }) => {
+  return fetchJson('/news/deep-dive', {
+    method: 'POST',
+    body: JSON.stringify({ ...params, days: params.days || 1 }),
+  });
+};
+
+export const clearDeepDive = async () => {
+  return fetchJson('/news/deep-dive/clear', { method: 'POST' });
 };
 
 // ============================================================================
@@ -454,6 +493,30 @@ export const archiveArticle = async (articleId: string, isArchived?: boolean): P
 
 export const bulkArchiveArticles = async (articleIds: string[]): Promise<number> => {
   const data = await fetchJson('/news/articles/bulk-archive', {
+    method: 'POST',
+    body: JSON.stringify({ articleIds }),
+  });
+  return data.count;
+};
+
+// ============================================================================
+// Dismiss Article (user manually tossed)
+// ============================================================================
+
+export const dismissArticle = async (articleId: string, isDismissed?: boolean): Promise<boolean> => {
+  const data = await fetchJson(`/news/articles/${articleId}/dismiss`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isDismissed }),
+  });
+  return data.isDismissed;
+};
+
+// ============================================================================
+// Bulk Dismiss Articles
+// ============================================================================
+
+export const bulkDismissArticles = async (articleIds: string[]): Promise<number> => {
+  const data = await fetchJson('/news/articles/bulk-dismiss', {
     method: 'POST',
     body: JSON.stringify({ articleIds }),
   });
