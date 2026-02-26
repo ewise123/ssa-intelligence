@@ -7,6 +7,16 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 ## [Unreleased]
 
 ### Fixed
+- Standardize metric formatting across all tables with shared `metric-formatter` module — consistent currency auto-promotion ($M→$B), percent, ratio, and bps formatting.
+- Fix double-counted source citations in executive summary bullets across all rendering pipelines.
+- Fix KPI table scale mismatch where column header shows ($M) but values show $22.3B — new `tableMode` suppresses scale suffixes in table cells.
+- Fix `resolveMetricUnit` false positives: ratio token `(x)` no longer matches `(max)`, unitHint substring matching uses word boundaries.
+- Fix `formatPercent` boundary: value 1.0 now formats as 1% instead of 100%.
+- Fix `formatCurrency` sub-1 K values: 0.5K now shows $0.5K instead of $1K.
+- Fix placeholder names (e.g. "Information Not Available") leaking into key_execs_and_board tables — filtered arrays now used for rendering.
+- Add DOCX renderer for `key_execs_and_board` section with placeholder name filtering.
+- Add "insufficient data" notices to DOCX sections (deal_team, leadership, news, sku, execs) for parity with markdown/frontend.
+- Show yellow warning icon (AlertCircle) instead of green checkmark for sections with only "Limited public information available" notice.
 - Allow zero revenue in foundation schema for pre-revenue companies (Vyne Dental bug).
 - Allow zero employees in foundation schema for undisclosed private companies (Vyne Dental bug).
 - Add foundation sanitizer to clamp negative sentinel values (e.g. -1) to 0 before validation.
@@ -15,6 +25,10 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Fix `segmentAnalysisOutputSchema` to enforce S# regex on `sources_used` (was allowing any string).
 
 ### Added
+- Shared `metric-formatter.ts` module for consistent metric formatting across backend markdown, DOCX, and frontend pipelines.
+- Shared `rendering-helpers.ts` module extracting duplicated helpers (`isEmptyValue`, `isPlaceholderName`, `stripInlineSource`, `normalizeCell`, `insufficientDataNotice`).
+- `scripts/check-shared-drift.sh` CI drift check for backend/frontend shared module copies.
+- `currency`, `unit`, `value_type` fields to peer benchmarking and segment analysis schemas for richer metric formatting.
 - Architecture report (`docs/architecture-report.md`) and Mermaid architecture diagram.
 - SAMI mascot image on News Activity header (cropped from SSAMI_Admin asset).
 
@@ -24,6 +38,8 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Remove `THUMBNAIL_S3_*` env vars from `.env.example`.
 
 ### Changed
+- Relaxed validation schemas (`.min(0)` on arrays) to accept sparse data from private/niche companies.
+- Renamed `section*Context` prompt fields to match orchestrator input names.
 - Move header bar action buttons to bottom-left on Research, News, and Activity pages.
 - Update News and Activity header titles to descriptive sentences.
 - Vertically and horizontally center SAMI mascots in all hero header bars.
