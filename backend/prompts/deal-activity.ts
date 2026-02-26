@@ -98,6 +98,15 @@ interface DealActivityOutput {
 }
 \`\`\`
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent deals, transactions, or activity that cannot be confirmed from public sources.
+- **Return an empty \`deals\` array** if no real deal activity can be identified.
+- **Use the \`summary\` field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+
+---
+
 ## CRITICAL REMINDERS
 
 1. Follow style guide: All formatting rules apply

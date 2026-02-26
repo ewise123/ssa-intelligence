@@ -132,6 +132,12 @@ interface Section1Output {
 
 ---
 
+## OUTPUT FORMAT RULES
+
+**Valid JSON only:** No markdown, no headings, no prose outside the JSON object.
+
+---
+
 ## BULLET POINT REQUIREMENTS
 
 **Format:** 5-7 bullet points total
@@ -194,6 +200,16 @@ Final. **Momentum Assessment** (Category: Momentum) - Recommended
 - [ ] Each bullet cites sources (S#)
 - [ ] 75-80% emphasizes ${geography}
 - [ ] Categories assigned correctly
+
+---
+
+## CRITICAL REMINDERS
+
+1. Follow style guide: All formatting rules apply
+2. Valid JSON only: No markdown, no headings, no prose outside JSON
+3. Source everything: No unsourced claims
+4. Geography focus: Emphasize the target geography throughout
+5. Exact schema match: Follow the TypeScript interface exactly
 
 ---
 

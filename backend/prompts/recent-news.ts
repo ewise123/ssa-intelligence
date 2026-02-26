@@ -334,6 +334,14 @@ interface Section8Output {
 
 ---
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate news.** Never invent news items, events, or headlines that cannot be confirmed from public sources.
+- **Return an empty \`news_items\` array** if no real news can be found within the time horizon.
+- **Set confidence.level to "LOW"** with a clear reason (e.g., "Private company with no recent news coverage in public sources").
+
+---
+
 ## CRITICAL REMINDERS
 
 1. **Follow style guide** for all formatting

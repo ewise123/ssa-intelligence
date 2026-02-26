@@ -79,7 +79,7 @@ export interface Trend {
   trend: string;
   description: string;
   direction: TrendDirection;
-  impact_score: number;    // 1-10
+  impact_score: number | null;    // 1-10, null if unknown
   geography_relevance: string;
   source: string;
 }
@@ -105,22 +105,22 @@ export interface CompanyBasics {
   ticker?: string;
   ownership: 'Public' | 'Private' | 'Subsidiary';
   headquarters: string;
-  global_revenue_usd: number;
-  global_employees: number;
+  global_revenue_usd: number | string | null;
+  global_employees: number | null;
   fiscal_year_end: string;
 }
 
 export interface GeographySpecifics {
-  regional_revenue_usd: number;
-  regional_revenue_pct: number;
-  regional_employees: number;
+  regional_revenue_usd: number | string | null;
+  regional_revenue_pct: number | null;
+  regional_employees: number | null;
   facilities: FacilityInfo[];
   key_facts: string[];
 }
 
 export interface SegmentStructure {
   name: string;
-  revenue_pct: number;
+  revenue_pct: number | null;
   description: string;
 }
 
@@ -130,8 +130,8 @@ export interface SegmentStructure {
 
 export interface FinancialMetric {
   metric: string;
-  company: number | string;
-  industry_avg: number | string;
+  company: number | string | null;
+  industry_avg: number | string | null;
   source: string;
   unit?: string;
   value_type?: 'currency' | 'percent' | 'ratio' | 'number';
@@ -139,9 +139,9 @@ export interface FinancialMetric {
 
 export interface SegmentFinancialMetric {
   metric: string;
-  segment: number | string;
-  company_avg: number | string;
-  industry_avg: number | string;
+  segment: number | string | null;
+  company_avg: number | string | null;
+  industry_avg: number | string | null;
   source: string;
 }
 
@@ -157,13 +157,13 @@ export interface DerivedMetric {
 // ============================================================================
 
 export interface FxRate {
-  rate: number;
+  rate: number | null;
   source: FxSource;
 }
 
 export interface FxRateDetailed {
   currency_pair: string;
-  rate: number;
+  rate: number | null;
   source: FxSource;
   source_description: string;
 }
@@ -189,7 +189,7 @@ export interface Opportunity {
   source: string;
   aligned_sku: string;
   priority: Priority;
-  severity: number;        // 1-10
+  severity: number | null;        // 1-10, null if unknown
   severity_rationale: string;
   geography_relevance: string;
   potential_value_levers: string[];

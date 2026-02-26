@@ -1,62 +1,8 @@
-/**
- * Report-Specific Section: Distribution Analysis (Insurance)
- * Analyzes distribution channels, partnerships, and go-to-market strategies for insurance companies
- */
-
-import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
-import type { FoundationOutput } from './types.js';
-
-export interface DistributionAnalysisInput {
-  foundation: FoundationOutput;
-  companyName: string;
-  geography: string;
-  reportType?: ReportTypeId;
-}
-
-export type DistributionChannelType =
-  | 'Captive Agents'
-  | 'Independent Brokers'
-  | 'Direct'
-  | 'Bancassurance'
-  | 'Affinity/Worksite'
-  | 'Other';
-
-export interface DistributionAnalysisOutput {
-  confidence: {
-    level: 'HIGH' | 'MEDIUM' | 'LOW';
-    reason: string;
-  };
-  summary: string;
-  channels: Array<{
-    channel_type: DistributionChannelType;
-    description: string;
-    premium_share_pct?: number;
-    key_partners?: string[];
-    trend: 'Growing' | 'Stable' | 'Declining';
-    source: string;
-  }>;
-  distribution_costs: {
-    acquisition_cost_ratio?: number;
-    commission_rates?: Record<string, number>;
-    notes: string;
-    source: string;
-  };
-  digital_capabilities: {
-    online_quoting: boolean;
-    self_service_portal: boolean;
-    mobile_app: boolean;
-    notes: string;
-    source: string;
-  };
-  competitive_positioning: string;
-  sources_used: string[];
-}
-
-export function buildDistributionAnalysisPrompt(input: DistributionAnalysisInput): string {
-  const { foundation, companyName, geography } = input;
-  const foundationJson = JSON.stringify(foundation, null, 2);
-
-  const basePrompt = `# Distribution Channels and Partnerships - Research Prompt
+import { appendReportTypeAddendum } from './report-type-addendums.js';
+export function buildDistributionAnalysisPrompt(input) {
+    const { foundation, companyName, geography } = input;
+    const foundationJson = JSON.stringify(foundation, null, 2);
+    const basePrompt = `# Distribution Channels and Partnerships - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -215,6 +161,6 @@ interface DistributionAnalysisOutput {
 - [ ] All channel_type values match the allowed enum
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA.**`;
-
-  return appendReportTypeAddendum('distribution_analysis', input.reportType, basePrompt);
+    return appendReportTypeAddendum('distribution_analysis', input.reportType, basePrompt);
 }
+//# sourceMappingURL=distribution-analysis.js.map

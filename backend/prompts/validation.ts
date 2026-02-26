@@ -60,7 +60,7 @@ export const sourceTypeSchema = z.enum([
 export const sourceReferenceSchema = z.object({
   id: z.string().regex(/^S\d+$/), // Must be S1, S2, etc.
   citation: z.string().min(1),
-  url: z.string().optional(),
+  url: z.string().nullish(),
   type: sourceTypeSchema,
   date: z.string()
 });
@@ -80,7 +80,7 @@ export const facilityInfoSchema = z.object({
 
 export const competitorSchema = z.object({
   name: z.string(),
-  market_share: z.string().optional(),
+  market_share: z.string().nullish(),
   geography: z.string()
 });
 
@@ -103,27 +103,39 @@ const positiveInt = z.preprocess(coerceNumber, z.number().int().positive());
 const nonNegativeInt = z.preprocess(coerceNumber, z.number().int().nonnegative());
 const percentNumber = z.preprocess(coerceNumber, z.number().min(0).max(100));
 
+// Nullable variants — allow null to explicitly represent "unknown/unavailable".
+// z.null() must be checked before z.preprocess() since preprocess can interfere with null passthrough.
+const nullableNonNegativeNumberOrString = z.union([z.null(), z.preprocess(coerceNumber, z.union([z.number().nonnegative(), z.string()]))]);
+const nullableNonNegativeInt = z.union([z.null(), z.preprocess(coerceNumber, z.number().int().nonnegative())]);
+const nullablePercentNumber = z.union([z.null(), z.preprocess(coerceNumber, z.number().min(0).max(100))]);
+const nullablePositiveNumber = z.union([z.null(), z.preprocess(coerceNumber, z.number().positive())]);
+const nullableIntRange = (min: number, max: number) => z.union([z.null(), z.number().int().min(min).max(max)]);
+
+// Metric table value: number, display string (e.g. "-"), or null for unavailable.
+// No coercion — strings like "-" are intentional display values.
+export const metricValue = z.union([z.number(), z.string(), z.null()]);
+
 export const companyBasicsSchema = z.object({
   legal_name: z.string(),
-  ticker: z.string().optional(),
+  ticker: z.union([z.string(), z.null()]).optional(),
   ownership: z.enum(['Public', 'Private', 'Subsidiary']),
   headquarters: z.string(),
-  global_revenue_usd: nonNegativeNumberOrString,
-  global_employees: nonNegativeInt,
+  global_revenue_usd: nullableNonNegativeNumberOrString,
+  global_employees: nullableNonNegativeInt,
   fiscal_year_end: z.string()
 });
 
 export const geographySpecificsSchema = z.object({
-  regional_revenue_usd: nonNegativeNumberOrString,
-  regional_revenue_pct: percentNumber,
-  regional_employees: nonNegativeInt,
+  regional_revenue_usd: nullableNonNegativeNumberOrString,
+  regional_revenue_pct: nullablePercentNumber,
+  regional_employees: nullableNonNegativeInt,
   facilities: z.array(facilityInfoSchema),
   key_facts: z.array(z.string())
 });
 
 export const segmentStructureSchema = z.object({
   name: z.string(),
-  revenue_pct: percentNumber,
+  revenue_pct: nullablePercentNumber,
   description: z.string()
 });
 
@@ -133,7 +145,7 @@ export const foundationOutputSchema = z.object({
   source_catalog: z.array(sourceReferenceSchema),
   segment_structure: z.array(segmentStructureSchema),
   fx_rates: z.record(z.object({
-    rate: positiveNumber,
+    rate: nullablePositiveNumber,
     source: fxSourceSchema
   })),
   industry_averages: z.object({
@@ -155,7 +167,7 @@ export const executiveBulletSchema = z.object({
 
 export const execSummaryOutputSchema = z.object({
   confidence: confidenceSchema,
-  bullet_points: z.array(executiveBulletSchema).min(5).max(10),
+  bullet_points: z.array(executiveBulletSchema).min(0).max(10),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
 
@@ -165,11 +177,11 @@ export const execSummaryOutputSchema = z.object({
 
 export const financialMetricSchema = z.object({
   metric: z.string(),
-  company: z.union([z.number(), z.string()]),
-  industry_avg: z.union([z.number(), z.string()]),
+  company: metricValue,
+  industry_avg: metricValue,
   source: z.string(),
-  unit: z.string().optional(),
-  value_type: z.enum(['currency', 'percent', 'ratio', 'number']).optional()
+  unit: z.string().nullish(),
+  value_type: z.enum(['currency', 'percent', 'ratio', 'number']).nullish()
 });
 
 export const derivedMetricSchema = z.object({
@@ -183,7 +195,7 @@ export const financialSnapshotOutputSchema = z.object({
   confidence: confidenceSchema,
   summary: z.string().min(50),
   kpi_table: z.object({
-    metrics: z.array(financialMetricSchema).min(10)
+    metrics: z.array(financialMetricSchema).min(0)
   }),
   fx_source: fxSourceSchema,
   industry_source: industrySourceSchema,
@@ -206,7 +218,7 @@ export const strategicPrioritySchema = z.object({
   priority: z.string(),
   description: z.string(),
   geography_relevance: z.string(),
-  geography_relevance_rating: z.enum(['High', 'Medium', 'Low']).optional(),
+  geography_relevance_rating: z.enum(['High', 'Medium', 'Low']).nullish(),
   source: z.string()
 });
 
@@ -228,7 +240,7 @@ export const companyOverviewOutputSchema = z.object({
   confidence: confidenceSchema,
   business_description: z.object({
     overview: z.string().min(100),
-    segments: z.array(businessSegmentSchema).min(1),
+    segments: z.array(businessSegmentSchema).min(0),
     geography_positioning: z.string().min(50)
   }),
   geographic_footprint: z.object({
@@ -238,18 +250,18 @@ export const companyOverviewOutputSchema = z.object({
       location: z.string(),
       type: z.enum(['Manufacturing', 'R&D', 'Distribution', 'Office', 'Headquarters']),
       employees: z.number().nullable().optional(),
-      capabilities: z.string().optional()
+      capabilities: z.string().nullish()
     })),
     regional_stats: z.union([z.string(), z.record(z.any())])
   }),
   strategic_priorities: z.object({
     summary: z.string().min(50),
-    priorities: z.array(strategicPrioritySchema).min(3).max(5),
+    priorities: z.array(strategicPrioritySchema).min(0).max(5),
     geography_specific_initiatives: z.union([z.string(), z.array(z.string())])
   }),
   key_leadership: z.object({
     summary: z.string().min(20),
-    executives: z.array(briefExecutiveSchema).min(1).max(3),
+    executives: z.array(briefExecutiveSchema).min(0).max(3),
     regional_leader: briefRegionalLeaderSchema.nullish()
   }),
   sources_used: z.array(z.string().regex(/^S\d+$/))
@@ -261,26 +273,26 @@ export const companyOverviewOutputSchema = z.object({
 
 export const segmentFinancialMetricSchema = z.object({
   metric: z.string(),
-  segment: z.union([z.number(), z.string()]),
-  company_avg: z.union([z.number(), z.string()]),
-  industry_avg: z.union([z.number(), z.string()]),
+  segment: metricValue,
+  company_avg: metricValue,
+  industry_avg: metricValue,
   source: z.string()
 });
 
 export const segmentAnalysisSchema = z.object({
   name: z.string(),
   financial_snapshot: z.object({
-    table: z.array(segmentFinancialMetricSchema).min(5),
+    table: z.array(segmentFinancialMetricSchema).min(0),
     fx_source: z.string(),
     geography_notes: z.string().min(50)
   }),
   performance_analysis: z.object({
-    paragraphs: z.array(z.string()).min(3).max(5),
+    paragraphs: z.array(z.string()).min(0).max(5),
     analyst_quotes: z.array(analystQuoteSchema).max(1),
-    key_drivers: z.array(z.string()).min(3).max(5)
+    key_drivers: z.array(z.string()).min(0).max(5)
   }),
   competitive_landscape: z.object({
-    competitors: z.array(competitorSchema).min(3).max(5),
+    competitors: z.array(competitorSchema).min(0).max(5),
     positioning: z.string().min(50),
     recent_dynamics: z.string().min(50)
   })
@@ -289,7 +301,7 @@ export const segmentAnalysisSchema = z.object({
 export const segmentAnalysisOutputSchema = z.object({
   confidence: confidenceSchema,
   overview: z.string().min(100),
-  segments: z.array(segmentAnalysisSchema).min(1),
+  segments: z.array(segmentAnalysisSchema).min(0),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
 
@@ -301,7 +313,7 @@ export const trendBaseSchema = z.object({
   trend: z.string(),
   description: z.string().min(50),
   direction: trendDirectionSchema,
-  impact_score: z.number().int().min(1).max(10),
+  impact_score: nullableIntRange(1, 10),
   geography_relevance: z.string().min(30),
   source: z.string()
 });
@@ -309,12 +321,12 @@ export const trendBaseSchema = z.object({
 export const macroTrendSchema = trendBaseSchema;
 
 export const microTrendSchema = trendBaseSchema.extend({
-  segment_relevance: z.string().optional()
+  segment_relevance: z.string().nullish()
 });
 
 export const companyTrendSchema = trendBaseSchema.extend({
-  management_commentary: z.string().optional(),
-  analyst_quote: analystQuoteSchema.optional()
+  management_commentary: z.string().nullish(),
+  analyst_quote: analystQuoteSchema.nullish()
 });
 
 export const trendsOutputSchema = z.object({
@@ -322,15 +334,15 @@ export const trendsOutputSchema = z.object({
   aggregate_summary: z.string().min(100),
   macro_trends: z.object({
     summary: z.string().min(50),
-    trends: z.array(macroTrendSchema).min(4).max(6)
+    trends: z.array(macroTrendSchema).min(0).max(6)
   }),
   micro_trends: z.object({
     summary: z.string().min(50),
-    trends: z.array(microTrendSchema).min(3).max(5)
+    trends: z.array(microTrendSchema).min(0).max(5)
   }),
   company_trends: z.object({
     summary: z.string().min(50),
-    trends: z.array(companyTrendSchema).min(3).max(5)
+    trends: z.array(companyTrendSchema).min(0).max(5)
   }),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
@@ -348,12 +360,12 @@ export const peerInfoSchema = z.object({
 
 export const peerMetricSchema = z.object({
   metric: z.string(),
-  company: z.union([z.number(), z.string()]),
-  peer1: z.union([z.number(), z.string()]),
-  peer2: z.union([z.number(), z.string()]),
-  peer3: z.union([z.number(), z.string()]),
-  peer4: z.union([z.number(), z.string()]).optional(),
-  industry_avg: z.union([z.number(), z.string()]),
+  company: metricValue,
+  peer1: metricValue,
+  peer2: metricValue,
+  peer3: metricValue,
+  peer4: metricValue.optional(),
+  industry_avg: metricValue,
   source: z.string()
 });
 
@@ -374,13 +386,13 @@ export const peerBenchmarkingOutputSchema = z.object({
   confidence: confidenceSchema,
   peer_comparison_table: z.object({
     company_name: z.string(),
-    peers: z.array(peerInfoSchema).min(3).max(5),
-    metrics: z.array(peerMetricSchema).min(10)
+    peers: z.array(peerInfoSchema).min(0).max(5),
+    metrics: z.array(peerMetricSchema).min(0)
   }),
   benchmark_summary: z.object({
     overall_assessment: z.string().min(100),
-    key_strengths: z.array(keyStrengthSchema).min(2).max(4),
-    key_gaps: z.array(keyGapSchema).min(2).max(4),
+    key_strengths: z.array(keyStrengthSchema).min(0).max(4),
+    key_gaps: z.array(keyGapSchema).min(0).max(4),
     competitive_positioning: z.string().min(100)
   }),
   sources_used: z.array(z.string().regex(/^S\d+$/))
@@ -396,7 +408,7 @@ export const opportunitySchema = z.object({
   source: z.string().regex(/^S\d+$/),
   aligned_sku: z.string(),
   priority: prioritySchema,
-  severity: z.number().int().min(1).max(10),
+  severity: nullableIntRange(1, 10),
   severity_rationale: z.string().min(30),
   geography_relevance: z.string().min(30),
   potential_value_levers: z.array(z.string()).min(2).max(4)
@@ -415,7 +427,7 @@ export const skuOpportunitiesOutputSchema = z.object({
 export const newsItemSchema = z.object({
   date: z.string(),
   headline: z.string(),
-  original_language: z.string().optional(),
+  original_language: z.string().nullish(),
   source: z.string().regex(/^S\d+$/),
   source_name: z.string(),
   implication: z.string().min(50),
@@ -425,7 +437,7 @@ export const newsItemSchema = z.object({
 
 export const recentNewsOutputSchema = z.object({
   confidence: confidenceSchema,
-  news_items: z.array(newsItemSchema).min(3).max(5),
+  news_items: z.array(newsItemSchema).min(0).max(5),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
 
@@ -438,7 +450,7 @@ export const conversationStarterSchema = z.object({
   question: z.string().min(100),
   supporting_data: z.string().min(50),
   business_value: z.string().min(50),
-  ssa_capability: z.string().optional(),
+  ssa_capability: z.string().nullish(),
   supporting_sections: z.array(z.string()).min(1),
   sources: z.array(z.string().regex(/^S\d+$/)).min(1),
   geography_relevance: z.string().min(30)
@@ -446,7 +458,7 @@ export const conversationStarterSchema = z.object({
 
 export const conversationStartersOutputSchema = z.object({
   confidence: confidenceSchema,
-  conversation_starters: z.array(conversationStarterSchema).min(3).max(5),
+  conversation_starters: z.array(conversationStarterSchema).min(0).max(5),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
 
@@ -457,9 +469,9 @@ export const conversationStartersOutputSchema = z.object({
 export const investmentStrategyOutputSchema = z.object({
   confidence: confidenceSchema,
   strategy_summary: z.string().min(80),
-  focus_areas: z.array(z.string()).min(3).max(6),
-  sector_focus: z.array(z.string()).min(2).max(6),
-  platform_vs_addon_patterns: z.array(z.string()).min(2).max(5),
+  focus_areas: z.array(z.string()).min(0).max(6),
+  sector_focus: z.array(z.string()).min(0).max(6),
+  platform_vs_addon_patterns: z.array(z.string()).min(0).max(5),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
 
@@ -470,10 +482,10 @@ export const portfolioSnapshotOutputSchema = z.object({
     name: z.string(),
     sector: z.string(),
     platform_or_addon: z.string(),
-    geography: z.string().optional(),
-    notes: z.string().optional(),
+    geography: z.string().nullish(),
+    notes: z.string().nullish(),
     source: z.string().regex(/^S\d+$/)
-  })).min(4),
+  })).min(0),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
 
@@ -486,7 +498,7 @@ export const dealActivityOutputSchema = z.object({
     deal_type: z.string(),
     rationale: z.string().min(30),
     source: z.string().regex(/^S\d+$/)
-  })).min(3),
+  })).min(0),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
 
@@ -496,10 +508,10 @@ export const dealTeamOutputSchema = z.object({
     name: z.string(),
     title: z.string(),
     role: z.string(),
-    focus_area: z.string().optional(),
+    focus_area: z.string().nullish(),
     source: z.string().regex(/^S\d+$/)
-  })).min(2),
-  notes: z.string().min(50).optional(),
+  })).min(0),
+  notes: z.string().min(50).nullish(),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
 
@@ -508,11 +520,11 @@ export const portfolioMaturityOutputSchema = z.object({
   summary: z.string().min(80),
   holdings: z.array(z.object({
     company: z.string(),
-    acquisition_period: z.string().optional(),
+    acquisition_period: z.string().nullish(),
     holding_period_years: z.number().nullable().optional(),
     exit_signal: z.string().min(30),
     source: z.string().regex(/^S\d+$/)
-  })).min(2),
+  })).min(0),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
 
@@ -521,9 +533,9 @@ export const leadershipAndGovernanceOutputSchema = z.object({
   leadership: z.array(z.object({
     name: z.string(),
     title: z.string(),
-    focus_area: z.string().optional(),
+    focus_area: z.string().nullish(),
     source: z.string().regex(/^S\d+$/)
-  })).min(3),
+  })).min(0),
   governance_notes: z.string().min(50),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
@@ -534,8 +546,8 @@ export const strategicPrioritiesOutputSchema = z.object({
     priority: z.string(),
     description: z.string().min(40),
     source: z.string().regex(/^S\d+$/)
-  })).min(3).max(6),
-  transformation_themes: z.array(z.string()).min(2).max(5),
+  })).min(0).max(6),
+  transformation_themes: z.array(z.string()).min(0).max(5),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
 
@@ -544,10 +556,10 @@ export const operatingCapabilitiesOutputSchema = z.object({
   capabilities: z.array(z.object({
     capability: z.string(),
     description: z.string().min(40),
-    maturity: z.enum(['Early', 'Developing', 'Advanced']).optional(),
+    maturity: z.enum(['Early', 'Developing', 'Advanced']).nullish(),
     source: z.string().regex(/^S\d+$/)
-  })).min(3).max(8),
-  gaps: z.array(z.string()).optional(),
+  })).min(0).max(8),
+  gaps: z.array(z.string()).nullish(),
   sources_used: z.array(z.string().regex(/^S\d+$/))
 });
 
@@ -561,13 +573,13 @@ export const distributionAnalysisOutputSchema = z.object({
   channels: z.array(z.object({
     channel_type: z.enum(['Captive Agents', 'Independent Brokers', 'Direct', 'Bancassurance', 'Affinity/Worksite', 'Other']),
     description: z.string().min(20),
-    premium_share_pct: z.number().min(0).max(100).optional(),
+    premium_share_pct: z.number().min(0).max(100).nullable().optional(),
     key_partners: z.array(z.string()).optional(),
     trend: z.enum(['Growing', 'Stable', 'Declining']),
     source: z.string().regex(/^S\d+$/)
-  })).min(1).max(6),
+  })).min(0).max(6),
   distribution_costs: z.object({
-    acquisition_cost_ratio: z.number().min(0).max(100).optional(),
+    acquisition_cost_ratio: z.number().min(0).max(100).nullable().optional(),
     commission_rates: z.record(z.string(), z.number()).optional(),
     notes: z.string(),
     source: z.string().regex(/^S\d+$/)
@@ -592,7 +604,7 @@ export const boardMemberSchema = z.object({
   role: z.string().min(1),
   committees: z.array(z.string()),
   background: z.string().min(20),
-  tenure: z.string(),
+  tenure: z.string().nullish(),
   other_boards: z.array(z.string()),
   source: z.string().regex(/^S\d+$/)
 });
@@ -602,9 +614,9 @@ export const cSuiteExecutiveSchema = z.object({
   title: z.string().min(1),
   role_description: z.string().min(10),
   background: z.string().min(20),
-  tenure: z.string(),
+  tenure: z.string().nullish(),
   performance_actions: z.array(z.string()),
-  geography_relevance: z.enum(['High', 'Medium', 'Low']).optional(),
+  geography_relevance: z.enum(['High', 'Medium', 'Low']).nullish(),
   source: z.string().regex(/^S\d+$/)
 });
 
@@ -615,7 +627,7 @@ export const businessUnitLeaderSchema = z.object({
   role_description: z.string().min(10),
   background: z.string().min(10),
   performance_actions: z.array(z.string()),
-  geography_relevance: z.enum(['High', 'Medium', 'Low']).optional(),
+  geography_relevance: z.enum(['High', 'Medium', 'Low']).nullish(),
   source: z.string().regex(/^S\d+$/)
 });
 
@@ -635,7 +647,7 @@ export const keyExecsAndBoardOutputSchema = z.object({
   }),
   c_suite: z.object({
     summary: z.string().min(30),
-    executives: z.array(cSuiteExecutiveSchema).min(1)
+    executives: z.array(cSuiteExecutiveSchema).min(0)
   }),
   business_unit_leaders: z.object({
     summary: z.string().min(10),
@@ -655,7 +667,7 @@ export const sourceReferenceDetailedSchema = sourceReferenceSchema.extend({
 
 export const fxRateDetailedSchema = z.object({
   currency_pair: z.string(),
-  rate: z.number().positive(),
+  rate: nullablePositiveNumber,
   source: fxSourceSchema,
   source_description: z.string()
 });
@@ -676,7 +688,7 @@ export const appendixOutputSchema = z.object({
     })
   }),
   derived_metrics: z.array(derivedMetricDetailedSchema),
-  renumbering_notes: z.string().optional()
+  renumbering_notes: z.string().nullish()
 });
 
 // ============================================================================

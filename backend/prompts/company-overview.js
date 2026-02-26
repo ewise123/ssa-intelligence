@@ -55,7 +55,7 @@ ${foundationJson}
 - "${companyName} global locations"
 
 **Extract for ${geography}:**
-- **Core facilities:** Locations, size, products made
+- **Core facilities:** Locations, size, outputs/services
 - **R&D centers:** Locations, focus areas
 - **Distribution centers:** Locations, capabilities
 - **Sales offices:** Major office locations
@@ -90,22 +90,20 @@ ${foundationJson}
 
 **Time focus:** Use the time horizon provided in report inputs.
 
-### 4. Key Leadership (Priority: MEDIUM)
+### 4. Key Leadership (Priority: LOW)
+
+**Note:** This subsection provides brief context only. For detailed executive profiles, board composition, and performance initiatives, see the **Key Execs and Board Members** section.
 
 **Search for:**
 - "${companyName} executive team"
-- "${companyName} proxy statement DEF 14A"
-- "${companyName} leadership bios"
-- "${companyName} ${geography} leadership" OR "${companyName} regional management"
+- "${companyName} ${geography} leadership"
 
-**Extract:**
-- **C-suite:** CEO, CFO, COO (names and brief background)
-- **Segment leaders:** Presidents/VPs of major business segments
-- **Regional leaders:** ${geography} country manager, regional president
-  - Name, title, tenure, background
-- **Recent changes:** New hires, departures, reorganizations (within the time horizon)
+**Extract (brief list only):**
+- **CEO:** Name and tenure
+- **CFO:** Name and tenure
+- **Regional leader (if known):** ${geography} country manager or regional president
 
-**Note:** Focus on leaders relevant to ${geography} operations or with P&L responsibility
+**Keep it simple:** Just names, titles, and tenure. No detailed backgrounds here.
 
 ---
 
@@ -161,20 +159,18 @@ interface Section3Output {
   };
   
   key_leadership: {
+    summary: string;          // 1-2 sentences; note detailed profiles in Key Execs section
     executives: Array<{
       name: string;
       title: string;
-      background: string;     // 1 sentence
       tenure?: string;        // "Since 2020" or "3 years"
-      geography_relevance: 'High' | 'Medium' | 'Low';
       source: string;
     }>;
-    regional_leaders: Array<{
+    regional_leader?: {       // Optional: ${geography} country manager or regional president
       name: string;
       title: string;
-      background: string;
       source: string;
-    }>;
+    } | null;
   };
   
   sources_used: string[];
@@ -197,14 +193,14 @@ interface Section3Output {
 
 3. **${geography} operations** (2-3 sentences - 75-80% FOCUS)
    - "**${geography} operations** represent 18% of global revenue with 12 facilities and 4,200 employees concentrated in priority business lines (S1, S3)."
-   - "The region serves primarily enterprise and commercial customers, with strong presence in automotive and machine building markets (S3)."
+   - "The region serves primarily enterprise and commercial customers, with strength in key verticals noted in filings (S3)."
 
 **Segment descriptions:**
 - For EACH major segment (typically 3-5 segments)
 - 2-3 sentences per segment
 - Include revenue % of total if available
 - **Critical:** Add "geography_relevance" field explaining ${geography} presence
-  - "Hydraulics segment has 8 Core facilities in ${geography}, representing 25% of segment global capacity (S3)"
+  - "Segment A has 8 facilities in ${geography}, representing 25% of segment global capacity (S3)"
 
 **Geography positioning paragraph (3-4 sentences):**
 - Market position in ${geography}
@@ -219,7 +215,7 @@ interface Section3Output {
 - Types of facilities (operations, R&D, distribution, offices)
 - Major facility locations
 - Recent expansions or changes
-- **Compare to global:** "${geography} hosts 12 of 85 global Core facilities (14% of footprint) (S1, S3)"
+- **Compare to global:** "${geography} hosts 12 of 85 global facilities (14% of footprint) (S1, S3)"
 
 **Facilities array:**
 - List ALL ${geography} facilities (use foundation data + new research)
@@ -254,17 +250,20 @@ interface Section3Output {
 
 ### 3.4 Key Leadership
 
-**Executives array (5-8 leaders):**
-- Focus on C-suite and segment/regional leaders
-- Geography relevance:
-  - **High:** Regional president, country manager, ${geography}-based leaders
-  - **Medium:** Segment leader with large ${geography} operations
-  - **Low:** Corporate executive with no direct regional role
+**Note:** This is a brief overview only. Detailed executive profiles belong in the **Key Execs and Board Members** section.
 
-**Regional leaders array (2-5 leaders):**
-- ONLY leaders based in or directly responsible for ${geography}
-- Country president, regional VP, site leaders
-- Include brief background (1 sentence)
+**Summary (1-2 sentences):**
+- Note the CEO and key leadership context
+- Reference Key Execs section for detailed profiles
+
+**Executives array (2-3 leaders max):**
+- CEO with tenure
+- CFO with tenure
+- COO or other key C-suite (if notable)
+
+**Regional leader (optional):**
+- Include ONLY if a ${geography}-specific leader is clearly identified
+- Just name, title, source - no detailed background
 
 ---
 
@@ -272,14 +271,14 @@ interface Section3Output {
 
 **Every subsection must emphasize ${geography}:**
 
-**CORRECT patterns:**
+✅ **CORRECT patterns:**
 
 **3.1 Business Description:**
 - "**${geography}** operations focus on priority business lines, serving core regional customers and partners..."
 - "Regional market position is #2 in a key segment, with estimated 18% market share (S7)..."
 
 **3.2 Geographic Footprint:**
-- "**${geography}** hosts 12 Core facilities concentrated in southern region..."
+- "**${geography}** hosts 12 facilities concentrated in southern region..."
 - "Largest regional operations site employs 850 people with leading utilization metrics (S3)..."
 
 **3.3 Strategic Priorities:**
@@ -287,12 +286,12 @@ interface Section3Output {
 - "**${geography}** is pilot region for AI-powered predictive maintenance program across 6 facilities (S8)..."
 
 **3.4 Key Leadership:**
-- "Regional President Klaus Schmidt (8 years tenure) leads ${geography} operations with P&L responsibility for €1.2B revenue (S4)..."
+- "CEO Jane Smith (since 2019) and CFO John Doe (since 2021) lead the company. For detailed profiles, see Key Execs and Board Members section."
 
-**WRONG patterns:**
+❌ **WRONG patterns:**
 - "Company operates 85 facilities globally..." [No regional context]
 - "Strategic priorities include digital transformation and sustainability..." [No geography mention]
-- "CEO has 25 years experience..." [Not geography-relevant unless regional role]
+- Detailed executive backgrounds in this section [Belongs in Key Execs section]
 
 ---
 
@@ -343,8 +342,8 @@ interface Section3Output {
 - [ ] Regional stats include global comparison
 - [ ] Strategic priorities rated for geography relevance
 - [ ] Geography-specific initiatives array populated
-- [ ] Leadership includes geography relevance ratings
-- [ ] Regional leaders array populated (if leaders identified)
+- [ ] Leadership summary references Key Execs section
+- [ ] Executives array limited to 2-3 top leaders (CEO, CFO)
 - [ ] 75-80% of content emphasizes ${geography}
 - [ ] All claims cited with sources
 - [ ] Sources_used array complete
@@ -353,14 +352,28 @@ interface Section3Output {
 
 ## CRITICAL REMINDERS
 
-1. **Follow style guide** for all formatting
-2. **75-80% geography focus** in every subsection
-3. **Source every claim** with S# references
-4. **Use "–" or null** for unavailable data
-5. **Geography relevance** ratings required for segments, priorities, leadership
-6. **Valid JSON only** - no markdown backticks
-7. **Exact schema match** - follow TypeScript interface
+1. **Follow style guide:** All formatting rules apply
+2. **Valid JSON only:** No markdown, no headings, no prose outside JSON
+3. **Source everything:** No unsourced claims
+4. **Geography focus:** Emphasize the target geography throughout
+5. **Exact schema match:** Follow the TypeScript interface exactly
+6. **Use null** for unavailable data
+7. **Geography relevance** ratings required for segments and priorities
 8. **Facilities array** must include all ${geography} locations
+9. **Key leadership** is brief; detailed profiles go in Key Execs and Board Members section
+
+---
+
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+**For private companies or when data cannot be found:**
+- **Do NOT fabricate placeholder entries.** Never return entries with names like "Information Not Available", "Not Disclosed", "Unknown", or similar placeholders in any array (executives, facilities, priorities, segments).
+- **Return empty arrays** for any category where no real data can be identified (e.g., empty \`executives\` array, empty \`priorities\` array).
+- **Use the relevant summary/overview field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- **Use \`null\`** for unavailable numeric data (not 0, not -1, not "–").
+
+**This rule supersedes minimum item counts** — it is better to return an empty array with a clear summary than to invent placeholder entries.
 
 ---
 
@@ -400,8 +413,8 @@ export function validateSection3Output(output) {
         return false;
     }
     if (!output.key_leadership ||
-        !Array.isArray(output.key_leadership.executives) ||
-        !Array.isArray(output.key_leadership.regional_leaders)) {
+        typeof output.key_leadership.summary !== 'string' ||
+        !Array.isArray(output.key_leadership.executives)) {
         return false;
     }
     if (!Array.isArray(output.sources_used))
@@ -414,7 +427,7 @@ export function formatSection3ForDocument(output) {
     markdown += `## 3.1 Business Description\n\n`;
     markdown += `${output.business_description.overview}\n\n`;
     for (const segment of output.business_description.segments) {
-        markdown += `**${segment.name}**${segment.revenue_pct ? ` (${segment.revenue_pct}% of revenue)` : ''}: `;
+        markdown += `**${segment.name}**${segment.revenue_pct != null ? ` (${segment.revenue_pct}% of revenue)` : ''}: `;
         markdown += `${segment.description} ${segment.geography_relevance}\n\n`;
     }
     markdown += `**Market Positioning:** ${output.business_description.geography_positioning}\n\n`;
@@ -424,7 +437,7 @@ export function formatSection3ForDocument(output) {
     for (const facility of output.geographic_footprint.facilities) {
         markdown += `- **${facility.name}** (${facility.location}, ${facility.type}): `;
         markdown += `${facility.description}`;
-        if (facility.employees)
+        if (facility.employees != null)
             markdown += ` Employees: ${facility.employees}.`;
         markdown += ` (${facility.source})\n`;
     }
@@ -446,21 +459,19 @@ export function formatSection3ForDocument(output) {
         markdown += `\n`;
     }
     markdown += `## 3.4 Key Leadership\n\n`;
-    markdown += `**Corporate Executives:**\n\n`;
+    markdown += `${output.key_leadership.summary}\n\n`;
     for (const exec of output.key_leadership.executives) {
         markdown += `- **${exec.name}**, ${exec.title}`;
         if (exec.tenure)
             markdown += ` (${exec.tenure})`;
-        markdown += `: ${exec.background} `;
-        markdown += `(Geography Relevance: ${exec.geography_relevance}) (${exec.source})\n`;
+        markdown += ` (${exec.source})\n`;
     }
-    if (output.key_leadership.regional_leaders.length > 0) {
-        markdown += `\n**Regional Leaders:**\n\n`;
-        for (const leader of output.key_leadership.regional_leaders) {
-            markdown += `- **${leader.name}**, ${leader.title}: ${leader.background} (${leader.source})\n`;
-        }
+    if (output.key_leadership.regional_leader) {
+        markdown += `\n**Regional Leader:** `;
+        markdown += `${output.key_leadership.regional_leader.name}, `;
+        markdown += `${output.key_leadership.regional_leader.title} `;
+        markdown += `(${output.key_leadership.regional_leader.source})\n`;
     }
     return markdown;
 }
 //# sourceMappingURL=company-overview.js.map
-

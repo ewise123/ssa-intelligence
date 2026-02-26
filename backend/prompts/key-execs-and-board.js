@@ -1,102 +1,8 @@
-/**
- * Key Execs and Board Members - TypeScript Implementation
- * Generates prompt and types for comprehensive executive and board coverage
- */
-
-import { appendReportTypeAddendum, type ReportTypeId } from './report-type-addendums.js';
-import type { FoundationOutput } from './types.js';
-
-// ============================================================================
-// INPUT TYPES
-// ============================================================================
-
-export interface KeyExecsAndBoardInput {
-  foundation: FoundationOutput;
-  companyName: string;
-  geography: string;
-  reportType?: ReportTypeId;
-}
-
-// ============================================================================
-// OUTPUT TYPES
-// ============================================================================
-
-export interface BoardMember {
-  name: string;
-  role: string;  // "Chairman", "Independent Director", etc.
-  committees: string[];  // ["Audit", "Compensation"]
-  background: string;  // 2-3 sentences
-  tenure: string;  // "Since 2019" or "5 years"
-  other_boards: string[];
-  source: string;
-}
-
-export interface CSuiteExecutive {
-  name: string;
-  title: string;
-  role_description: string;
-  background: string;
-  tenure: string;
-  performance_actions: string[];
-  geography_relevance?: 'High' | 'Medium' | 'Low';
-  source: string;
-}
-
-export interface BusinessUnitLeader {
-  name: string;
-  title: string;
-  business_unit: string;
-  role_description: string;
-  background: string;
-  performance_actions: string[];
-  geography_relevance?: 'High' | 'Medium' | 'Low';
-  source: string;
-}
-
-export interface LeadershipChange {
-  date: string;
-  change_type: 'New Hire' | 'Departure' | 'Promotion' | 'Reorganization';
-  description: string;
-  implications: string;
-  source: string;
-}
-
-export interface KeyExecsAndBoardOutput {
-  confidence: {
-    level: 'HIGH' | 'MEDIUM' | 'LOW';
-    reason: string;
-  };
-
-  board_of_directors: {
-    summary: string;  // 2-3 sentences on board composition
-    members: BoardMember[];
-  };
-
-  c_suite: {
-    summary: string;
-    executives: CSuiteExecutive[];
-  };
-
-  business_unit_leaders: {
-    summary: string;
-    leaders: BusinessUnitLeader[];
-  };
-
-  recent_leadership_changes: LeadershipChange[];
-
-  sources_used: string[];
-}
-
-// ============================================================================
-// PROMPT BUILDER
-// ============================================================================
-
-export function buildKeyExecsAndBoardPrompt(input: KeyExecsAndBoardInput): string {
-  const { foundation, companyName, geography } = input;
-
-  const foundationJson = JSON.stringify(foundation, null, 2);
-
-  const basePrompt = `# Key Execs and Board Members - Research Prompt
+import { appendReportTypeAddendum } from './report-type-addendums.js';
+export function buildKeyExecsAndBoardPrompt(input) {
+    const { foundation, companyName, geography } = input;
+    const foundationJson = JSON.stringify(foundation, null, 2);
+    const basePrompt = `# Key Execs and Board Members - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -431,183 +337,150 @@ interface KeyExecsAndBoardOutput {
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
-
-  return appendReportTypeAddendum('key_execs_and_board', input.reportType, basePrompt);
+    return appendReportTypeAddendum('key_execs_and_board', input.reportType, basePrompt);
 }
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-export function validateKeyExecsAndBoardOutput(output: any): output is KeyExecsAndBoardOutput {
-  if (!output || typeof output !== 'object') return false;
-
-  // Check confidence
-  if (!output.confidence ||
-      !['HIGH', 'MEDIUM', 'LOW'].includes(output.confidence.level) ||
-      typeof output.confidence.reason !== 'string') {
-    return false;
-  }
-
-  // Check board_of_directors
-  if (!output.board_of_directors ||
-      typeof output.board_of_directors.summary !== 'string' ||
-      !Array.isArray(output.board_of_directors.members)) {
-    return false;
-  }
-
-  // Validate board member shapes
-  for (const member of output.board_of_directors.members) {
-    if (!member ||
-        typeof member.name !== 'string' ||
-        typeof member.role !== 'string' ||
-        !Array.isArray(member.committees) ||
-        typeof member.background !== 'string' ||
-        typeof member.tenure !== 'string' ||
-        !Array.isArray(member.other_boards) ||
-        typeof member.source !== 'string') {
-      return false;
+export function validateKeyExecsAndBoardOutput(output) {
+    if (!output || typeof output !== 'object')
+        return false;
+    if (!output.confidence ||
+        !['HIGH', 'MEDIUM', 'LOW'].includes(output.confidence.level) ||
+        typeof output.confidence.reason !== 'string') {
+        return false;
     }
-  }
-
-  // Check c_suite
-  if (!output.c_suite ||
-      typeof output.c_suite.summary !== 'string' ||
-      !Array.isArray(output.c_suite.executives)) {
-    return false;
-  }
-
-  // Validate executive shapes
-  for (const exec of output.c_suite.executives) {
-    if (!exec ||
-        typeof exec.name !== 'string' ||
-        typeof exec.title !== 'string' ||
-        typeof exec.role_description !== 'string' ||
-        typeof exec.background !== 'string' ||
-        typeof exec.tenure !== 'string' ||
-        !Array.isArray(exec.performance_actions) ||
-        typeof exec.source !== 'string') {
-      return false;
+    if (!output.board_of_directors ||
+        typeof output.board_of_directors.summary !== 'string' ||
+        !Array.isArray(output.board_of_directors.members)) {
+        return false;
     }
-  }
-
-  // Check business_unit_leaders
-  if (!output.business_unit_leaders ||
-      typeof output.business_unit_leaders.summary !== 'string' ||
-      !Array.isArray(output.business_unit_leaders.leaders)) {
-    return false;
-  }
-
-  // Validate business unit leader shapes
-  for (const leader of output.business_unit_leaders.leaders) {
-    if (!leader ||
-        typeof leader.name !== 'string' ||
-        typeof leader.title !== 'string' ||
-        typeof leader.business_unit !== 'string' ||
-        typeof leader.role_description !== 'string' ||
-        typeof leader.background !== 'string' ||
-        !Array.isArray(leader.performance_actions) ||
-        typeof leader.source !== 'string') {
-      return false;
-    }
-  }
-
-  // Check recent_leadership_changes
-  if (!Array.isArray(output.recent_leadership_changes)) {
-    return false;
-  }
-
-  // Validate leadership change shapes
-  for (const change of output.recent_leadership_changes) {
-    if (!change ||
-        typeof change.date !== 'string' ||
-        typeof change.change_type !== 'string' ||
-        typeof change.description !== 'string' ||
-        typeof change.implications !== 'string' ||
-        typeof change.source !== 'string') {
-      return false;
-    }
-  }
-
-  // Check sources
-  if (!Array.isArray(output.sources_used)) return false;
-
-  return true;
-}
-
-export function formatKeyExecsAndBoardForDocument(output: KeyExecsAndBoardOutput): string {
-  let markdown = `# Key Execs and Board Members\n\n`;
-  markdown += `**Confidence: ${output.confidence.level}** – ${output.confidence.reason}\n\n`;
-
-  // Board of Directors
-  markdown += `## Board of Directors\n\n`;
-  markdown += `${output.board_of_directors.summary}\n\n`;
-
-  for (const member of output.board_of_directors.members) {
-    markdown += `**${member.name}** (${member.role})`;
-    if (member.tenure) markdown += ` - ${member.tenure}`;
-    markdown += `\n`;
-    markdown += `- Committees: ${member.committees.join(', ') || 'None listed'}\n`;
-    markdown += `- Background: ${member.background}\n`;
-    if (member.other_boards.length > 0) {
-      markdown += `- Other Boards: ${member.other_boards.join(', ')}\n`;
-    }
-    markdown += `- Source: ${member.source}\n\n`;
-  }
-
-  // C-Suite Executives
-  markdown += `## C-Suite and Executive Leadership\n\n`;
-  markdown += `${output.c_suite.summary}\n\n`;
-
-  for (const exec of output.c_suite.executives) {
-    markdown += `**${exec.name}**, ${exec.title}`;
-    if (exec.tenure) markdown += ` (${exec.tenure})`;
-    if (exec.geography_relevance) markdown += ` [${exec.geography_relevance} Geography Relevance]`;
-    markdown += `\n`;
-    markdown += `- Role: ${exec.role_description}\n`;
-    markdown += `- Background: ${exec.background}\n`;
-    if (exec.performance_actions.length > 0) {
-      markdown += `- Performance Improvement Actions:\n`;
-      for (const action of exec.performance_actions) {
-        markdown += `  - ${action}\n`;
-      }
-    }
-    markdown += `- Source: ${exec.source}\n\n`;
-  }
-
-  // Business Unit Leaders
-  markdown += `## Business Unit/Division Leaders\n\n`;
-  markdown += `${output.business_unit_leaders.summary}\n\n`;
-
-  if (output.business_unit_leaders.leaders.length > 0) {
-    for (const leader of output.business_unit_leaders.leaders) {
-      markdown += `**${leader.name}**, ${leader.title} - ${leader.business_unit}`;
-      if (leader.geography_relevance) markdown += ` [${leader.geography_relevance} Geography Relevance]`;
-      markdown += `\n`;
-      markdown += `- Role: ${leader.role_description}\n`;
-      markdown += `- Background: ${leader.background}\n`;
-      if (leader.performance_actions.length > 0) {
-        markdown += `- Performance Actions:\n`;
-        for (const action of leader.performance_actions) {
-          markdown += `  - ${action}\n`;
+    for (const member of output.board_of_directors.members) {
+        if (!member ||
+            typeof member.name !== 'string' ||
+            typeof member.role !== 'string' ||
+            !Array.isArray(member.committees) ||
+            typeof member.background !== 'string' ||
+            typeof member.tenure !== 'string' ||
+            !Array.isArray(member.other_boards) ||
+            typeof member.source !== 'string') {
+            return false;
         }
-      }
-      markdown += `- Source: ${leader.source}\n\n`;
     }
-  } else {
-    markdown += `*None identified in available sources.*\n\n`;
-  }
-
-  // Recent Leadership Changes
-  if (output.recent_leadership_changes.length > 0) {
-    markdown += `## Recent Leadership Changes\n\n`;
-
+    if (!output.c_suite ||
+        typeof output.c_suite.summary !== 'string' ||
+        !Array.isArray(output.c_suite.executives)) {
+        return false;
+    }
+    for (const exec of output.c_suite.executives) {
+        if (!exec ||
+            typeof exec.name !== 'string' ||
+            typeof exec.title !== 'string' ||
+            typeof exec.role_description !== 'string' ||
+            typeof exec.background !== 'string' ||
+            typeof exec.tenure !== 'string' ||
+            !Array.isArray(exec.performance_actions) ||
+            typeof exec.source !== 'string') {
+            return false;
+        }
+    }
+    if (!output.business_unit_leaders ||
+        typeof output.business_unit_leaders.summary !== 'string' ||
+        !Array.isArray(output.business_unit_leaders.leaders)) {
+        return false;
+    }
+    for (const leader of output.business_unit_leaders.leaders) {
+        if (!leader ||
+            typeof leader.name !== 'string' ||
+            typeof leader.title !== 'string' ||
+            typeof leader.business_unit !== 'string' ||
+            typeof leader.role_description !== 'string' ||
+            typeof leader.background !== 'string' ||
+            !Array.isArray(leader.performance_actions) ||
+            typeof leader.source !== 'string') {
+            return false;
+        }
+    }
+    if (!Array.isArray(output.recent_leadership_changes)) {
+        return false;
+    }
     for (const change of output.recent_leadership_changes) {
-      markdown += `**${change.date}** - ${change.change_type}\n`;
-      markdown += `${change.description}\n`;
-      markdown += `*Implications:* ${change.implications} (${change.source})\n\n`;
+        if (!change ||
+            typeof change.date !== 'string' ||
+            typeof change.change_type !== 'string' ||
+            typeof change.description !== 'string' ||
+            typeof change.implications !== 'string' ||
+            typeof change.source !== 'string') {
+            return false;
+        }
     }
-  }
-
-  return markdown;
+    if (!Array.isArray(output.sources_used))
+        return false;
+    return true;
 }
+export function formatKeyExecsAndBoardForDocument(output) {
+    let markdown = `# Key Execs and Board Members\n\n`;
+    markdown += `**Confidence: ${output.confidence.level}** – ${output.confidence.reason}\n\n`;
+    markdown += `## Board of Directors\n\n`;
+    markdown += `${output.board_of_directors.summary}\n\n`;
+    for (const member of output.board_of_directors.members) {
+        markdown += `**${member.name}** (${member.role})`;
+        if (member.tenure)
+            markdown += ` - ${member.tenure}`;
+        markdown += `\n`;
+        markdown += `- Committees: ${member.committees.join(', ') || 'None listed'}\n`;
+        markdown += `- Background: ${member.background}\n`;
+        if (member.other_boards.length > 0) {
+            markdown += `- Other Boards: ${member.other_boards.join(', ')}\n`;
+        }
+        markdown += `- Source: ${member.source}\n\n`;
+    }
+    markdown += `## C-Suite and Executive Leadership\n\n`;
+    markdown += `${output.c_suite.summary}\n\n`;
+    for (const exec of output.c_suite.executives) {
+        markdown += `**${exec.name}**, ${exec.title}`;
+        if (exec.tenure)
+            markdown += ` (${exec.tenure})`;
+        if (exec.geography_relevance)
+            markdown += ` [${exec.geography_relevance} Geography Relevance]`;
+        markdown += `\n`;
+        markdown += `- Role: ${exec.role_description}\n`;
+        markdown += `- Background: ${exec.background}\n`;
+        if (exec.performance_actions.length > 0) {
+            markdown += `- Performance Improvement Actions:\n`;
+            for (const action of exec.performance_actions) {
+                markdown += `  - ${action}\n`;
+            }
+        }
+        markdown += `- Source: ${exec.source}\n\n`;
+    }
+    markdown += `## Business Unit/Division Leaders\n\n`;
+    markdown += `${output.business_unit_leaders.summary}\n\n`;
+    if (output.business_unit_leaders.leaders.length > 0) {
+        for (const leader of output.business_unit_leaders.leaders) {
+            markdown += `**${leader.name}**, ${leader.title} - ${leader.business_unit}`;
+            if (leader.geography_relevance)
+                markdown += ` [${leader.geography_relevance} Geography Relevance]`;
+            markdown += `\n`;
+            markdown += `- Role: ${leader.role_description}\n`;
+            markdown += `- Background: ${leader.background}\n`;
+            if (leader.performance_actions.length > 0) {
+                markdown += `- Performance Actions:\n`;
+                for (const action of leader.performance_actions) {
+                    markdown += `  - ${action}\n`;
+                }
+            }
+            markdown += `- Source: ${leader.source}\n\n`;
+        }
+    }
+    else {
+        markdown += `*None identified in available sources.*\n\n`;
+    }
+    if (output.recent_leadership_changes.length > 0) {
+        markdown += `## Recent Leadership Changes\n\n`;
+        for (const change of output.recent_leadership_changes) {
+            markdown += `**${change.date}** - ${change.change_type}\n`;
+            markdown += `${change.description}\n`;
+            markdown += `*Implications:* ${change.implications} (${change.source})\n\n`;
+        }
+    }
+    return markdown;
+}
+//# sourceMappingURL=key-execs-and-board.js.map

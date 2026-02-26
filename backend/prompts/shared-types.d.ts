@@ -1,3 +1,7 @@
+/**
+ * Shared Types - Common types used across all sections
+ * of the Company Intelligence Sheet generation system
+ */
 export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW';
 export type FxSource = 'A' | 'B' | 'C';
 export type IndustrySource = 'A' | 'B' | 'C';
@@ -28,7 +32,7 @@ export interface Trend {
     trend: string;
     description: string;
     direction: TrendDirection;
-    impact_score: number;
+    impact_score: number | null;
     geography_relevance: string;
     source: string;
 }
@@ -47,35 +51,35 @@ export interface CompanyBasics {
     ticker?: string;
     ownership: 'Public' | 'Private' | 'Subsidiary';
     headquarters: string;
-    global_revenue_usd: number;
-    global_employees: number;
+    global_revenue_usd: number | string | null;
+    global_employees: number | null;
     fiscal_year_end: string;
 }
 export interface GeographySpecifics {
-    regional_revenue_usd: number;
-    regional_revenue_pct: number;
-    regional_employees: number;
+    regional_revenue_usd: number | string | null;
+    regional_revenue_pct: number | null;
+    regional_employees: number | null;
     facilities: FacilityInfo[];
     key_facts: string[];
 }
 export interface SegmentStructure {
     name: string;
-    revenue_pct: number;
+    revenue_pct: number | null;
     description: string;
 }
 export interface FinancialMetric {
     metric: string;
-    company: number | string;
-    industry_avg: number | string;
+    company: number | string | null;
+    industry_avg: number | string | null;
     source: string;
     unit?: string;
     value_type?: 'currency' | 'percent' | 'ratio' | 'number';
 }
 export interface SegmentFinancialMetric {
     metric: string;
-    segment: number | string;
-    company_avg: number | string;
-    industry_avg: number | string;
+    segment: number | string | null;
+    company_avg: number | string | null;
+    industry_avg: number | string | null;
     source: string;
 }
 export interface DerivedMetric {
@@ -85,12 +89,12 @@ export interface DerivedMetric {
     source: string;
 }
 export interface FxRate {
-    rate: number;
+    rate: number | null;
     source: FxSource;
 }
 export interface FxRateDetailed {
     currency_pair: string;
-    rate: number;
+    rate: number | null;
     source: FxSource;
     source_description: string;
 }
@@ -109,7 +113,7 @@ export interface Opportunity {
     source: string;
     aligned_sku: string;
     priority: Priority;
-    severity: number;
+    severity: number | null;
     severity_rationale: string;
     geography_relevance: string;
     potential_value_levers: string[];
@@ -124,13 +128,39 @@ export interface NewsItem {
     geography_relevance: string;
     category: NewsCategory;
 }
+/**
+ * Type guard for confidence level
+ */
 export declare function isConfidenceLevel(value: any): value is ConfidenceLevel;
+/**
+ * Type guard for FX source
+ */
 export declare function isFxSource(value: any): value is FxSource;
+/**
+ * Type guard for trend direction
+ */
 export declare function isTrendDirection(value: any): value is TrendDirection;
+/**
+ * Type guard for priority
+ */
 export declare function isPriority(value: any): value is Priority;
+/**
+ * Type guard for magnitude
+ */
 export declare function isMagnitude(value: any): value is Magnitude;
+/**
+ * Type guard for source reference
+ */
 export declare function isSourceReference(value: any): value is SourceReference;
+/**
+ * Type guard for analyst quote
+ */
 export declare function isAnalystQuote(value: any): value is AnalystQuote;
+/**
+ * Validates impact score is between 1-10
+ */
 export declare function isValidImpactScore(score: any): score is number;
+/**
+ * Validates severity score is between 1-10
+ */
 export declare function isValidSeverityScore(score: any): score is number;
-//# sourceMappingURL=shared-types.d.ts.map

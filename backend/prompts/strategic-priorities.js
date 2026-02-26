@@ -1,14 +1,8 @@
-/**
- * Report-Specific Section: Strategic Priorities and Transformation
- */
-
 import { appendReportTypeAddendum } from './report-type-addendums.js';
-
 export function buildStrategicPrioritiesPrompt(input) {
-  const { foundation, companyName } = input;
-  const foundationJson = JSON.stringify(foundation, null, 2);
-
-  const basePrompt = `# Strategic Priorities and Transformation - Research Prompt
+    const { foundation, companyName } = input;
+    const foundationJson = JSON.stringify(foundation, null, 2);
+    const basePrompt = `# Strategic Priorities and Transformation - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -63,6 +57,15 @@ interface StrategicPrioritiesOutput {
 }
 \`\`\`
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent strategic priorities or transformation themes that cannot be confirmed from public sources.
+- **Return empty arrays** for \`priorities\` and/or \`transformation_themes\` if no real data can be identified.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- **Use \`null\`** for unavailable numeric data (not 0, not -1, not "–").
+
+---
+
 ## CRITICAL REMINDERS
 
 1. Follow style guide: All formatting rules apply
@@ -87,6 +90,6 @@ interface StrategicPrioritiesOutput {
 - [ ] \`sources_used\` only contains S# values
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA.**`;
-
-  return appendReportTypeAddendum('strategic_priorities', input.reportType, basePrompt);
+    return appendReportTypeAddendum('strategic_priorities', input.reportType, basePrompt);
 }
+//# sourceMappingURL=strategic-priorities.js.map

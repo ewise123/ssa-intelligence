@@ -70,7 +70,7 @@ export interface SourceReference {
 
 export interface FXRate {
   currency_pair: string;
-  rate: number;
+  rate: number | null;
   source: 'A' | 'B' | 'C';
   source_description: string;
 }
