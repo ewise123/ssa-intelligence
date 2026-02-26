@@ -51,6 +51,9 @@ export interface PeerMetric {
   peer4?: number | string | null;
   industry_avg: number | string | null;
   source: string;
+  currency?: string | null;
+  unit?: string;
+  value_type?: 'currency' | 'percent' | 'ratio' | 'number';
 }
 
 export interface KeyStrength {

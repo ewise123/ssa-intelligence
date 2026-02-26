@@ -44,6 +44,21 @@ describe('docx-section-renderers', () => {
       expect(renderExecSummary(null)).toEqual([]);
       expect(renderExecSummary(undefined)).toEqual([]);
     });
+
+    it('does not double source references when bullet text contains inline sources', () => {
+      const result = renderExecSummary({
+        bullet_points: [
+          { bullet: 'Revenue grew 15% driven by strong demand (S1, S2)', sources: ['S1', 'S2'] },
+        ],
+      });
+      // Extract text from the bullet paragraph (index 1, after the heading)
+      const bulletParagraph = result[1] as Paragraph;
+      const root = (bulletParagraph as any).root;
+      const allText = JSON.stringify(root);
+      // "(S1, S2)" should appear exactly once, not twice
+      const matches = allText.match(/S1, S2/g);
+      expect(matches).toHaveLength(1);
+    });
   });
 
   describe('renderFinancialSnapshot', () => {

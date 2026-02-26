@@ -184,161 +184,8 @@ const stringifyContent = (value: unknown): string => {
   return '';
 };
 
-// Numeric formatting helpers
-const formatNumber = (value: number): string => {
-  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-};
-
-const formatCurrency = (value: number, currency: string = 'USD'): string => {
-  // Default: USD with grouping, allow other currency codes if provided
-  return value.toLocaleString(undefined, {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: Math.abs(value) >= 1000 ? 0 : 2,
-  });
-};
-
-const formatPercent = (value: number): string => {
-  // Accept raw percent (e.g., 12.3) or ratio (e.g., 0.123); pick sensible format
-  const asRatio = Math.abs(value) <= 1 ? value * 100 : value;
-  return `${asRatio.toFixed(1)}%`;
-};
-
-const formatValue = (raw: any): string => {
-  if (raw === null || raw === undefined) return '';
-  // Already a string, try to detect currency/percent patterns; otherwise return as-is
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim();
-    // Handle suffixes like M/B for millions/billions with optional leading $
-    const suffixMatch = trimmed.match(/^\$?(-?\d[\d,]*\.?\d*)([MB])$/i);
-    if (suffixMatch) {
-      const num = Number.parseFloat(suffixMatch[1].replace(/,/g, ''));
-      const suffix = suffixMatch[2].toUpperCase();
-      if (!Number.isNaN(num)) {
-        const val = suffix === 'B' ? num * 1_000_000_000 : num * 1_000_000;
-        const formatted = formatNumber(val);
-        return trimmed.startsWith('$') ? `$${formatted}${suffix}` : `${formatted}${suffix}`;
-      }
-    }
-    if (/^\$?-?\d[\d,]*\.?\d*$/.test(trimmed.replace(/,/g, ''))) {
-      const num = Number.parseFloat(trimmed.replace(/[^0-9.-]/g, ''));
-      if (!Number.isNaN(num)) return formatCurrency(num);
-    }
-    if (/^-?\d+(\.\d+)?%$/.test(trimmed)) {
-      const num = Number.parseFloat(trimmed.replace('%', ''));
-      if (!Number.isNaN(num)) return formatPercent(num);
-    }
-    const numeric = Number(trimmed.replace(/,/g, ''));
-    if (!Number.isNaN(numeric)) return formatNumber(numeric);
-    return trimmed;
-  }
-  if (typeof raw === 'number') {
-    return formatNumber(raw);
-  }
-  return String(raw);
-};
-
-type MetricUnit = {
-  type: 'currency' | 'percent' | 'ratio' | 'days' | 'years' | 'number' | 'bps';
-  suffix?: string;
-  prefix?: string;
-};
-
-const resolveMetricUnit = (metricName: string, unitHint?: string, valueType?: string): MetricUnit | null => {
-  const match = metricName.match(/\(([^)]+)\)\s*$/);
-  const token = match?.[1]?.toLowerCase();
-
-  if (token) {
-    if (token.includes('$b')) return { type: 'currency', prefix: '$', suffix: 'B' };
-    if (token.includes('$m')) return { type: 'currency', prefix: '$', suffix: 'M' };
-    if (token.includes('$k')) return { type: 'currency', prefix: '$', suffix: 'K' };
-    if (token.includes('bps') || token.includes('bp')) return { type: 'bps', suffix: ' bps' };
-    if (token.includes('%') || token.includes('percent')) return { type: 'percent', suffix: '%' };
-    if (token.includes('x')) return { type: 'ratio', suffix: 'x' };
-    if (token.includes('day')) return { type: 'days', suffix: ' days' };
-    if (token.includes('year')) return { type: 'years', suffix: ' years' };
-    if (token.includes('count') || token.includes('score')) return { type: 'number' };
-    if (token.includes('$')) return { type: 'currency', prefix: '$' };
-  }
-
-  const normalizedUnit = unitHint?.toLowerCase();
-  if (normalizedUnit) {
-    if (normalizedUnit.includes('%') || normalizedUnit.includes('percent')) return { type: 'percent', suffix: '%' };
-    if (normalizedUnit.includes('bps') || normalizedUnit.includes('bp')) return { type: 'bps', suffix: ' bps' };
-    if (normalizedUnit.includes('day')) return { type: 'days', suffix: ' days' };
-    if (normalizedUnit.includes('year')) return { type: 'years', suffix: ' years' };
-    if (normalizedUnit.includes('count') || normalizedUnit.includes('score')) return { type: 'number' };
-    if (normalizedUnit.includes('usd') || normalizedUnit.includes('$')) return { type: 'currency', prefix: '$' };
-  }
-
-  const normalizedType = valueType?.toLowerCase();
-  if (normalizedType === 'percent') return { type: 'percent', suffix: '%' };
-  if (normalizedType === 'ratio') return { type: 'ratio', suffix: 'x' };
-  if (normalizedType === 'number') return { type: 'number' };
-  if (normalizedType === 'currency') return { type: 'currency', prefix: '$' };
-
-  return null;
-};
-
-const parseNumeric = (raw: string): number | null => {
-  const cleaned = raw.replace(/,/g, '');
-  const match = cleaned.match(/-?\d+(\.\d+)?/);
-  if (!match) return null;
-  const num = Number.parseFloat(match[0]);
-  return Number.isNaN(num) ? null : num;
-};
-
-const formatMetricValue = (
-  metricName: string,
-  raw: any,
-  unitHint?: string,
-  valueType?: string
-): string => {
-  if (raw === null || raw === undefined) return '';
-  const unit = resolveMetricUnit(metricName, unitHint, valueType);
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim();
-    if (trimmed === '-') return '-';
-    if (trimmed === '') return '';
-    const hasLetters = /[a-z]/i.test(trimmed);
-    if (hasLetters && !unit) return trimmed;
-  }
-
-  const numeric =
-    typeof raw === 'number'
-      ? raw
-      : typeof raw === 'string'
-        ? parseNumeric(raw)
-        : null;
-
-  if (numeric === null) {
-    return typeof raw === 'string' ? raw.trim() : String(raw);
-  }
-
-  if (!unit) return formatNumber(numeric);
-
-  switch (unit.type) {
-    case 'percent':
-      return formatPercent(numeric);
-    case 'bps':
-      return `${formatNumber(numeric)}${unit.suffix ?? ''}`;
-    case 'ratio':
-      return `${formatNumber(numeric)}${unit.suffix ?? 'x'}`;
-    case 'days':
-      return `${formatNumber(numeric)}${unit.suffix ?? ' days'}`;
-    case 'years':
-      return `${formatNumber(numeric)}${unit.suffix ?? ' years'}`;
-    case 'currency': {
-      const formatted = formatNumber(numeric);
-      const prefix = unit.prefix ?? '$';
-      const suffix = unit.suffix ?? '';
-      return `${prefix}${formatted}${suffix}`;
-    }
-    case 'number':
-    default:
-      return formatNumber(numeric);
-  }
-};
+// Metric formatting — imported from shared module
+import { formatMetricValue, formatNumber } from '../utils/metric-formatter';
 
 // Simple Markdown table builder
 const normalizeCell = (cell: string | number | null | undefined): string => {
@@ -369,9 +216,10 @@ const isEmptyValue = (v: any): boolean => {
   return false;
 };
 
-/** Strip inline source references like "(S10)" or "(S1, S2)" from display values. */
+/** Strip inline source references like "(S10)", "(S1, S2)", or "(S1, Section 2)" from display values.
+ *  Preserves any trailing period after the source ref. */
 const stripInlineSource = (v: string): string =>
-  v.replace(/\s*\(S\d+(?:,\s*S\d+)*\)\s*$/, '').trim();
+  v.replace(/\s*\((?:S\d+|Section\s+\d+)(?:,\s*(?:S\d+|Section\s+\d+))*\)(\.?)\s*$/, '$1').trim();
 
 /** Detect placeholder names Claude fabricates when no real person can be identified. */
 const isPlaceholderName = (name: string): boolean => {
@@ -416,7 +264,13 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
         parts.push('\n**Key Takeaways**');
         parts.push(
           data.bullet_points
-            .map((b: any) => `- ${b.bullet || ''}${b.sources ? ` (${(b.sources || []).join(', ')})` : ''}`)
+            .map((b: any) => {
+              let text = stripInlineSource(b.bullet || '');
+              const endsWithPeriod = text.endsWith('.');
+              if (endsWithPeriod) text = text.slice(0, -1);
+              const sources = b.sources ? ` (${(b.sources || []).join(', ')})` : '';
+              return `- ${text}${sources}${endsWithPeriod ? '.' : ''}`;
+            })
             .join('\n')
         );
       }
@@ -438,8 +292,9 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
                 const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
                 const rawCompany = typeof m.company === 'string' ? stripInlineSource(m.company) : m.company;
                 const rawIndustry = typeof m.industry_avg === 'string' ? stripInlineSource(m.industry_avg) : m.industry_avg;
-                const companyValue = formatMetricValue(metricName, rawCompany, m.unit, m.value_type);
-                const industryValue = formatMetricValue(metricName, rawIndustry, m.unit, m.value_type);
+                const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
+                const companyValue = formatMetricValue(metricName, rawCompany, opts);
+                const industryValue = formatMetricValue(metricName, rawIndustry, opts);
                 return [
                   metricName,
                   companyValue,
@@ -484,7 +339,12 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
         parts.push(
           mdTable(
             ['Name', 'Description', 'Revenue %', 'Geography Relevance'],
-            data.business_description.segments.map((s: any) => [s.name, s.description, s.revenue_pct, s.geography_relevance])
+            data.business_description.segments.map((s: any) => [
+              s.name,
+              s.description,
+              s.revenue_pct != null ? formatMetricValue('Revenue (%)', s.revenue_pct) : '',
+              s.geography_relevance,
+            ])
           )
         );
       }
@@ -493,7 +353,13 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
         parts.push(
           mdTable(
             ['Name', 'Location', 'Type', 'Employees', 'Capabilities'],
-            data.geographic_footprint.facilities.map((f: any) => [f.name, f.location, f.type, f.employees, f.capabilities])
+            data.geographic_footprint.facilities.map((f: any) => [
+              f.name,
+              f.location,
+              f.type,
+              f.employees != null ? formatNumber(f.employees) : '',
+              f.capabilities,
+            ])
           )
         );
       }
@@ -807,9 +673,10 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
                 ['Metric', 'Segment', 'Company Avg', 'Industry Avg', 'Source'],
                 seg.financial_snapshot.table.map((m: any) => {
                   const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
-                  const segmentValue = formatMetricValue(metricName, m.segment, m.unit, m.value_type);
-                  const companyValue = formatMetricValue(metricName, m.company_avg, m.unit, m.value_type);
-                  const industryValue = formatMetricValue(metricName, m.industry_avg, m.unit, m.value_type);
+                  const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
+                  const segmentValue = formatMetricValue(metricName, m.segment, opts);
+                  const companyValue = formatMetricValue(metricName, m.company_avg, opts);
+                  const industryValue = formatMetricValue(metricName, m.industry_avg, opts);
                   return [
                     metricName,
                     segmentValue,
@@ -895,16 +762,20 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
         parts.push(
           mdTable(
             ['Metric', 'Company', 'Peer1', 'Peer2', 'Peer3', 'Peer4', 'Industry Avg', 'Source'],
-            populatedMetrics.map((m: any) => [
-              m.metric,
-              isEmptyValue(m.company) ? '' : m.company,
-              isEmptyValue(m.peer1) ? '' : m.peer1,
-              isEmptyValue(m.peer2) ? '' : m.peer2,
-              isEmptyValue(m.peer3) ? '' : m.peer3,
-              isEmptyValue(m.peer4) ? '' : m.peer4,
-              isEmptyValue(m.industry_avg) ? '' : m.industry_avg,
-              m.source,
-            ])
+            populatedMetrics.map((m: any) => {
+              const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
+              const fmt = (v: any) => isEmptyValue(v) ? '' : formatMetricValue(m.metric, v, opts);
+              return [
+                m.metric,
+                fmt(m.company),
+                fmt(m.peer1),
+                fmt(m.peer2),
+                fmt(m.peer3),
+                fmt(m.peer4),
+                fmt(m.industry_avg),
+                m.source,
+              ];
+            })
           )
         );
       }
@@ -971,7 +842,12 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
         parts.push(
           mdTable(
             ['Pair', 'Rate', 'Source', 'Description'],
-            data.fx_rates_and_industry.fx_rates.map((r: any) => [r.currency_pair, r.rate ?? '', resolveSourceLabel(r.source, FX_SOURCE_LABELS), r.source_description])
+            data.fx_rates_and_industry.fx_rates.map((r: any) => [
+              r.currency_pair,
+              r.rate != null ? formatNumber(r.rate) : '',
+              resolveSourceLabel(r.source, FX_SOURCE_LABELS),
+              r.source_description,
+            ])
           )
         );
       }

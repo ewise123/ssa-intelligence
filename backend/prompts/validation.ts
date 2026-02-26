@@ -181,7 +181,8 @@ export const financialMetricSchema = z.object({
   industry_avg: metricValue,
   source: z.string(),
   unit: z.string().nullish(),
-  value_type: z.enum(['currency', 'percent', 'ratio', 'number']).nullish()
+  value_type: z.enum(['currency', 'percent', 'ratio', 'number']).nullish(),
+  currency: z.string().length(3).nullish()
 });
 
 export const derivedMetricSchema = z.object({
@@ -276,7 +277,10 @@ export const segmentFinancialMetricSchema = z.object({
   segment: metricValue,
   company_avg: metricValue,
   industry_avg: metricValue,
-  source: z.string()
+  source: z.string(),
+  currency: z.string().length(3).nullish(),
+  unit: z.string().nullish(),
+  value_type: z.enum(['currency', 'percent', 'ratio', 'number']).nullish()
 });
 
 export const segmentAnalysisSchema = z.object({
@@ -366,7 +370,10 @@ export const peerMetricSchema = z.object({
   peer3: metricValue,
   peer4: metricValue.optional(),
   industry_avg: metricValue,
-  source: z.string()
+  source: z.string(),
+  currency: z.string().length(3).nullish(),
+  unit: z.string().nullish(),
+  value_type: z.enum(['currency', 'percent', 'ratio', 'number']).nullish()
 });
 
 export const keyStrengthSchema = z.object({

@@ -10,6 +10,8 @@ import {
   BorderStyle,
   ShadingType,
 } from 'docx';
+import { formatMetricValue, formatNumber } from './metric-formatter.js';
+import { stripInlineSource } from './section-formatter.js';
 
 // SSA brand colors
 const BRAND_BLUE = '003399';
@@ -243,7 +245,11 @@ export function renderExecSummary(data: any): DocxElement[] {
   if (Array.isArray(data.bullet_points) && data.bullet_points.length) {
     elements.push(boldParagraph('Key Takeaways'));
     for (const b of data.bullet_points) {
-      const text = `${b.bullet || ''}${b.sources ? ` (${(b.sources || []).join(', ')})` : ''}`;
+      let cleaned = stripInlineSource(b.bullet || '');
+      const endsWithPeriod = cleaned.endsWith('.');
+      if (endsWithPeriod) cleaned = cleaned.slice(0, -1);
+      const sources = b.sources ? ` (${(b.sources || []).join(', ')})` : '';
+      const text = `${cleaned}${sources}${endsWithPeriod ? '.' : ''}`;
       elements.push(bulletItem(text));
     }
   }
@@ -261,7 +267,10 @@ export function renderFinancialSnapshot(data: any): DocxElement[] {
         ['Metric', 'Company', 'Industry Avg', 'Source'],
         data.kpi_table.metrics.map((m: any) => {
           const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
-          return [metricName, formatValue(m.company), formatValue(m.industry_avg), m.source || ''];
+          const rawCompany = typeof m.company === 'string' ? stripInlineSource(m.company) : m.company;
+          const rawIndustry = typeof m.industry_avg === 'string' ? stripInlineSource(m.industry_avg) : m.industry_avg;
+          const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
+          return [metricName, formatMetricValue(metricName, rawCompany, opts), formatMetricValue(metricName, rawIndustry, opts), m.source || ''];
         }),
       ),
     );
@@ -293,7 +302,7 @@ export function renderCompanyOverview(data: any): DocxElement[] {
         data.business_description.segments.map((s: any) => [
           s.name,
           s.description,
-          s.revenue_pct,
+          s.revenue_pct != null ? formatMetricValue('Revenue (%)', s.revenue_pct) : '',
           s.geography_relevance,
         ]),
       ),
@@ -308,7 +317,7 @@ export function renderCompanyOverview(data: any): DocxElement[] {
           f.name,
           f.location,
           f.type,
-          f.employees,
+          f.employees != null ? formatNumber(f.employees) : '',
           f.capabilities,
         ]),
       ),
@@ -583,11 +592,12 @@ export function renderSegmentAnalysis(data: any): DocxElement[] {
             ['Metric', 'Segment', 'Company Avg', 'Industry Avg', 'Source'],
             seg.financial_snapshot.table.map((m: any) => {
               const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
+              const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
               return [
                 metricName,
-                formatValue(m.segment),
-                formatValue(m.company_avg),
-                formatValue(m.industry_avg),
+                formatMetricValue(metricName, m.segment, opts),
+                formatMetricValue(metricName, m.company_avg, opts),
+                formatMetricValue(metricName, m.industry_avg, opts),
                 m.source || '',
               ];
             }),
@@ -667,16 +677,20 @@ export function renderPeerBenchmarking(data: any): DocxElement[] {
     elements.push(
       brandedTable(
         ['Metric', 'Company', 'Peer1', 'Peer2', 'Peer3', 'Peer4', 'Industry Avg', 'Source'],
-        populatedMetrics.map((m: any) => [
-          m.metric,
-          m.company,
-          m.peer1,
-          m.peer2,
-          m.peer3,
-          m.peer4 || '',
-          m.industry_avg,
-          m.source,
-        ]),
+        populatedMetrics.map((m: any) => {
+          const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
+          const fmt = (v: any) => isEmptyValue(v) ? '' : formatMetricValue(m.metric, v, opts);
+          return [
+            m.metric,
+            fmt(m.company),
+            fmt(m.peer1),
+            fmt(m.peer2),
+            fmt(m.peer3),
+            fmt(m.peer4),
+            fmt(m.industry_avg),
+            m.source,
+          ];
+        }),
       ),
     );
   }
@@ -776,7 +790,7 @@ export function renderAppendix(data: any): DocxElement[] {
         ['Pair', 'Rate', 'Source', 'Description'],
         data.fx_rates_and_industry.fx_rates.map((r: any) => [
           r.currency_pair,
-          r.rate ?? '',
+          r.rate != null ? formatNumber(r.rate) : '',
           r.source,
           r.source_description,
         ]),
@@ -828,12 +842,6 @@ export function renderSection(sectionId: string, data: unknown): DocxElement[] {
 }
 
 // ── Helpers ──
-
-function formatValue(raw: any): string {
-  if (raw === null || raw === undefined) return '';
-  if (typeof raw === 'number') return raw.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return String(raw);
-}
 
 /** Treat dashes, N/A, and similar placeholders as empty (no real data). */
 function isEmptyValue(v: any): boolean {
