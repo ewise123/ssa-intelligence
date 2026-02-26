@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { ReportBlueprint, ResearchJob, SECTIONS_CONFIG, SectionId, SectionStatus } from '../types';
 import { StatusPill } from '../components/StatusPill';
-import { ChevronRight, BarChart3, Globe, ExternalLink, AlertTriangle, Loader2, CheckCircle2, Circle, Search } from 'lucide-react';
+import { ChevronRight, BarChart3, Globe, ExternalLink, AlertTriangle, AlertCircle, Loader2, CheckCircle2, Circle, Search } from 'lucide-react';
 
 // Improved Markdown Renderer
 const parseFormattedText = (text: string) => {
@@ -280,10 +280,18 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({
                 let icon = <Circle size={16} className="text-slate-300" />;
                 let textColor = 'text-slate-400';
                 let bgColor = 'bg-transparent';
+                const content = secData?.content;
+                const isInsufficientData = status === 'completed' &&
+                  typeof content === 'string' &&
+                  content.trim().startsWith('> **Limited public information available**');
+
                 if (status === 'running') {
                   icon = <Loader2 size={16} className="text-blue-500 animate-spin" />;
                   textColor = 'text-blue-600 font-medium';
                   bgColor = 'bg-blue-50';
+                } else if (status === 'completed' && isInsufficientData) {
+                  icon = <AlertCircle size={16} className="text-amber-500" />;
+                  textColor = 'text-slate-700';
                 } else if (status === 'completed') {
                   icon = <CheckCircle2 size={16} className="text-emerald-500" />;
                   textColor = 'text-slate-700';
@@ -489,7 +497,15 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({
                 let StatusIcon = Circle;
                 let iconClass = "text-slate-300";
 
-                if (status === 'completed') {
+                const sectionContent = job.sections[config.id]?.content;
+                const isInsufficientData = status === 'completed' &&
+                  typeof sectionContent === 'string' &&
+                  sectionContent.trim().startsWith('> **Limited public information available**');
+
+                if (status === 'completed' && isInsufficientData) {
+                  StatusIcon = AlertCircle;
+                  iconClass = "text-amber-500";
+                } else if (status === 'completed') {
                   StatusIcon = CheckCircle2;
                   iconClass = "text-emerald-500";
                 } else if (status === 'running') {
