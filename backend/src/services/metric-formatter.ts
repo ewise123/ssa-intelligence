@@ -159,14 +159,17 @@ export function resolveMetricUnit(
 
   const normalizedUnit = unitHint?.toLowerCase();
   if (normalizedUnit) {
+    const hasCurrencyIndicator =
+      normalizedUnit.includes('$') || /\b[a-z]{3}\b/.test(normalizedUnit);
+
     if (normalizedUnit.includes('%') || normalizedUnit.includes('percent')) return { type: 'percent', suffix: '%' };
     if (/\bbps?\b/.test(normalizedUnit)) return { type: 'bps', suffix: ' bps' };
     if (normalizedUnit.includes('day')) return { type: 'days', suffix: ' days' };
     if (normalizedUnit.includes('year')) return { type: 'years', suffix: ' years' };
     if (normalizedUnit.includes('count') || normalizedUnit.includes('score')) return { type: 'number' };
-    if (normalizedUnit.includes('usd') && /\bbillion/.test(normalizedUnit)) return { type: 'currency', scale: 'B' };
-    if (normalizedUnit.includes('usd') && /\bmillion/.test(normalizedUnit)) return { type: 'currency', scale: 'M' };
-    if (normalizedUnit.includes('usd') && /\bthousand/.test(normalizedUnit)) return { type: 'currency', scale: 'K' };
+    if (hasCurrencyIndicator && /\bbillion/.test(normalizedUnit)) return { type: 'currency', scale: 'B' };
+    if (hasCurrencyIndicator && /\bmillion/.test(normalizedUnit)) return { type: 'currency', scale: 'M' };
+    if (hasCurrencyIndicator && /\bthousand/.test(normalizedUnit)) return { type: 'currency', scale: 'K' };
     if (normalizedUnit.includes('usd') || normalizedUnit.includes('$')) return { type: 'currency' };
   }
 

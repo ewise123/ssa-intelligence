@@ -241,6 +241,12 @@ describe('resolveMetricUnit', () => {
     expect(resolveMetricUnit('Revenue', 'USD thousands')).toEqual({ type: 'currency', scale: 'K' });
   });
 
+  it('detects non-USD currency scale hints', () => {
+    expect(resolveMetricUnit('Revenue', 'EUR millions')).toEqual({ type: 'currency', scale: 'M' });
+    expect(resolveMetricUnit('Revenue', 'GBP billions')).toEqual({ type: 'currency', scale: 'B' });
+    expect(resolveMetricUnit('Revenue', 'JPY thousands')).toEqual({ type: 'currency', scale: 'K' });
+  });
+
   it('returns null for unrecognized metrics', () => {
     expect(resolveMetricUnit('Something')).toBeNull();
   });

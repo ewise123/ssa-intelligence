@@ -234,7 +234,9 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
               let text = stripInlineSource(b.bullet || '');
               const endsWithPeriod = text.endsWith('.');
               if (endsWithPeriod) text = text.slice(0, -1);
-              const sources = b.sources ? ` (${(b.sources || []).join(', ')})` : '';
+              const sources = Array.isArray(b.sources) && b.sources.length
+                ? ` (${b.sources.join(', ')})`
+                : '';
               return `- ${text}${sources}${endsWithPeriod ? '.' : ''}`;
             })
             .join('\n')
