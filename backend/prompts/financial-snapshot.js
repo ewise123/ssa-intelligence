@@ -1,4 +1,14 @@
+/**
+ * Section 2: Financial Snapshot - TypeScript Implementation
+ * Generates prompt and types for Financial Snapshot section
+ */
+// ============================================================================
+// INPUT TYPES
+// ============================================================================
 import { appendReportTypeAddendum } from './report-type-addendums.js';
+// ============================================================================
+// KPI REQUIREMENTS
+// ============================================================================
 const REQUIRED_KPIS_BY_REPORT_TYPE = {
     INDUSTRIALS: [
         'Revenue (Latest Period) ($M)',
@@ -61,15 +71,32 @@ const REQUIRED_KPIS_BY_REPORT_TYPE = {
         'Cash and Equivalents ($M)',
         'Total Debt ($M)',
         'Net Debt ($M)'
+    ],
+    INSURANCE: [
+        'Gross Written Premiums ($M)',
+        'Net Written Premiums ($M)',
+        'Premium Growth (YoY) (%)',
+        'Combined Ratio (%)',
+        'Loss Ratio (%)',
+        'Expense Ratio (%)',
+        'Underwriting Income (Loss) ($M)',
+        'Net Investment Income ($M)',
+        'Investment Yield (%)',
+        'Net Income ($M)',
+        'Return on Equity (ROE) (%)',
+        'Solvency Ratio / RBC Ratio (%)',
+        'Reserve to Premium Ratio (x)',
+        'Policy Retention Rate (%)'
     ]
 };
-const getRequiredKpis = (reportType) => {
-    var _a;
-    return (_a = REQUIRED_KPIS_BY_REPORT_TYPE[reportType !== null && reportType !== void 0 ? reportType : 'GENERIC']) !== null && _a !== void 0 ? _a : REQUIRED_KPIS_BY_REPORT_TYPE.GENERIC;
-};
+const getRequiredKpis = (reportType) => REQUIRED_KPIS_BY_REPORT_TYPE[reportType ?? 'GENERIC'] || REQUIRED_KPIS_BY_REPORT_TYPE.GENERIC;
+// ============================================================================
+// PROMPT BUILDER
+// ============================================================================
 export function buildFinancialSnapshotPrompt(input) {
     const { foundation, companyName, geography } = input;
     const requiredKpis = getRequiredKpis(input.reportType);
+    // Serialize foundation context for injection
     const foundationJson = JSON.stringify(foundation, null, 2);
     const requiredKpiList = requiredKpis
         .map((metric, index) => `${index + 1}. ${metric}`)
@@ -90,6 +117,12 @@ export function buildFinancialSnapshotPrompt(input) {
                 return [
                     '**Industrials focus:** Emphasize operational efficiency, working capital, and margin KPIs.',
                     'Include working capital metrics such as DSO/DIO/Inventory Turns when available.'
+                ].join('\n');
+            case 'INSURANCE':
+                return [
+                    '**Insurance focus:** Emphasize underwriting performance, loss ratios, and solvency metrics.',
+                    'Use insurance-specific KPIs (combined ratio, loss ratio, expense ratio, investment yield).',
+                    'Do NOT include banking metrics (NIM, CET1, DSO) unless company has banking operations.'
                 ].join('\n');
             default:
                 return [
@@ -204,8 +237,8 @@ interface Section2Output {
   kpi_table: {
     metrics: Array<{
       metric: string;           // Exact name from style guide Section 8
-      company: number | string; // Number value or "-" if unavailable
-      industry_avg: number | string;
+      company: number | string | null; // Number value or null if unavailable
+      industry_avg: number | string | null;
       source: string;           // "S1, S3" format
     }>;
   };
@@ -233,14 +266,21 @@ interface Section2Output {
 
 ---
 
+## NUMBER FORMATTING (STRICT)
+
+- **Units belong in the metric name** (e.g., \`Revenue ($M)\`, \`EBITDA Margin (%)\`, \`Net Leverage (x)\`).
+- **Table values must be numeric only** (or null), with no \`$\`, \`%\`, \`M/B\`, or \`x\` suffixes.
+- **Renderer will apply formatting** based on units in the metric name.
+- **Output must start with \`{\` and end with \`}\`.** No leading headings or commentary.
+
 ## REQUIRED METRICS FOR KPI TABLE
 
-**The table MUST include these metrics (use "-" if unavailable):**
+**The table MUST include these metrics (use null if unavailable):**
 
 ${requiredKpiList}
 
 **Use the exact metric names from the style guide.**
-**Do NOT output a markdown table**; populate kpi_table.metrics with one object per metric.
+**Do NOT output a markdown table**; populate \`kpi_table.metrics\` with one object per metric.
 
 ---
 
@@ -272,11 +312,7 @@ ${reportTypeFocus}
 6. **FX impacts:** If material (>5% revenue impact)
    - Example: "EUR/USD headwind of ~3% masked underlying operational performance in European segment (S1)."
 
-**MUST end with:**
-\`\`\`
-FX rate source: {A/B/C}
-Industry average source: {A/B/C}
-\`\`\`
+**Do NOT include FX rate source or industry average source codes in the summary text.** These are captured in the dedicated \`fx_source\` and \`industry_source\` fields and rendered separately.
 
 ---
 
@@ -319,17 +355,17 @@ WRONG patterns:
 ## DATA QUALITY RULES (Style Guide Section 10)
 
 ### Unavailable Data
-**Use "-" for missing metrics:**
+**Use null for missing metrics:**
 \`\`\`json
 {
   "metric": "Gross Margin",
-  "company": "-",
+  "company": null,
   "industry_avg": 42.5,
   "source": "S7"
 }
 \`\`\`
 
-**Never return a missing-input or data-availability error.** Always return the full schema with "-" placeholders.
+**Never return a missing-input or data-availability error.** Always return the full schema with null placeholders.
 
 ### Derived Metrics
 **Flag with asterisk and document:**
@@ -351,6 +387,8 @@ WRONG patterns:
   "source": "S1"
 }
 \`\`\`
+
+**Rule:** Every derived metric must appear in the KPI table with a \`*\` in the metric name.
 
 ### Never Speculate
 - If data cannot be verified -> Use "-"
@@ -447,29 +485,26 @@ WRONG patterns:
 - [ ] Confidence assigned with reason
 - [ ] Summary is 4-6 sentences
 - [ ] Summary emphasizes ${geography} (75-80%)
-- [ ] Summary ends with FX and industry source notes
-- [ ] All required metrics in table (use "-" if unavailable)
+- [ ] Summary does NOT contain FX/industry source codes (those go in fx_source and industry_source fields)
+- [ ] All ${requiredKpis.length} required metrics in table (use null if unavailable)
 - [ ] Table uses exact metric names from style guide
 - [ ] ALL metrics cite sources (S# format)
 - [ ] Derived metrics flagged with * in table
 - [ ] Derived metrics documented in array
 - [ ] All currencies in USD
 - [ ] Geography focus maintained throughout
-- [ ] No speculation (use "-" for unavailable)
+- [ ] No speculation (use null for unavailable)
 - [ ] Sources_used array populated
 
 ---
 
-## CRITICAL REMINDERS
+## HANDLING MISSING INFORMATION (CRITICAL)
 
-1. **Follow style guide:** ALL formatting rules apply
-2. **75-80% geography focus:** Every metric must show regional context
-3. **Source everything:** No unsourced claims
-4. **Use "-" for unavailable:** Never speculate or leave blank
-5. **Flag derived metrics:** Asterisk + documentation
-6. **Currency in USD:** Convert all amounts
-7. **Valid JSON only:** No markdown, no prose outside JSON
-8. **Exact schema match:** Follow TypeScript interface
+- **Do NOT fabricate financial data.** Never invent revenue figures, margins, or other metrics that cannot be confirmed from public sources.
+- **Use \`null\`** for unavailable numeric metric values (not 0, not -1, not "–"). The formatter will handle display.
+- **Use the \`summary\` field** to explain data limitations (e.g., "Financial data is not publicly available for this private company.").
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- For KPI table rows where neither the company value nor industry average can be sourced, still include the metric row with \`null\` values — the formatter will filter empty rows.
 
 ---
 
@@ -479,24 +514,36 @@ WRONG patterns:
 **Geography:** ${geography}  
 **Foundation Context:** [Provided above]
 
+Return a JSON object with keys: confidence, summary, kpi_table, fx_source, industry_source, derived_metrics, sources_used. Do not return an array.
+
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA. START RESEARCH NOW.**
 `;
     return appendReportTypeAddendum('financial_snapshot', input.reportType, basePrompt);
 }
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+/**
+ * Validates Section 2 output against schema
+ */
 export function validateSection2Output(output) {
     if (!output || typeof output !== 'object')
         return false;
+    // Check confidence
     if (!output.confidence ||
         !['HIGH', 'MEDIUM', 'LOW'].includes(output.confidence.level) ||
         typeof output.confidence.reason !== 'string') {
         return false;
     }
+    // Check summary
     if (typeof output.summary !== 'string' || output.summary.length === 0) {
         return false;
     }
+    // Check kpi_table
     if (!output.kpi_table || !Array.isArray(output.kpi_table.metrics)) {
         return false;
     }
+    // Check each metric
     for (const metric of output.kpi_table.metrics) {
         if (!metric.metric || !metric.source)
             return false;
@@ -504,30 +551,121 @@ export function validateSection2Output(output) {
             return false;
         }
     }
+    // Check sources
     if (!['A', 'B', 'C'].includes(output.fx_source))
         return false;
     if (!['A', 'B', 'C'].includes(output.industry_source))
         return false;
+    // Check derived_metrics
     if (!Array.isArray(output.derived_metrics))
         return false;
+    // Ensure derived metrics are present in table with asterisk flag
+    const tableMetricNames = output.kpi_table.metrics.map(metric => metric.metric);
+    for (const derived of output.derived_metrics) {
+        const requiredName = `${derived.metric}*`;
+        if (!tableMetricNames.includes(requiredName))
+            return false;
+    }
+    // Check sources_used
     if (!Array.isArray(output.sources_used))
         return false;
     return true;
 }
+/**
+ * Formats Section 2 output for document generation
+ */
 export function formatSection2ForDocument(output) {
-    let markdown = `# 2. Financial Snapshot\n\n`;
-    markdown += `**Confidence: ${output.confidence.level}** - ${output.confidence.reason}\n\n`;
-    markdown += `## 2.1 Financial Snapshot Summary\n\n`;
-    markdown += `${output.summary}\n\n`;
-    markdown += `## 2.2 Time Horizon KPIs\n\n`;
-    markdown += `| Metric | Company | Industry Avg | Source |\n`;
-    markdown += `|--------|---------|--------------|--------|\n`;
+    const formatNumber = (value) => value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const resolveMetricUnit = (metricName) => {
+        const match = metricName.match(/\(([^)]+)\)\s*$/);
+        const token = match?.[1].toLowerCase();
+        if (!token)
+            return null;
+        if (token.includes('$b'))
+            return { type: 'currency', suffix: 'B' };
+        if (token.includes('$m'))
+            return { type: 'currency', suffix: 'M' };
+        if (token.includes('$k'))
+            return { type: 'currency', suffix: 'K' };
+        if (token.includes('%'))
+            return { type: 'percent', suffix: '%' };
+        if (token.includes('x'))
+            return { type: 'ratio', suffix: 'x' };
+        if (token.includes('day'))
+            return { type: 'days', suffix: ' days' };
+        if (token.includes('year'))
+            return { type: 'years', suffix: ' years' };
+        if (token.includes('count') || token.includes('score'))
+            return { type: 'number', suffix: '' };
+        return null;
+    };
+    const inferValueType = (metricName) => {
+        const metric = metricName.toLowerCase();
+        if (metric.includes('margin') || metric.includes('growth') || metric.includes('irr') || metric.includes('roe') ||
+            metric.includes('roa') || metric.includes('rate') || metric.includes('pct') || metric.includes('percent')) {
+            return 'percent';
+        }
+        if (metric.includes('turn') || metric.includes('multiple') || metric.includes('leverage'))
+            return 'ratio';
+        if (metric.includes('day') || metric.includes('dso') || metric.includes('dio') || metric.includes('dpo')) {
+            return 'days';
+        }
+        return 'currency';
+    };
+    const formatTableValue = (metricName, value) => {
+        if (value === null || value === undefined)
+            return '–';
+        if (typeof value !== 'number')
+            return value;
+        const unit = resolveMetricUnit(metricName);
+        const formatted = formatNumber(value);
+        if (unit?.type === 'percent')
+            return `${formatted}%`;
+        if (unit?.type === 'currency')
+            return `$${formatted}${unit.suffix}`;
+        if (unit?.type === 'ratio')
+            return `${formatted}x`;
+        if (unit?.type === 'days')
+            return `${formatted} days`;
+        if (unit?.type === 'years')
+            return `${formatted} years`;
+        const fallbackType = inferValueType(metricName);
+        if (fallbackType === 'percent')
+            return `${formatted}%`;
+        if (fallbackType === 'ratio')
+            return `${formatted}x`;
+        if (fallbackType === 'days')
+            return `${formatted} days`;
+        return `$${formatted}M`;
+    };
+    let markdown = `# 2. Financial Snapshot
+
+`;
+    markdown += `**Confidence: ${output.confidence.level}** ? ${output.confidence.reason}
+
+`;
+    markdown += `## 2.1 Financial Snapshot Summary
+
+`;
+    markdown += `${output.summary}
+
+`;
+    markdown += `## 2.2 Time Horizon KPIs
+
+`;
+    markdown += `Note: Monetary values shown in USD millions unless stated.
+
+`;
+    // Build table
+    markdown += `| Metric | Company | Industry Avg | Source |
+`;
+    markdown += `|--------|---------|--------------|--------|
+`;
     for (const metric of output.kpi_table.metrics) {
-        const company = typeof metric.company === 'number' ?
-            metric.company.toLocaleString() : metric.company;
-        const industry = typeof metric.industry_avg === 'number' ?
-            metric.industry_avg.toLocaleString() : metric.industry_avg;
-        markdown += `| ${metric.metric} | ${company} | ${industry} | ${metric.source} |\n`;
+        const company = formatTableValue(metric.metric, metric.company);
+        const industry = formatTableValue(metric.metric, metric.industry_avg);
+        markdown += `| ${metric.metric} | ${company} | ${industry} | ${metric.source} |
+`;
     }
     return markdown;
 }

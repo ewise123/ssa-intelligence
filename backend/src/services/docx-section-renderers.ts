@@ -240,7 +240,7 @@ type DocxElement = Paragraph | Table;
 export function renderExecSummary(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
   const elements: DocxElement[] = [];
-  if (Array.isArray(data.bullet_points)) {
+  if (Array.isArray(data.bullet_points) && data.bullet_points.length) {
     elements.push(boldParagraph('Key Takeaways'));
     for (const b of data.bullet_points) {
       const text = `${b.bullet || ''}${b.sources ? ` (${(b.sources || []).join(', ')})` : ''}`;
@@ -285,7 +285,7 @@ export function renderCompanyOverview(data: any): DocxElement[] {
     elements.push(boldParagraph('Overview'));
     elements.push(styledParagraph(data.business_description.overview));
   }
-  if (Array.isArray(data.business_description?.segments)) {
+  if (Array.isArray(data.business_description?.segments) && data.business_description.segments.length) {
     elements.push(boldParagraph('Segments'));
     elements.push(
       brandedTable(
@@ -299,7 +299,7 @@ export function renderCompanyOverview(data: any): DocxElement[] {
       ),
     );
   }
-  if (Array.isArray(data.geographic_footprint?.facilities)) {
+  if (Array.isArray(data.geographic_footprint?.facilities) && data.geographic_footprint.facilities.length) {
     elements.push(boldParagraph('Facilities'));
     elements.push(
       brandedTable(
@@ -658,12 +658,16 @@ export function renderPeerBenchmarking(data: any): DocxElement[] {
       ),
     );
   }
-  if (data.peer_comparison_table?.metrics?.length) {
+  const populatedMetrics = (data.peer_comparison_table?.metrics || []).filter((m: any) =>
+    !isEmptyValue(m.company) || !isEmptyValue(m.peer1) || !isEmptyValue(m.peer2) ||
+    !isEmptyValue(m.peer3) || !isEmptyValue(m.peer4) || !isEmptyValue(m.industry_avg)
+  );
+  if (populatedMetrics.length) {
     elements.push(boldParagraph('Metrics'));
     elements.push(
       brandedTable(
         ['Metric', 'Company', 'Peer1', 'Peer2', 'Peer3', 'Peer4', 'Industry Avg', 'Source'],
-        data.peer_comparison_table.metrics.map((m: any) => [
+        populatedMetrics.map((m: any) => [
           m.metric,
           m.company,
           m.peer1,
@@ -704,7 +708,7 @@ export function renderSkuOpportunities(data: any): DocxElement[] {
           o.source,
           o.aligned_sku,
           o.priority,
-          o.severity,
+          o.severity ?? '',
           o.geography_relevance,
           Array.isArray(o.potential_value_levers) ? o.potential_value_levers.join('; ') : '',
         ]),
@@ -756,7 +760,7 @@ export function renderConversationStarters(data: any): DocxElement[] {
 export function renderAppendix(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
   const elements: DocxElement[] = [];
-  if (Array.isArray(data.source_references)) {
+  if (Array.isArray(data.source_references) && data.source_references.length) {
     elements.push(boldParagraph('Source References'));
     elements.push(
       brandedTable(
@@ -772,7 +776,7 @@ export function renderAppendix(data: any): DocxElement[] {
         ['Pair', 'Rate', 'Source', 'Description'],
         data.fx_rates_and_industry.fx_rates.map((r: any) => [
           r.currency_pair,
-          r.rate,
+          r.rate ?? '',
           r.source,
           r.source_description,
         ]),
@@ -829,4 +833,14 @@ function formatValue(raw: any): string {
   if (raw === null || raw === undefined) return '';
   if (typeof raw === 'number') return raw.toLocaleString(undefined, { maximumFractionDigits: 2 });
   return String(raw);
+}
+
+/** Treat dashes, N/A, and similar placeholders as empty (no real data). */
+function isEmptyValue(v: any): boolean {
+  if (v == null || v === '') return true;
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if (t === '' || t === '–' || t === '-' || t === '—' || /^n\/?a$/i.test(t)) return true;
+  }
+  return false;
 }

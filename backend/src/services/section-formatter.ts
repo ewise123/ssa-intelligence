@@ -4,6 +4,7 @@ export type SectionId =
   | 'exec_summary'
   | 'financial_snapshot'
   | 'company_overview'
+  | 'key_execs_and_board'
   | 'investment_strategy'
   | 'portfolio_snapshot'
   | 'deal_activity'
@@ -175,14 +176,68 @@ const formatMetricValue = (
   }
 };
 
+const normalizeCell = (cell: string | number | null | undefined): string => {
+  if (cell === null || cell === undefined) return '';
+  const s = String(cell).trim();
+  // Normalize dash placeholders and N/A to blank for consistent empty-cell display
+  if (s === '–' || s === '-' || s === '—' || /^n\/?a$/i.test(s)) return '';
+  return s;
+};
+
 const mdTable = (headers: string[], rows: (string | number | null | undefined)[][]): string => {
   if (!rows.length) return '';
   const headerRow = `| ${headers.join(' | ')} |`;
   const sepRow = `| ${headers.map(() => '---').join(' | ')} |`;
   const body = rows
-    .map((r) => `| ${r.map((cell) => (cell === null || cell === undefined ? '' : String(cell))).join(' | ')} |`)
+    .map((r) => `| ${r.map(normalizeCell).join(' | ')} |`)
     .join('\n');
   return `${headerRow}\n${sepRow}\n${body}`;
+};
+
+/** Treat dashes, N/A, and similar placeholders as empty (no real data). */
+const isEmptyValue = (v: any): boolean => {
+  if (v == null || v === '') return true;
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if (t === '' || t === '–' || t === '-' || t === '—' || /^n\/?a$/i.test(t)) return true;
+  }
+  return false;
+};
+
+/** Strip inline source references like "(S10)" or "(S1, S2)" from display values. */
+const stripInlineSource = (v: string): string =>
+  v.replace(/\s*\(S\d+(?:,\s*S\d+)*\)\s*$/, '').trim();
+
+/** Detect placeholder names Claude fabricates when no real person can be identified. */
+const isPlaceholderName = (name: string): boolean => {
+  if (!name) return true;
+  const t = name.trim().toLowerCase();
+  return /not (publicly )?(available|disclosed|known|identified)/i.test(t) ||
+    /information not available/i.test(t) ||
+    /undisclosed/i.test(t) ||
+    /unknown/i.test(t) ||
+    t === '–' || t === '-' || t === '—' || /^n\/?a$/i.test(t);
+};
+
+const FX_SOURCE_LABELS: Record<string, string> = {
+  A: 'Company-disclosed rate',
+  B: 'Historical average (Bloomberg/Reuters)',
+  C: 'Current spot rate',
+};
+const INDUSTRY_SOURCE_LABELS: Record<string, string> = {
+  A: 'True industry average (S&P Capital IQ, Damodaran)',
+  B: 'Peer set average (comparable firms)',
+};
+const resolveSourceLabel = (code: string, labels: Record<string, string>): string =>
+  labels[code] || code;
+
+const stripSourceMetadata = (summary: string): string =>
+  summary.replace(/\s*FX rate source:[\s\S]*$/i, '').trim();
+
+export const insufficientDataNotice = (reason?: string): string => {
+  const lines = ['> **Limited public information available**'];
+  if (reason) lines.push('>', `> ${reason}`);
+  return lines.join('\n');
 };
 
 export const formatSectionContent = (sectionId: SectionId, data: any): string => {
@@ -191,11 +246,11 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
   switch (sectionId) {
     case 'exec_summary': {
       const parts: string[] = [];
-      if (Array.isArray(data.bullet_points)) {
+      if (Array.isArray(data.bullet_points) && data.bullet_points.length) {
         parts.push('**Key Takeaways**');
         parts.push(
           data.bullet_points
-            .map((b: any) => `- ${b.bullet || ''}${b.sources ? ` (${(b.sources || []).join(', ')})` : ''}`)
+            .map((b: any) => `- ${stripInlineSource(b.bullet || '')}${b.sources ? ` (${(b.sources || []).join(', ')})` : ''}`)
             .join('\n')
         );
       }
@@ -203,25 +258,32 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
     }
     case 'financial_snapshot': {
       const parts: string[] = [];
-      if (data.summary) parts.push(String(data.summary));
+      if (data.summary) parts.push(stripSourceMetadata(String(data.summary)));
       if (data.kpi_table?.metrics?.length) {
-        parts.push('**KPI Table**');
-        parts.push(
-          mdTable(
-            ['Metric', 'Company', 'Industry Avg', 'Source'],
-            data.kpi_table.metrics.map((m: any) => {
-              const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
-              const companyValue = formatMetricValue(metricName, m.company, m.unit, m.value_type);
-              const industryValue = formatMetricValue(metricName, m.industry_avg, m.unit, m.value_type);
-              return [
-                metricName,
-                companyValue,
-                industryValue,
-                m.source || '',
-              ];
-            })
-          )
+        const populatedMetrics = data.kpi_table.metrics.filter((m: any) =>
+          !isEmptyValue(m.company) || !isEmptyValue(m.industry_avg)
         );
+        if (populatedMetrics.length) {
+          parts.push('**KPI Table**');
+          parts.push(
+            mdTable(
+              ['Metric', 'Company', 'Industry Avg', 'Source'],
+              populatedMetrics.map((m: any) => {
+                const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
+                const rawCompany = typeof m.company === 'string' ? stripInlineSource(m.company) : m.company;
+                const rawIndustry = typeof m.industry_avg === 'string' ? stripInlineSource(m.industry_avg) : m.industry_avg;
+                const companyValue = formatMetricValue(metricName, rawCompany, m.unit, m.value_type);
+                const industryValue = formatMetricValue(metricName, rawIndustry, m.unit, m.value_type);
+                return [
+                  metricName,
+                  companyValue,
+                  industryValue,
+                  m.source || '',
+                ];
+              })
+            )
+          );
+        }
       }
       if (data.derived_metrics?.length) {
         parts.push('**Derived Metrics**');
@@ -232,12 +294,26 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
           )
         );
       }
+      // Add FX and industry source notes if available
+      const sourceNotes: string[] = [];
+      if (data.fx_source) {
+        sourceNotes.push(`**FX Rate Source:** ${resolveSourceLabel(data.fx_source, FX_SOURCE_LABELS)}`);
+      }
+      if (data.industry_source) {
+        sourceNotes.push(`**Industry Average Source:** ${resolveSourceLabel(data.industry_source, INDUSTRY_SOURCE_LABELS)}`);
+      }
+      if (sourceNotes.length) parts.push(sourceNotes.join(' | '));
+      // If no tables rendered and confidence is LOW, show notice instead of just summary text
+      const hasTable = parts.some(p => p.startsWith('|') || p.startsWith('**KPI') || p.startsWith('**Derived'));
+      if (!hasTable && data.confidence?.level === 'LOW') {
+        return insufficientDataNotice(data.confidence?.reason);
+      }
       return parts.filter(Boolean).join('\n\n');
     }
     case 'company_overview': {
       const parts: string[] = [];
       if (data.business_description?.overview) parts.push(`**Overview**\n${data.business_description.overview}`);
-      if (Array.isArray(data.business_description?.segments)) {
+      if (data.business_description?.segments?.length) {
         parts.push('**Segments**');
         parts.push(
           mdTable(
@@ -246,7 +322,7 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
           )
         );
       }
-      if (Array.isArray(data.geographic_footprint?.facilities)) {
+      if (Array.isArray(data.geographic_footprint?.facilities) && data.geographic_footprint.facilities.length) {
         parts.push('**Facilities**');
         parts.push(
           mdTable(
@@ -257,14 +333,9 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
       }
       if (data.strategic_priorities?.priorities?.length) {
         parts.push('**Strategic Priorities**');
-        parts.push(
-          data.strategic_priorities.priorities
-            .map(
-              (p: any) =>
-                `- ${p.priority} (${p.geography_relevance || ''})${p.source ? ` [${p.source}]` : ''}\n  ${p.description}`
-            )
-            .join('\n')
-        );
+        for (const p of data.strategic_priorities.priorities) {
+          parts.push(`**${p.priority}**\n${p.description}`);
+        }
       }
       if (data.key_leadership) {
         const execs = data.key_leadership.executives || [];
@@ -274,11 +345,91 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
           parts.push(
             execs.map((e: any) => `- ${e.name}, ${e.title}${e.tenure ? ` (${e.tenure})` : ''}${e.source ? ` [${e.source}]` : ''}`).join('\n')
           );
+        } else {
+          parts.push('**Key Leadership**');
+          parts.push(insufficientDataNotice(data.key_leadership?.summary || data.confidence?.reason));
         }
         if (regionals.length) {
           parts.push('**Regional Leaders**');
           parts.push(regionals.map((e: any) => `- ${e.name}, ${e.title}${e.source ? ` [${e.source}]` : ''}`).join('\n'));
         }
+      }
+      return parts.filter(Boolean).join('\n\n');
+    }
+    case 'key_execs_and_board': {
+      const parts: string[] = [];
+      // Filter out placeholder entries Claude fabricates when people can't be found
+      const realExecs = (data.c_suite?.executives || []).filter((e: any) => !isPlaceholderName(e.name));
+      const realBoard = (data.board_of_directors?.members || []).filter((m: any) => !isPlaceholderName(m.name));
+      const realLeaders = (data.business_unit_leaders?.leaders || []).filter((l: any) => !isPlaceholderName(l.name));
+      const hasAnyPeople = realExecs.length + realBoard.length + realLeaders.length > 0;
+
+      if (!hasAnyPeople) {
+        return insufficientDataNotice(data.confidence?.reason);
+      }
+
+      if (data.board_of_directors?.summary) parts.push(`**Board of Directors**\n${data.board_of_directors.summary}`);
+      if (Array.isArray(data.board_of_directors?.members) && data.board_of_directors.members.length) {
+        parts.push(
+          mdTable(
+            ['Name', 'Role', 'Committees', 'Tenure', 'Background', 'Source'],
+            data.board_of_directors.members.map((m: any) => [
+              m.name,
+              m.role,
+              Array.isArray(m.committees) ? m.committees.join(', ') : (m.committees || ''),
+              m.tenure || '',
+              m.background || '',
+              m.source || ''
+            ])
+          )
+        );
+      }
+      if (data.c_suite?.summary) parts.push(`**C-Suite Leadership**\n${data.c_suite.summary}`);
+      if (Array.isArray(data.c_suite?.executives) && data.c_suite.executives.length) {
+        parts.push(
+          mdTable(
+            ['Name', 'Title', 'Tenure', 'Background', 'Performance Actions', 'Source'],
+            data.c_suite.executives.map((e: any) => [
+              e.name,
+              e.title,
+              e.tenure || '',
+              e.background || '',
+              Array.isArray(e.performance_actions) ? e.performance_actions.join('; ') : (e.performance_actions || ''),
+              e.source || ''
+            ])
+          )
+        );
+      }
+      if (data.business_unit_leaders?.summary) parts.push(`**Business Unit Leaders**\n${data.business_unit_leaders.summary}`);
+      if (Array.isArray(data.business_unit_leaders?.leaders) && data.business_unit_leaders.leaders.length) {
+        parts.push(
+          mdTable(
+            ['Name', 'Title', 'Business Unit', 'Background', 'Performance Actions', 'Source'],
+            data.business_unit_leaders.leaders.map((l: any) => [
+              l.name,
+              l.title,
+              l.business_unit || '',
+              l.background || '',
+              Array.isArray(l.performance_actions) ? l.performance_actions.join('; ') : (l.performance_actions || ''),
+              l.source || ''
+            ])
+          )
+        );
+      }
+      if (Array.isArray(data.recent_leadership_changes) && data.recent_leadership_changes.length) {
+        parts.push('**Recent Leadership Changes**');
+        parts.push(
+          mdTable(
+            ['Date', 'Type', 'Description', 'Implications', 'Source'],
+            data.recent_leadership_changes.map((c: any) => [
+              c.date || '',
+              c.change_type || '',
+              c.description || '',
+              c.implications || '',
+              c.source || ''
+            ])
+          )
+        );
       }
       return parts.filter(Boolean).join('\n\n');
     }
@@ -344,6 +495,8 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
             data.stakeholders.map((s: any) => [s.name, s.title, s.role, s.focus_area || '', s.source || ''])
           )
         );
+      } else {
+        parts.push(insufficientDataNotice(data.confidence?.reason));
       }
       if (data.notes) parts.push(`\n**Notes**\n${data.notes}`);
       return parts.filter(Boolean).join('\n\n');
@@ -378,6 +531,8 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
             data.leadership.map((l: any) => [l.name, l.title, l.focus_area || '', l.source || ''])
           )
         );
+      } else {
+        parts.push(insufficientDataNotice(data.confidence?.reason));
       }
       if (data.governance_notes) parts.push(`\n**Governance Notes**\n${data.governance_notes}`);
       return parts.filter(Boolean).join('\n\n');
@@ -385,12 +540,9 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
     case 'strategic_priorities': {
       const parts: string[] = [];
       if (Array.isArray(data.priorities) && data.priorities.length) {
-        parts.push('\n**Priorities**');
-        parts.push(
-          data.priorities
-            .map((p: any) => `- ${p.priority}${p.source ? ` [${p.source}]` : ''}\n  ${p.description}`)
-            .join('\n')
-        );
+        for (const p of data.priorities) {
+          parts.push(`**${p.priority}**\n${p.description}`);
+        }
       }
       if (Array.isArray(data.transformation_themes) && data.transformation_themes.length) {
         parts.push('\n**Transformation Themes**');
@@ -471,7 +623,15 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
     }
     case 'segment_analysis': {
       const parts: string[] = [];
+      // If no segments and LOW confidence, show notice regardless of overview
+      // (overview is just Claude explaining why there's no data)
+      if (!data.segments?.length && data.confidence?.level === 'LOW') {
+        return insufficientDataNotice(data.confidence?.reason);
+      }
       if (data.overview) parts.push(String(data.overview));
+      if (!data.segments?.length && !data.overview) {
+        parts.push(insufficientDataNotice(data.confidence?.reason));
+      }
       if (Array.isArray(data.segments)) {
         data.segments.forEach((seg: any) => {
           parts.push(`### ${seg.name}`);
@@ -531,62 +691,84 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
       if (data.macro_trends) parts.push(...buildTrendBlock('Macro Trends', data.macro_trends));
       if (data.micro_trends) parts.push(...buildTrendBlock('Micro Trends', data.micro_trends));
       if (data.company_trends) parts.push(...buildTrendBlock('Company Trends', data.company_trends));
+      if (!parts.length) {
+        return insufficientDataNotice(data.confidence?.reason);
+      }
       return parts.filter(Boolean).join('\n\n');
     }
     case 'peer_benchmarking': {
       const parts: string[] = [];
-      if (data.peer_comparison_table?.peers?.length) {
+
+      // Filter metrics to only rows with real values (not dashes/N-A)
+      const populatedMetrics = (data.peer_comparison_table?.metrics || []).filter((m: any) =>
+        !isEmptyValue(m.company) || !isEmptyValue(m.peer1) || !isEmptyValue(m.peer2) ||
+        !isEmptyValue(m.peer3) || !isEmptyValue(m.peer4) || !isEmptyValue(m.industry_avg)
+      );
+
+      const hasPeers = data.peer_comparison_table?.peers?.length > 0;
+      const hasMetrics = populatedMetrics.length > 0;
+      const hasStrengths = data.benchmark_summary?.key_strengths?.length > 0;
+      const hasGaps = data.benchmark_summary?.key_gaps?.length > 0;
+
+      // If no real data after filtering, show notice
+      if (!hasMetrics && data.confidence?.level === 'LOW') {
+        const reason = data.confidence?.reason || data.benchmark_summary?.overall_assessment;
+        return insufficientDataNotice(reason);
+      }
+      if (!hasPeers && !hasMetrics && !hasStrengths && !hasGaps) {
+        const reason = data.confidence?.reason || data.benchmark_summary?.overall_assessment;
+        return insufficientDataNotice(reason);
+      }
+
+      if (hasPeers) {
         parts.push('**Peers**');
         parts.push(mdTable(['Name', 'Ticker', 'Geography'], data.peer_comparison_table.peers.map((p: any) => [p.name, p.ticker || '', p.geography_presence])));
       }
-      if (data.peer_comparison_table?.metrics?.length) {
+      if (hasMetrics) {
         parts.push('**Metrics**');
         parts.push(
           mdTable(
             ['Metric', 'Company', 'Peer1', 'Peer2', 'Peer3', 'Peer4', 'Industry Avg', 'Source'],
-            data.peer_comparison_table.metrics.map((m: any) => [
+            populatedMetrics.map((m: any) => [
               m.metric,
-              m.company,
-              m.peer1,
-              m.peer2,
-              m.peer3,
-              m.peer4 || '',
-              m.industry_avg,
+              isEmptyValue(m.company) ? '' : m.company,
+              isEmptyValue(m.peer1) ? '' : m.peer1,
+              isEmptyValue(m.peer2) ? '' : m.peer2,
+              isEmptyValue(m.peer3) ? '' : m.peer3,
+              isEmptyValue(m.peer4) ? '' : m.peer4,
+              isEmptyValue(m.industry_avg) ? '' : m.industry_avg,
               m.source,
             ])
           )
         );
       }
-      if (data.benchmark_summary?.key_strengths?.length) {
+      if (hasStrengths) {
         parts.push('**Key Strengths**');
         parts.push(data.benchmark_summary.key_strengths.map((s: any) => `- ${s.strength}: ${s.description}`).join('\n'));
       }
-      if (data.benchmark_summary?.key_gaps?.length) {
+      if (hasGaps) {
         parts.push('**Key Gaps**');
         parts.push(data.benchmark_summary.key_gaps.map((g: any) => `- ${g.gap} (${g.magnitude}): ${g.description}`).join('\n'));
       }
       return parts.filter(Boolean).join('\n\n');
     }
     case 'sku_opportunities': {
-      const parts: string[] = [];
       if (data.opportunities?.length) {
-        parts.push(
-          mdTable(
-            ['Issue Area', 'Problem', 'Source', 'Aligned SKU', 'Priority', 'Severity', 'Geography', 'Value Levers'],
-            data.opportunities.map((o: any) => [
-              o.issue_area,
-              o.public_problem,
-              o.source,
-              o.aligned_sku,
-              o.priority,
-              o.severity,
-              o.geography_relevance,
-              Array.isArray(o.potential_value_levers) ? o.potential_value_levers.join('; ') : ''
-            ])
-          )
+        return mdTable(
+          ['Issue Area', 'Problem', 'Source', 'Aligned SKU', 'Priority', 'Severity', 'Geography', 'Value Levers'],
+          data.opportunities.map((o: any) => [
+            o.issue_area,
+            o.public_problem,
+            o.source,
+            o.aligned_sku,
+            o.priority,
+            o.severity ?? '',
+            o.geography_relevance,
+            Array.isArray(o.potential_value_levers) ? o.potential_value_levers.join('; ') : ''
+          ])
         );
       }
-      return parts.filter(Boolean).join('\n\n');
+      return insufficientDataNotice(data.confidence?.reason);
     }
     case 'recent_news': {
       if (data.news_items?.length) {
@@ -595,7 +777,7 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
           data.news_items.map((n: any) => [n.date, n.headline, n.source, n.implication, n.geography_relevance, n.category])
         );
       }
-      return '';
+      return insufficientDataNotice(data.confidence?.reason);
     }
     case 'conversation_starters': {
       if (data.conversation_starters?.length) {
@@ -614,7 +796,7 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
     }
     case 'appendix': {
       const parts: string[] = [];
-      if (Array.isArray(data.source_references)) {
+      if (Array.isArray(data.source_references) && data.source_references.length) {
         parts.push('**Source References**');
         parts.push(mdTable(['ID', 'Citation', 'Type', 'Date', 'URL'], data.source_references.map((s: any) => [s.id, s.citation, s.type, s.date, s.url || ''])));
       }
@@ -623,14 +805,14 @@ export const formatSectionContent = (sectionId: SectionId, data: any): string =>
         parts.push(
           mdTable(
             ['Pair', 'Rate', 'Source', 'Description'],
-            data.fx_rates_and_industry.fx_rates.map((r: any) => [r.currency_pair, r.rate, r.source, r.source_description])
+            data.fx_rates_and_industry.fx_rates.map((r: any) => [r.currency_pair, r.rate, resolveSourceLabel(r.source, FX_SOURCE_LABELS), r.source_description])
           )
         );
       }
       if (data.fx_rates_and_industry?.industry_averages) {
         const ia = data.fx_rates_and_industry.industry_averages;
         parts.push('**Industry Averages**');
-        parts.push(`- Source: ${ia.source}\n- Dataset: ${ia.dataset}\n- Description: ${ia.description || ''}`);
+        parts.push(`- Source: ${resolveSourceLabel(ia.source, INDUSTRY_SOURCE_LABELS)}\n- Dataset: ${ia.dataset}\n- Description: ${ia.description || ''}`);
       }
       return parts.filter(Boolean).join('\n\n');
     }

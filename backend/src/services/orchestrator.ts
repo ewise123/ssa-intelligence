@@ -854,6 +854,8 @@ export class ResearchOrchestrator {
       // Sanitize common issues before content check/save
       if (stageId === 'exec_summary') {
         output = this.sanitizeExecSummary(output);
+      } else if (stageId === 'financial_snapshot') {
+        output = this.sanitizeFinancialSnapshot(output);
       } else if (stageId === 'segment_analysis') {
         output = this.sanitizeSegmentAnalysis(output);
       } else if (stageId === 'peer_benchmarking') {
@@ -1410,15 +1412,52 @@ export class ResearchOrchestrator {
     return cleaned;
   }
 
+  /**
+   * Convert null metric-table values to en-dash display string so downstream
+   * renderers and exports don't need null-handling logic.
+   */
+  private sanitizeMetricTableNulls(row: Record<string, unknown>, fields: string[]): Record<string, unknown> {
+    const patched = { ...row };
+    for (const field of fields) {
+      if (patched[field] === null || patched[field] === undefined) {
+        patched[field] = '–';
+      }
+    }
+    return patched;
+  }
+
+  private sanitizeFinancialSnapshot(output: any) {
+    if (!output || typeof output !== 'object') return output;
+    const metrics = output?.kpi_table?.metrics;
+    if (!Array.isArray(metrics)) return output;
+
+    const fields = ['company', 'industry_avg'];
+    return {
+      ...output,
+      kpi_table: {
+        ...output.kpi_table,
+        metrics: metrics.map((row: any) => this.sanitizeMetricTableNulls(row, fields))
+      }
+    };
+  }
+
   private sanitizeSegmentAnalysis(output: any) {
     const cleanedSources = this.cleanSourceIds(output?.sources_used, 'segment_analysis');
 
+    const metricFields = ['segment', 'company_avg', 'industry_avg'];
     const segments = Array.isArray(output?.segments) ? output.segments.map((seg: any) => {
       const comp = Array.isArray(seg?.competitive_landscape?.competitors)
         ? seg.competitive_landscape.competitors.slice(0, 5) // cap to max 5 to avoid validation failure
         : [];
+      const table = Array.isArray(seg?.financial_snapshot?.table)
+        ? seg.financial_snapshot.table.map((row: any) => this.sanitizeMetricTableNulls(row, metricFields))
+        : seg?.financial_snapshot?.table;
       return {
         ...seg,
+        financial_snapshot: {
+          ...(seg?.financial_snapshot || {}),
+          table
+        },
         competitive_landscape: {
           ...(seg?.competitive_landscape || {}),
           competitors: comp
@@ -1444,13 +1483,19 @@ export class ResearchOrchestrator {
       geography_presence: typeof peer?.geography_presence === 'string' ? peer.geography_presence.trim() : ''
     }));
 
+    const metricFields = ['company', 'peer1', 'peer2', 'peer3', 'peer4', 'industry_avg'];
+    const metrics = Array.isArray(table.metrics)
+      ? table.metrics.map((row: any) => this.sanitizeMetricTableNulls(row, metricFields))
+      : table.metrics;
+
     const cleanedSources = this.cleanSourceIds(output?.sources_used, 'peer_benchmarking');
 
     return {
       ...output,
       peer_comparison_table: {
         ...table,
-        peers
+        peers,
+        metrics
       },
       sources_used: cleanedSources
     };
@@ -1633,7 +1678,7 @@ export class ResearchOrchestrator {
       candidate = candidate[0];
     }
 
-    // Foundation: clamp negative sentinel values to 0 before validation
+    // Foundation: convert sentinel values (negative numbers, "N/A", "unknown") to null before validation
     if (stageId === 'foundation') {
       candidate = this.sanitizeFoundationOutput(candidate);
     }
@@ -1646,14 +1691,26 @@ export class ResearchOrchestrator {
   }
 
   /**
-   * Clamp negative sentinel values (e.g. -1) to 0 in foundation output.
-   * LLMs sometimes use -1 as "unknown" instead of the instructed "–" string.
-   * This is a temporary patch — the long-term fix is better prompt enforcement.
+   * Normalize sentinel values in foundation output to null.
+   * LLMs sometimes use -1, "N/A", "unknown", or "–" when data is unavailable.
+   * Converting to null gives downstream consumers a clean signal for "unknown"
+   * while preserving genuine zero values (e.g. pre-revenue company with 0 revenue).
    */
   private sanitizeFoundationOutput(output: any): any {
     if (!output || typeof output !== 'object') return output;
+    output = JSON.parse(JSON.stringify(output));
 
-    const numericFields = [
+    const UNKNOWN_STRINGS = new Set(['n/a', 'unknown', 'unavailable', 'not available', 'not disclosed', 'undisclosed', '–', '—', '-']);
+
+    const toNullIfSentinel = (val: unknown): unknown => {
+      if (typeof val === 'number' && val < 0) return null;
+      if (typeof val === 'string' && UNKNOWN_STRINGS.has(val.trim().toLowerCase())) return null;
+      return val;
+    };
+
+    const conversions: string[] = [];
+
+    const numericFields: [string, string][] = [
       ['company_basics', 'global_revenue_usd'],
       ['company_basics', 'global_employees'],
       ['geography_specifics', 'regional_revenue_usd'],
@@ -1663,20 +1720,42 @@ export class ResearchOrchestrator {
 
     for (const [section, field] of numericFields) {
       const val = output?.[section]?.[field];
-      if (typeof val === 'number' && val < 0) {
-        console.warn(`[sanitize] foundation: clamped ${section}.${field} from ${val} to 0`);
-        output[section][field] = 0;
+      const sanitized = toNullIfSentinel(val);
+      if (sanitized !== val) {
+        conversions.push(`${section}.${field}: ${JSON.stringify(val)} → null`);
+        output[section][field] = null;
       }
     }
 
-    // Clamp negative segment revenue_pct values
+    // Sanitize segment_structure revenue_pct values
     if (Array.isArray(output?.segment_structure)) {
       for (const seg of output.segment_structure) {
-        if (typeof seg?.revenue_pct === 'number' && seg.revenue_pct < 0) {
-          console.warn(`[sanitize] foundation: clamped segment_structure[${seg.name}].revenue_pct from ${seg.revenue_pct} to 0`);
-          seg.revenue_pct = 0;
+        const val = seg?.revenue_pct;
+        const sanitized = toNullIfSentinel(val);
+        if (sanitized !== val) {
+          conversions.push(`segment_structure[${seg.name}].revenue_pct: ${JSON.stringify(val)} → null`);
+          seg.revenue_pct = null;
         }
       }
+    }
+
+    // Sanitize fx_rates — convert invalid rates to null
+    if (output?.fx_rates && typeof output.fx_rates === 'object') {
+      for (const [pair, entry] of Object.entries(output.fx_rates)) {
+        const fxEntry = entry as any;
+        if (fxEntry?.rate != null) {
+          const val = fxEntry.rate;
+          const sanitized = toNullIfSentinel(val);
+          if (sanitized !== val) {
+            conversions.push(`fx_rates[${pair}].rate: ${JSON.stringify(val)} → null`);
+            fxEntry.rate = null;
+          }
+        }
+      }
+    }
+
+    if (conversions.length > 0) {
+      console.warn(`[sanitize] foundation: converted ${conversions.length} sentinel(s) to null: ${conversions.join('; ')}`);
     }
 
     return output;
@@ -1862,28 +1941,34 @@ export class ResearchOrchestrator {
     }
 
     if (stageId === 'peer_benchmarking') {
-      const peers = output?.peer_comparison_table?.peers;
-      if (!Array.isArray(peers) || peers.length === 0) {
-        throw new Error('Peer Benchmarking missing peers');
+      const hasPeers = Array.isArray(output?.peer_comparison_table?.peers) && output.peer_comparison_table.peers.length > 0;
+      const hasSummary = output?.benchmark_summary?.overall_assessment || output?.benchmark_summary?.competitive_positioning;
+      if (!hasPeers && !hasSummary) {
+        throw new Error('Peer Benchmarking has no content');
       }
     }
 
     if (stageId === 'recent_news') {
-      if (!Array.isArray(output.news_items) || output.news_items.length === 0) {
-        throw new Error('Recent News missing news_items');
+      const hasItems = Array.isArray(output.news_items) && output.news_items.length > 0;
+      const hasConfidence = output.confidence?.level;
+      if (!hasItems && !hasConfidence) {
+        throw new Error('Recent News has no content');
       }
     }
 
     if (stageId === 'conversation_starters') {
-      if (!Array.isArray(output.conversation_starters) || output.conversation_starters.length < 3) {
+      if (!Array.isArray(output.conversation_starters) || output.conversation_starters.length < 2) {
         throw new Error('Conversation Starters missing items');
       }
     }
 
     if (stageId === 'key_execs_and_board') {
-      const execs = output?.c_suite?.executives;
-      if (!Array.isArray(execs) || execs.length === 0) {
-        throw new Error('Key Execs missing executives');
+      const hasExecs = Array.isArray(output?.c_suite?.executives) && output.c_suite.executives.length > 0;
+      const hasBoard = Array.isArray(output?.board_of_directors?.members) && output.board_of_directors.members.length > 0;
+      const hasLeaders = Array.isArray(output?.business_unit_leaders?.leaders) && output.business_unit_leaders.leaders.length > 0;
+      const hasSummary = output?.c_suite?.summary || output?.board_of_directors?.summary;
+      if (!hasExecs && !hasBoard && !hasLeaders && !hasSummary) {
+        throw new Error('Key Execs and Board has no content');
       }
     }
   }
