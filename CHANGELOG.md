@@ -7,6 +7,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 ## [Unreleased]
 
 ### Fixed
+- Fix promotional articles leaking through LLM filter by adding explicit `keep` boolean to LLM output schema and programmatically dropping articles where `keep !== true`.
 - Sort news articles alphabetically by company/person name so grouped entities stay together instead of being split across pages.
 - Remove pagination from news dashboard; all articles load on a single scrollable page.
 - Fix news refresh LLM batch timeouts: deterministic pre-filtering, smaller parallel batches (10 articles, concurrency 5), and raised token limits yield 96% LLM success rate (up from 12%).
