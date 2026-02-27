@@ -69,6 +69,7 @@ export interface ProcessedArticle {
 /** Shape of an article object returned by the LLM in its JSON response */
 interface LLMArticleResponse {
   id?: number;
+  keep?: boolean;
   headline?: string;
   shortSummary?: string;
   longSummary?: string;
@@ -817,7 +818,13 @@ People: ${[...batchPeople].join(', ') || 'none'}
 - Market share changes, competitive threats
 - Technology implementations, workforce restructuring
 
-## For each KEPT article:
+## For EVERY article, output an entry with a "keep" boolean:
+- Set "keep": true if the article passes the filter rules above
+- Set "keep": false if the article should be excluded
+- For kept articles (keep=true), also fill in all summary fields below
+- For excluded articles (keep=false), set shortSummary/longSummary/whyItMatters to null
+
+## For each KEPT article (keep=true):
 - Assign category: M&A / Deal Activity, Leadership Changes, Earnings & Operational Performance, Strategy, Value Creation / Cost Initiatives, Digital & Technology Modernization, Fundraising / New Funds, Operating Partner Activity, Supply Chain & Logistics, Plant & Footprint Changes
 - Generate shortSummary (1-2 sentences for card preview)
 - Generate longSummary (3-5 sentences for detailed view)
@@ -830,6 +837,7 @@ People: ${[...batchPeople].join(', ') || 'none'}
   "articles": [
     {
       "id": 0,
+      "keep": true,
       "headline": "headline",
       "shortSummary": "...",
       "longSummary": "...",
@@ -943,8 +951,15 @@ People: ${[...batchPeople].join(', ') || 'none'}
 
     console.log(`[process] LLM OK: ${result.articles?.length ?? 0} articles returned`);
 
+    // Filter out articles the LLM explicitly marked as not kept
+    const keptArticles = result.articles.filter((a: LLMArticleResponse) => a.keep === true);
+    const excludedCount = result.articles.length - keptArticles.length;
+    if (excludedCount > 0) {
+      console.log(`[process] Filtered out ${excludedCount} articles marked keep=false by LLM`);
+    }
+
     // Enrich with original data and resolve userNames deterministically
-    const processedArticles: ProcessedArticle[] = result.articles.map((a: LLMArticleResponse) => {
+    const processedArticles: ProcessedArticle[] = keptArticles.map((a: LLMArticleResponse) => {
       const original = typeof a.id === 'number' ? allPreTagged[a.id] : null;
       const company = a.company || original?.taggedCompany || null;
       const person = a.person || original?.taggedPerson || null;
@@ -1344,10 +1359,16 @@ ${company ? `- News about ${company} being an underwriter or bookrunner for IPOs
 4. Explain why it matters for client engagement
 
 ## Output Format
+For every article you consider, include it in the output with a "keep" boolean:
+- Set "keep": true ONLY for articles that pass all filter rules above
+- Set "keep": false for articles that should be excluded
+- For excluded articles (keep=false), set summary fields to null
+
 Return ONLY valid JSON (no markdown, no backticks):
 {
   "articles": [
     {
+      "keep": true,
       "headline": "Article headline",
       "shortSummary": "1-2 sentence preview",
       "longSummary": "3-5 sentence detailed summary",
@@ -1412,7 +1433,19 @@ Return only HIGH-QUALITY, RELEVANT articles where ${entityName} is the PRIMARY s
       cleaned = jsonMatch[0];
     }
 
-    return JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned);
+
+    // Filter out articles the LLM marked as not kept
+    if (parsed.articles) {
+      const before = parsed.articles.length;
+      parsed.articles = parsed.articles.filter((a: LLMArticleResponse) => a.keep === true);
+      const excluded = before - parsed.articles.length;
+      if (excluded > 0) {
+        console.log(`[search] Filtered out ${excluded} articles marked keep=false by LLM`);
+      }
+    }
+
+    return parsed;
   } catch (error) {
     console.error('[search] Error:', error);
     return { articles: [], coverageGaps: [] };
