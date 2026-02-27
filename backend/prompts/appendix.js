@@ -24,21 +24,30 @@ function consolidateSources(foundation, sections) {
             sections_used_in: []
         });
     }
-    const sectionNames = [
-        'Section 1',
-        'Section 2',
-        'Section 3',
-        'Section 4',
-        'Section 5',
-        'Section 6',
-        'Section 7',
-        'Section 8',
-        'Section 9'
-    ];
-    Object.entries(sections).forEach(([key, section], index) => {
+    const sectionNameMap = {
+        section1: 'Executive Summary',
+        section2: 'Financial Snapshot',
+        section3: 'Company Overview',
+        section4: 'Segment Analysis',
+        section5: 'Market Trends',
+        section6: 'Peer Benchmarking',
+        section7: 'SKU Opportunities',
+        section8: 'Recent News',
+        section9: 'Conversation Starters',
+        investmentStrategy: 'Investment Strategy',
+        portfolioSnapshot: 'Portfolio Snapshot',
+        dealActivity: 'Deal Activity',
+        dealTeam: 'Deal Team',
+        portfolioMaturity: 'Portfolio Maturity',
+        leadershipAndGovernance: 'Leadership & Governance',
+        strategicPriorities: 'Strategic Priorities',
+        operatingCapabilities: 'Operating Capabilities',
+        distributionAnalysis: 'Distribution Analysis',
+    };
+    Object.entries(sections).forEach(([key, section]) => {
         if (!section || !section.sources_used)
             return;
-        const sectionName = sectionNames[index];
+        const sectionName = sectionNameMap[key] || key;
         for (const sourceId of section.sources_used) {
             const existing = sourceMap.get(sourceId);
             if (existing) {

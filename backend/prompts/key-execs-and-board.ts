@@ -393,8 +393,33 @@ interface KeyExecsAndBoardOutput {
 4. **Performance actions:** Be specific about what each leader is doing to improve performance
 5. **Geography relevance:** Rate executives for ${geography} involvement
 6. **Exact schema match:** Follow the TypeScript interface exactly
-7. **Comprehensive coverage:** Don't omit key executives or board members
+7. **Comprehensive coverage:** Don't omit key executives or board members **that can be identified**
 8. **Recent changes:** Include leadership transitions and their implications
+
+---
+
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+**For private companies or when leadership cannot be identified:**
+
+- **Do NOT fabricate placeholder entries.** Never return entries with names like "Information Not Available", "Not Disclosed", "Unknown", or similar placeholders. These pollute the output.
+- **Return empty arrays** for any people category (executives, members, leaders) where no real individuals can be identified.
+- **Use the summary field** to explain what information is missing and why (e.g., "Vyne Dental is a private company with no publicly disclosed executive team.").
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+
+**Example for a private company with no public leadership data:**
+\`\`\`json
+{
+  "confidence": { "level": "LOW", "reason": "Private company with extremely limited publicly available information" },
+  "board_of_directors": { "summary": "Board composition is not publicly disclosed.", "members": [] },
+  "c_suite": { "summary": "Executive team details are not publicly available for this private company.", "executives": [] },
+  "business_unit_leaders": { "summary": "No business unit leaders could be identified from public sources.", "leaders": [] },
+  "recent_leadership_changes": [],
+  "sources_used": ["S1"]
+}
+\`\`\`
+
+**This rule supersedes "Comprehensive coverage"** — it is better to return an empty array with a clear summary than to invent placeholder people entries.
 
 ---
 

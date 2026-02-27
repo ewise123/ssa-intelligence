@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, Sparkles, CheckCircle2, Circle, ArrowRight, BrainCircuit } from 'lucide-react';
+import { Loader2, Sparkles, CheckCircle2, AlertCircle, Circle, ArrowRight, BrainCircuit } from 'lucide-react';
 import { BlueprintInput, BlueprintSection, ReportBlueprint, ReportType, SectionId, SECTIONS_CONFIG, VisibilityScope } from '../types';
 import { enforceLockedSections, isSectionLocked } from '../utils/sections';
 import { resolveCompanyApi, CompanyResolveResponse } from '../services/researchManager';
@@ -958,10 +958,18 @@ export const NewResearch: React.FC<NewResearchProps> = ({
                  let textColor = "text-slate-400";
                  let bgColor = "bg-transparent";
 
+                 const content = secData?.content;
+                 const isInsufficientData = status === 'completed' &&
+                   typeof content === 'string' &&
+                   content.trim().startsWith('> **Limited public information available**');
+
                  if (status === 'running') {
                    icon = <Loader2 size={16} className="text-blue-500 animate-spin" />;
                    textColor = "text-blue-600 font-medium";
                    bgColor = "bg-blue-50";
+                 } else if (status === 'completed' && isInsufficientData) {
+                   icon = <AlertCircle size={16} className="text-amber-500" />;
+                   textColor = "text-slate-700";
                  } else if (status === 'completed') {
                    icon = <CheckCircle2 size={16} className="text-emerald-500" />;
                    textColor = "text-slate-700";

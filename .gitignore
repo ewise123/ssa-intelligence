@@ -33,8 +33,7 @@ Thumbs.db
 .idea/
 .vscode/
 .worktrees/
-.claude/settings.local.json
-.claude/rules/
+.claude/
 .serena/
 
 # Scratch/debug notes
@@ -51,7 +50,5 @@ docs/PLAN-REPORT-TYPE-ADDENDUMS.md
 docs/REPORT-TYPE-ADDENDUM-NOTES.md
 docs/report-blueprints/IMPLEMENTATION-PLAN.md
 docs/PLAN-QUEUE-FIX.md
-.claude/settings.local.json
-
 # Planning documents (not for version control)
 docs/plans/

@@ -1,8 +1,18 @@
+/**
+ * Section 6: Peer Benchmarking - TypeScript Implementation
+ * Generates prompt and types for Peer Benchmarking section
+ */
+// ============================================================================
+// INPUT TYPES
+// ============================================================================
 import { appendReportTypeAddendum } from './report-type-addendums.js';
+// ============================================================================
+// PROMPT BUILDER
+// ============================================================================
 export function buildPeerBenchmarkingPrompt(input) {
-    const { foundation, companyName, geography, section2Context } = input;
+    const { foundation, companyName, geography, section2 } = input;
     const foundationJson = JSON.stringify(foundation, null, 2);
-    const section2Json = JSON.stringify(section2Context, null, 2);
+    const section2Json = JSON.stringify(section2, null, 2);
     const basePrompt = `# Section 6: Peer Benchmarking - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
@@ -113,12 +123,12 @@ interface Section6Output {
     }>;
     metrics: Array<{
       metric: string;
-      company: number | string;
-      peer1: number | string;
-      peer2: number | string;
-      peer3: number | string;
-      peer4?: number | string;
-      industry_avg: number | string;
+      company: number | string | null;
+      peer1: number | string | null;
+      peer2: number | string | null;
+      peer3: number | string | null;
+      peer4?: number | string | null;
+      industry_avg: number | string | null;
       source: string;
     }>;
   };
@@ -154,6 +164,14 @@ interface Section6Output {
 
 ---
 
+## NUMBER FORMATTING (STRICT)
+
+- **Units belong in the metric name** (matching Section 2 KPI labels).
+- **Table values must be numeric only** (or null), with no \`$\`, \`%\`, \`M/B\`, or \`x\` suffixes.
+- **Renderer will apply formatting** based on units in the metric name.
+
+---
+
 ## TABLE REQUIREMENTS (Section 6.1)
 
 **The table MUST use this EXACT format from style guide:**
@@ -164,8 +182,9 @@ interface Section6Output {
 
 **Critical requirements:**
 - Use exact metric names from Section 2
-- Include ALL Section 2 metrics (use "–" if peer data unavailable)
-- Format consistently: $X.XB, X.X%, X.Xx, X days
+- Include ALL Section 2 metrics (use null if peer data unavailable)
+- Format consistently using units in metric names (e.g., ($M), (%), (x), (days))
+- Currency default: USD millions unless stated
 - Source every metric
 
 ---
@@ -220,6 +239,26 @@ Focus on ${geography}-specific competitive standing
 
 ---
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent peer companies, metrics, strengths, or gaps that cannot be confirmed from public sources.
+- **Return empty arrays** for \`peers\`, \`metrics\`, \`key_strengths\`, and/or \`key_gaps\` if no real data can be identified.
+- **Use \`overall_assessment\`** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- **Use \`null\`** for unavailable metric values (not "–" or "N/A"). Use "–" only for text fields where data genuinely cannot be determined.
+
+---
+
+## CRITICAL REMINDERS
+
+1. Follow style guide: All formatting rules apply
+2. Valid JSON only: No markdown, no headings, no prose outside JSON
+3. Source everything: No unsourced claims
+4. Geography focus: Emphasize the target geography throughout
+5. Exact schema match: Follow the TypeScript interface exactly
+
+---
+
 ## BEGIN RESEARCH
 
 **Company:** ${companyName}  
@@ -231,23 +270,30 @@ Focus on ${geography}-specific competitive standing
 `;
     return appendReportTypeAddendum('peer_benchmarking', input.reportType, basePrompt);
 }
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
 export function validateSection6Output(output) {
     if (!output || typeof output !== 'object')
         return false;
+    // Check confidence
     if (!output.confidence ||
         !['HIGH', 'MEDIUM', 'LOW'].includes(output.confidence.level)) {
         return false;
     }
+    // Check peer_comparison_table
     if (!output.peer_comparison_table ||
         typeof output.peer_comparison_table.company_name !== 'string' ||
         !Array.isArray(output.peer_comparison_table.peers) ||
         !Array.isArray(output.peer_comparison_table.metrics)) {
         return false;
     }
+    // Validate peers (3-5 required)
     if (output.peer_comparison_table.peers.length < 3 ||
         output.peer_comparison_table.peers.length > 5) {
         return false;
     }
+    // Validate metrics
     for (const metric of output.peer_comparison_table.metrics) {
         if (!metric.metric || !metric.source ||
             metric.company === undefined ||
@@ -258,6 +304,7 @@ export function validateSection6Output(output) {
             return false;
         }
     }
+    // Check benchmark_summary
     if (!output.benchmark_summary ||
         typeof output.benchmark_summary.overall_assessment !== 'string' ||
         !Array.isArray(output.benchmark_summary.key_strengths) ||
@@ -265,64 +312,172 @@ export function validateSection6Output(output) {
         typeof output.benchmark_summary.competitive_positioning !== 'string') {
         return false;
     }
+    // Validate gaps magnitude
     for (const gap of output.benchmark_summary.key_gaps) {
         if (!['Significant', 'Moderate', 'Minor'].includes(gap.magnitude)) {
             return false;
         }
     }
+    // Check sources
     if (!Array.isArray(output.sources_used))
         return false;
     return true;
 }
 export function formatSection6ForDocument(output) {
-    let markdown = `# 6. Peer Benchmarking\n\n`;
-    markdown += `**Confidence: ${output.confidence.level}** – ${output.confidence.reason}\n\n`;
-    markdown += `## 6.1 Peer Comparison Table\n\n`;
-    markdown += `**Peer Companies:**\n\n`;
+    const formatNumber = (value) => value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const resolveMetricUnit = (metricName) => {
+        const match = metricName.match(/\(([^)]+)\)\s*$/);
+        const token = match?.[1].toLowerCase();
+        if (!token)
+            return null;
+        if (token.includes('$b'))
+            return { type: 'currency', suffix: 'B' };
+        if (token.includes('$m'))
+            return { type: 'currency', suffix: 'M' };
+        if (token.includes('$k'))
+            return { type: 'currency', suffix: 'K' };
+        if (token.includes('%'))
+            return { type: 'percent', suffix: '%' };
+        if (token.includes('x'))
+            return { type: 'ratio', suffix: 'x' };
+        if (token.includes('day'))
+            return { type: 'days', suffix: ' days' };
+        if (token.includes('year'))
+            return { type: 'years', suffix: ' years' };
+        if (token.includes('count') || token.includes('score'))
+            return { type: 'number', suffix: '' };
+        return null;
+    };
+    const inferValueType = (metricName) => {
+        const metric = metricName.toLowerCase();
+        if (metric.includes('margin') || metric.includes('growth') || metric.includes('irr') || metric.includes('roe') ||
+            metric.includes('roa') || metric.includes('rate') || metric.includes('pct') || metric.includes('percent')) {
+            return 'percent';
+        }
+        if (metric.includes('turn') || metric.includes('multiple') || metric.includes('leverage'))
+            return 'ratio';
+        if (metric.includes('day') || metric.includes('dso') || metric.includes('dio') || metric.includes('dpo')) {
+            return 'days';
+        }
+        return 'currency';
+    };
+    const formatTableValue = (metricName, value) => {
+        if (value === null || value === undefined)
+            return '–';
+        if (typeof value !== 'number')
+            return value;
+        const unit = resolveMetricUnit(metricName);
+        const formatted = formatNumber(value);
+        if (unit?.type === 'percent')
+            return `${formatted}%`;
+        if (unit?.type === 'currency')
+            return `$${formatted}${unit.suffix}`;
+        if (unit?.type === 'ratio')
+            return `${formatted}x`;
+        if (unit?.type === 'days')
+            return `${formatted} days`;
+        if (unit?.type === 'years')
+            return `${formatted} years`;
+        const fallbackType = inferValueType(metricName);
+        if (fallbackType === 'percent')
+            return `${formatted}%`;
+        if (fallbackType === 'ratio')
+            return `${formatted}x`;
+        if (fallbackType === 'days')
+            return `${formatted} days`;
+        return `$${formatted}M`;
+    };
+    let markdown = `# 6. Peer Benchmarking
+
+`;
+    markdown += `**Confidence: ${output.confidence.level}** ? ${output.confidence.reason}
+
+`;
+    markdown += `## 6.1 Peer Comparison Table
+
+`;
+    // Peer descriptions
+    markdown += `**Peer Companies:**
+
+`;
     for (let i = 0; i < output.peer_comparison_table.peers.length; i++) {
         const peer = output.peer_comparison_table.peers[i];
         markdown += `- **Peer ${i + 1}: ${peer.name}**`;
         if (peer.ticker)
             markdown += ` (${peer.ticker})`;
         markdown += `: ${peer.geography_presence}`;
-        if (peer.geography_revenue_pct) {
+        if (peer.geography_revenue_pct != null) {
             markdown += ` Geography revenue: ${peer.geography_revenue_pct}% of total.`;
         }
-        markdown += `\n`;
+        markdown += `
+`;
     }
-    markdown += `\n`;
+    markdown += `
+`;
+    markdown += `Note: Monetary values shown in USD millions unless stated.
+
+`;
+    // Build table
     const peerNames = output.peer_comparison_table.peers.map((p, i) => `Peer ${i + 1}`);
-    markdown += `| Metric | ${output.peer_comparison_table.company_name} | ${peerNames.join(' | ')} | Industry Avg |\n`;
-    markdown += `|--------|${'-'.repeat(output.peer_comparison_table.company_name.length + 2)}|${peerNames.map(p => '-'.repeat(p.length + 2)).join('|')}|${'-'.repeat(14)}|\n`;
+    markdown += `| Metric | ${output.peer_comparison_table.company_name} | ${peerNames.join(' | ')} | Industry Avg |
+`;
+    markdown += `|--------|${'-'.repeat(output.peer_comparison_table.company_name.length + 2)}|${peerNames.map(p => '-'.repeat(p.length + 2)).join('|')}|${'-'.repeat(14)}|
+`;
     for (const metric of output.peer_comparison_table.metrics) {
         const values = [
-            metric.company,
-            metric.peer1,
-            metric.peer2,
-            metric.peer3
+            formatTableValue(metric.metric, metric.company),
+            formatTableValue(metric.metric, metric.peer1),
+            formatTableValue(metric.metric, metric.peer2),
+            formatTableValue(metric.metric, metric.peer3)
         ];
         if (metric.peer4 !== undefined)
-            values.push(metric.peer4);
-        values.push(metric.industry_avg);
-        markdown += `| ${metric.metric} | ${values.map(v => typeof v === 'number' ? v.toLocaleString() : v).join(' | ')} |\n`;
+            values.push(formatTableValue(metric.metric, metric.peer4));
+        values.push(formatTableValue(metric.metric, metric.industry_avg));
+        markdown += `| ${metric.metric} | ${values.join(' | ')} |
+`;
     }
-    markdown += `\n*Sources: ${output.peer_comparison_table.metrics.map(m => m.source).filter((v, i, a) => a.indexOf(v) === i).join(', ')}*\n\n`;
-    markdown += `## 6.2 Peer Benchmark Summary\n\n`;
-    markdown += `${output.benchmark_summary.overall_assessment}\n\n`;
-    markdown += `**Key Strengths:**\n\n`;
+    markdown += `
+*Sources: ${output.peer_comparison_table.metrics.map(m => m.source).filter((v, i, a) => a.indexOf(v) === i).join(', ')}*
+
+`;
+    // 6.2 Benchmark Summary
+    markdown += `## 6.2 Peer Benchmark Summary
+
+`;
+    markdown += `${output.benchmark_summary.overall_assessment}
+
+`;
+    markdown += `**Key Strengths:**
+
+`;
     for (const strength of output.benchmark_summary.key_strengths) {
-        markdown += `- **${strength.strength}**: ${strength.description}\n`;
-        markdown += `  - **Geography Context:** ${strength.geography_context}\n\n`;
+        markdown += `- **${strength.strength}**: ${strength.description}
+`;
+        markdown += `  - **Geography Context:** ${strength.geography_context}
+
+`;
     }
-    markdown += `**Key Gaps:**\n\n`;
+    markdown += `**Key Gaps:**
+
+`;
     for (const gap of output.benchmark_summary.key_gaps) {
-        markdown += `- **${gap.gap}** (${gap.magnitude}): ${gap.description}\n`;
-        markdown += `  - **Geography Context:** ${gap.geography_context}\n\n`;
+        markdown += `- **${gap.gap}** (${gap.magnitude}): ${gap.description}
+`;
+        markdown += `  - **Geography Context:** ${gap.geography_context}
+
+`;
     }
-    markdown += `**Competitive Positioning:**\n\n`;
-    markdown += `${output.benchmark_summary.competitive_positioning}\n\n`;
+    markdown += `**Competitive Positioning:**
+
+`;
+    markdown += `${output.benchmark_summary.competitive_positioning}
+
+`;
     return markdown;
 }
+/**
+ * Compares company performance vs peers for a specific metric
+ */
 export function compareMetric(output, metricName) {
     const metric = output.peer_comparison_table.metrics.find(m => m.metric === metricName);
     if (!metric)
@@ -349,6 +504,9 @@ export function compareMetric(output, metricName) {
         industryAvg: metric.industry_avg
     };
 }
+/**
+ * Identifies metrics where company outperforms peers
+ */
 export function getOutperformingMetrics(output) {
     const outperforming = [];
     for (const metric of output.peer_comparison_table.metrics) {
@@ -363,6 +521,8 @@ export function getOutperformingMetrics(output) {
         if (peerValues.length === 0)
             continue;
         const avgPeer = peerValues.reduce((a, b) => a + b, 0) / peerValues.length;
+        // For metrics where higher is better (margins, growth, turns, ROIC)
+        // or where lower is better (DSO, DIO, Debt/EBITDA)
         const higherIsBetter = [
             'Revenue Growth',
             'EBITDA Margin',

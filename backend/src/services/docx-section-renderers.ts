@@ -10,6 +10,8 @@ import {
   BorderStyle,
   ShadingType,
 } from 'docx';
+import { formatMetricValue, formatNumber } from './metric-formatter.js';
+import { stripInlineSource, isEmptyValue, isPlaceholderName } from './rendering-helpers.js';
 
 // SSA brand colors
 const BRAND_BLUE = '003399';
@@ -235,15 +237,38 @@ export function brandedTable(
 
 type DocxElement = Paragraph | Table;
 
+/** Styled notice paragraph for sections with insufficient data. */
+function insufficientDataParagraph(reason?: string): Paragraph {
+  const text = reason
+    ? `Limited public information available — ${reason}`
+    : 'Limited public information available';
+  return new Paragraph({
+    children: [
+      new TextRun({
+        text,
+        font: 'Avenir Next LT Pro',
+        size: 22,
+        color: '92400E', // amber-900
+        italics: true,
+      }),
+    ],
+    spacing: { before: 120, after: 120 },
+  });
+}
+
 // ── Individual section renderers ──
 
 export function renderExecSummary(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
   const elements: DocxElement[] = [];
-  if (Array.isArray(data.bullet_points)) {
+  if (Array.isArray(data.bullet_points) && data.bullet_points.length) {
     elements.push(boldParagraph('Key Takeaways'));
     for (const b of data.bullet_points) {
-      const text = `${b.bullet || ''}${b.sources ? ` (${(b.sources || []).join(', ')})` : ''}`;
+      let cleaned = stripInlineSource(b.bullet || '');
+      const endsWithPeriod = cleaned.endsWith('.');
+      if (endsWithPeriod) cleaned = cleaned.slice(0, -1);
+      const sources = b.sources ? ` (${(b.sources || []).join(', ')})` : '';
+      const text = `${cleaned}${sources}${endsWithPeriod ? '.' : ''}`;
       elements.push(bulletItem(text));
     }
   }
@@ -261,7 +286,10 @@ export function renderFinancialSnapshot(data: any): DocxElement[] {
         ['Metric', 'Company', 'Industry Avg', 'Source'],
         data.kpi_table.metrics.map((m: any) => {
           const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
-          return [metricName, formatValue(m.company), formatValue(m.industry_avg), m.source || ''];
+          const rawCompany = typeof m.company === 'string' ? stripInlineSource(m.company) : m.company;
+          const rawIndustry = typeof m.industry_avg === 'string' ? stripInlineSource(m.industry_avg) : m.industry_avg;
+          const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
+          return [metricName, formatMetricValue(metricName, rawCompany, opts), formatMetricValue(metricName, rawIndustry, opts), m.source || ''];
         }),
       ),
     );
@@ -285,7 +313,7 @@ export function renderCompanyOverview(data: any): DocxElement[] {
     elements.push(boldParagraph('Overview'));
     elements.push(styledParagraph(data.business_description.overview));
   }
-  if (Array.isArray(data.business_description?.segments)) {
+  if (Array.isArray(data.business_description?.segments) && data.business_description.segments.length) {
     elements.push(boldParagraph('Segments'));
     elements.push(
       brandedTable(
@@ -293,13 +321,13 @@ export function renderCompanyOverview(data: any): DocxElement[] {
         data.business_description.segments.map((s: any) => [
           s.name,
           s.description,
-          s.revenue_pct,
+          s.revenue_pct != null ? formatMetricValue('Revenue (%)', s.revenue_pct) : '',
           s.geography_relevance,
         ]),
       ),
     );
   }
-  if (Array.isArray(data.geographic_footprint?.facilities)) {
+  if (Array.isArray(data.geographic_footprint?.facilities) && data.geographic_footprint.facilities.length) {
     elements.push(boldParagraph('Facilities'));
     elements.push(
       brandedTable(
@@ -308,7 +336,7 @@ export function renderCompanyOverview(data: any): DocxElement[] {
           f.name,
           f.location,
           f.type,
-          f.employees,
+          f.employees != null ? formatNumber(f.employees) : '',
           f.capabilities,
         ]),
       ),
@@ -345,6 +373,95 @@ export function renderCompanyOverview(data: any): DocxElement[] {
         );
       }
     }
+  }
+  return elements;
+}
+
+export function renderKeyExecsAndBoard(data: any): DocxElement[] {
+  if (!data || typeof data !== 'object') return [];
+  const elements: DocxElement[] = [];
+
+  const realExecs = (data.c_suite?.executives || []).filter((e: any) => !isPlaceholderName(e.name));
+  const realBoard = (data.board_of_directors?.members || []).filter((m: any) => !isPlaceholderName(m.name));
+  const realLeaders = (data.business_unit_leaders?.leaders || []).filter((l: any) => !isPlaceholderName(l.name));
+  const hasAnyPeople = realExecs.length + realBoard.length + realLeaders.length > 0;
+
+  if (!hasAnyPeople) {
+    return [insufficientDataParagraph(data.confidence?.reason)];
+  }
+
+  if (data.board_of_directors?.summary) {
+    elements.push(boldParagraph('Board of Directors'));
+    elements.push(styledParagraph(data.board_of_directors.summary));
+  }
+  if (realBoard.length) {
+    if (!data.board_of_directors?.summary) elements.push(boldParagraph('Board of Directors'));
+    elements.push(
+      brandedTable(
+        ['Name', 'Role', 'Committees', 'Tenure', 'Background', 'Source'],
+        realBoard.map((m: any) => [
+          m.name,
+          m.role,
+          Array.isArray(m.committees) ? m.committees.join(', ') : (m.committees || ''),
+          m.tenure || '',
+          m.background || '',
+          m.source || '',
+        ]),
+      ),
+    );
+  }
+  if (data.c_suite?.summary) {
+    elements.push(boldParagraph('C-Suite Leadership'));
+    elements.push(styledParagraph(data.c_suite.summary));
+  }
+  if (realExecs.length) {
+    if (!data.c_suite?.summary) elements.push(boldParagraph('C-Suite Leadership'));
+    elements.push(
+      brandedTable(
+        ['Name', 'Title', 'Tenure', 'Background', 'Source'],
+        realExecs.map((e: any) => [
+          e.name,
+          e.title,
+          e.tenure || '',
+          e.background || '',
+          e.source || '',
+        ]),
+      ),
+    );
+  }
+  if (data.business_unit_leaders?.summary) {
+    elements.push(boldParagraph('Business Unit Leaders'));
+    elements.push(styledParagraph(data.business_unit_leaders.summary));
+  }
+  if (realLeaders.length) {
+    if (!data.business_unit_leaders?.summary) elements.push(boldParagraph('Business Unit Leaders'));
+    elements.push(
+      brandedTable(
+        ['Name', 'Title', 'Business Unit', 'Background', 'Source'],
+        realLeaders.map((l: any) => [
+          l.name,
+          l.title,
+          l.business_unit || '',
+          l.background || '',
+          l.source || '',
+        ]),
+      ),
+    );
+  }
+  if (Array.isArray(data.recent_leadership_changes) && data.recent_leadership_changes.length) {
+    elements.push(boldParagraph('Recent Leadership Changes'));
+    elements.push(
+      brandedTable(
+        ['Date', 'Type', 'Description', 'Implications', 'Source'],
+        data.recent_leadership_changes.map((c: any) => [
+          c.date || '',
+          c.change_type || '',
+          c.description || '',
+          c.implications || '',
+          c.source || '',
+        ]),
+      ),
+    );
   }
   return elements;
 }
@@ -410,6 +527,9 @@ export function renderDealActivity(data: any): DocxElement[] {
 export function renderDealTeam(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
   const elements: DocxElement[] = [];
+  if (!data.stakeholders?.length && !data.notes) {
+    return [insufficientDataParagraph(data.confidence?.reason)];
+  }
   if (Array.isArray(data.stakeholders) && data.stakeholders.length) {
     elements.push(boldParagraph('Stakeholders'));
     elements.push(
@@ -457,6 +577,9 @@ export function renderPortfolioMaturity(data: any): DocxElement[] {
 export function renderLeadershipAndGovernance(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
   const elements: DocxElement[] = [];
+  if (!data.leadership?.length && !data.governance_notes) {
+    return [insufficientDataParagraph(data.confidence?.reason)];
+  }
   if (Array.isArray(data.leadership) && data.leadership.length) {
     elements.push(boldParagraph('Leadership'));
     elements.push(
@@ -583,11 +706,12 @@ export function renderSegmentAnalysis(data: any): DocxElement[] {
             ['Metric', 'Segment', 'Company Avg', 'Industry Avg', 'Source'],
             seg.financial_snapshot.table.map((m: any) => {
               const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
+              const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
               return [
                 metricName,
-                formatValue(m.segment),
-                formatValue(m.company_avg),
-                formatValue(m.industry_avg),
+                formatMetricValue(metricName, m.segment, opts),
+                formatMetricValue(metricName, m.company_avg, opts),
+                formatMetricValue(metricName, m.industry_avg, opts),
                 m.source || '',
               ];
             }),
@@ -658,21 +782,29 @@ export function renderPeerBenchmarking(data: any): DocxElement[] {
       ),
     );
   }
-  if (data.peer_comparison_table?.metrics?.length) {
+  const populatedMetrics = (data.peer_comparison_table?.metrics || []).filter((m: any) =>
+    !isEmptyValue(m.company) || !isEmptyValue(m.peer1) || !isEmptyValue(m.peer2) ||
+    !isEmptyValue(m.peer3) || !isEmptyValue(m.peer4) || !isEmptyValue(m.industry_avg)
+  );
+  if (populatedMetrics.length) {
     elements.push(boldParagraph('Metrics'));
     elements.push(
       brandedTable(
         ['Metric', 'Company', 'Peer1', 'Peer2', 'Peer3', 'Peer4', 'Industry Avg', 'Source'],
-        data.peer_comparison_table.metrics.map((m: any) => [
-          m.metric,
-          m.company,
-          m.peer1,
-          m.peer2,
-          m.peer3,
-          m.peer4 || '',
-          m.industry_avg,
-          m.source,
-        ]),
+        populatedMetrics.map((m: any) => {
+          const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
+          const fmt = (v: any) => isEmptyValue(v) ? '' : formatMetricValue(m.metric, v, opts);
+          return [
+            m.metric,
+            fmt(m.company),
+            fmt(m.peer1),
+            fmt(m.peer2),
+            fmt(m.peer3),
+            fmt(m.peer4),
+            fmt(m.industry_avg),
+            m.source,
+          ];
+        }),
       ),
     );
   }
@@ -693,6 +825,9 @@ export function renderPeerBenchmarking(data: any): DocxElement[] {
 
 export function renderSkuOpportunities(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
+  if (!data.opportunities?.length) {
+    return [insufficientDataParagraph(data.confidence?.reason)];
+  }
   const elements: DocxElement[] = [];
   if (data.opportunities?.length) {
     elements.push(
@@ -704,7 +839,7 @@ export function renderSkuOpportunities(data: any): DocxElement[] {
           o.source,
           o.aligned_sku,
           o.priority,
-          o.severity,
+          o.severity ?? '',
           o.geography_relevance,
           Array.isArray(o.potential_value_levers) ? o.potential_value_levers.join('; ') : '',
         ]),
@@ -716,6 +851,9 @@ export function renderSkuOpportunities(data: any): DocxElement[] {
 
 export function renderRecentNews(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
+  if (!data.news_items?.length) {
+    return [insufficientDataParagraph(data.confidence?.reason)];
+  }
   if (data.news_items?.length) {
     return [
       brandedTable(
@@ -756,7 +894,7 @@ export function renderConversationStarters(data: any): DocxElement[] {
 export function renderAppendix(data: any): DocxElement[] {
   if (!data || typeof data !== 'object') return [];
   const elements: DocxElement[] = [];
-  if (Array.isArray(data.source_references)) {
+  if (Array.isArray(data.source_references) && data.source_references.length) {
     elements.push(boldParagraph('Source References'));
     elements.push(
       brandedTable(
@@ -772,7 +910,7 @@ export function renderAppendix(data: any): DocxElement[] {
         ['Pair', 'Rate', 'Source', 'Description'],
         data.fx_rates_and_industry.fx_rates.map((r: any) => [
           r.currency_pair,
-          r.rate,
+          r.rate != null ? formatNumber(r.rate) : '',
           r.source,
           r.source_description,
         ]),
@@ -795,6 +933,7 @@ const renderers: Record<string, (data: any) => DocxElement[]> = {
   exec_summary: renderExecSummary,
   financial_snapshot: renderFinancialSnapshot,
   company_overview: renderCompanyOverview,
+  key_execs_and_board: renderKeyExecsAndBoard,
   investment_strategy: renderInvestmentStrategy,
   portfolio_snapshot: renderPortfolioSnapshot,
   deal_activity: renderDealActivity,
@@ -823,10 +962,3 @@ export function renderSection(sectionId: string, data: unknown): DocxElement[] {
   }
 }
 
-// ── Helpers ──
-
-function formatValue(raw: any): string {
-  if (raw === null || raw === undefined) return '';
-  if (typeof raw === 'number') return raw.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return String(raw);
-}

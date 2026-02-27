@@ -449,10 +449,23 @@ interface Section3Output {
 3. **Source everything:** No unsourced claims
 4. **Geography focus:** Emphasize the target geography throughout
 5. **Exact schema match:** Follow the TypeScript interface exactly
-6. **Use "?" or null** for unavailable data
+6. **Use null** for unavailable data
 7. **Geography relevance** ratings required for segments and priorities
 8. **Facilities array** must include all ${geography} locations
 9. **Key leadership** is brief; detailed profiles go in Key Execs and Board Members section
+
+---
+
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+**For private companies or when data cannot be found:**
+- **Do NOT fabricate placeholder entries.** Never return entries with names like "Information Not Available", "Not Disclosed", "Unknown", or similar placeholders in any array (executives, facilities, priorities, segments).
+- **Return empty arrays** for any category where no real data can be identified (e.g., empty \`executives\` array, empty \`priorities\` array).
+- **Use the relevant summary/overview field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- **Use \`null\`** for unavailable numeric data (not 0, not -1, not "–").
+
+**This rule supersedes minimum item counts** — it is better to return an empty array with a clear summary than to invent placeholder entries.
 
 ---
 
@@ -526,7 +539,7 @@ export function formatSection3ForDocument(output: Section3Output): string {
   markdown += `${output.business_description.overview}\n\n`;
   
   for (const segment of output.business_description.segments) {
-    markdown += `**${segment.name}**${segment.revenue_pct ? ` (${segment.revenue_pct}% of revenue)` : ''}: `;
+    markdown += `**${segment.name}**${segment.revenue_pct != null ? ` (${segment.revenue_pct}% of revenue)` : ''}: `;
     markdown += `${segment.description} ${segment.geography_relevance}\n\n`;
   }
   
@@ -540,7 +553,7 @@ export function formatSection3ForDocument(output: Section3Output): string {
   for (const facility of output.geographic_footprint.facilities) {
     markdown += `- **${facility.name}** (${facility.location}, ${facility.type}): `;
     markdown += `${facility.description}`;
-    if (facility.employees) markdown += ` Employees: ${facility.employees}.`;
+    if (facility.employees != null) markdown += ` Employees: ${facility.employees}.`;
     markdown += ` (${facility.source})\n`;
   }
   

@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { ReportBlueprint, ResearchJob, SECTIONS_CONFIG, SectionId, SectionStatus } from '../types';
 import { StatusPill } from '../components/StatusPill';
-import { ChevronRight, BarChart3, Globe, ExternalLink, AlertTriangle, Loader2, CheckCircle2, Circle, Search } from 'lucide-react';
+import { ChevronRight, BarChart3, Globe, ExternalLink, AlertTriangle, AlertCircle, Loader2, CheckCircle2, Circle, Search } from 'lucide-react';
 
 // Improved Markdown Renderer
 const parseFormattedText = (text: string) => {
@@ -30,8 +30,10 @@ const MarkdownText = ({ content }: { content: string }) => {
   const renderTable = (block: string, idx: number) => {
     const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
     if (lines.length < 2) return null;
-    const header = lines[0].split('|').map((h) => h.trim()).filter(Boolean);
-    const rows = lines.slice(2).map((row) => row.split('|').map((c) => c.trim()).filter(Boolean));
+    // Use slice(1, -1) instead of filter(Boolean) to preserve empty cells in the middle
+    // (pipe-split of "| A |  | C |" gives ['', ' A ', '  ', ' C ', ''] — we only trim edges)
+    const header = lines[0].split('|').slice(1, -1).map((h) => h.trim());
+    const rows = lines.slice(2).map((row) => row.split('|').slice(1, -1).map((c) => c.trim()));
     return (
       <div key={`tbl-${idx}`} className="overflow-x-auto mb-4">
         <table className="min-w-full border border-slate-200 text-sm text-slate-700">
@@ -66,6 +68,21 @@ const MarkdownText = ({ content }: { content: string }) => {
 
         if (isTableBlock(trimmed)) {
           return renderTable(trimmed, idx);
+        }
+
+        // Blockquote block: all lines start with >
+        const bqLines = trimmed.split('\n');
+        if (bqLines.every((l: string) => l.trim().startsWith('>') || l.trim() === '')) {
+          const content = bqLines
+            .map((l: string) => l.trim().replace(/^>\s?/, ''))
+            .filter(Boolean);
+          return (
+            <div key={idx} className="border-l-4 border-amber-400 bg-amber-50 rounded-r-lg px-4 py-3 my-3">
+              {content.map((c: string, ci: number) => (
+                <p key={ci} className="text-amber-900 text-sm leading-relaxed">{parseFormattedText(c)}</p>
+              ))}
+            </div>
+          );
         }
 
         const lines = trimmed.split('\n');
@@ -263,10 +280,18 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({
                 let icon = <Circle size={16} className="text-slate-300" />;
                 let textColor = 'text-slate-400';
                 let bgColor = 'bg-transparent';
+                const content = secData?.content;
+                const isInsufficientData = status === 'completed' &&
+                  typeof content === 'string' &&
+                  content.trim().startsWith('> **Limited public information available**');
+
                 if (status === 'running') {
                   icon = <Loader2 size={16} className="text-blue-500 animate-spin" />;
                   textColor = 'text-blue-600 font-medium';
                   bgColor = 'bg-blue-50';
+                } else if (status === 'completed' && isInsufficientData) {
+                  icon = <AlertCircle size={16} className="text-amber-500" />;
+                  textColor = 'text-slate-700';
                 } else if (status === 'completed') {
                   icon = <CheckCircle2 size={16} className="text-emerald-500" />;
                   textColor = 'text-slate-700';
@@ -472,7 +497,15 @@ export const ResearchDetail: React.FC<ResearchDetailProps> = ({
                 let StatusIcon = Circle;
                 let iconClass = "text-slate-300";
 
-                if (status === 'completed') {
+                const sectionContent = job.sections[config.id]?.content;
+                const isInsufficientData = status === 'completed' &&
+                  typeof sectionContent === 'string' &&
+                  sectionContent.trim().startsWith('> **Limited public information available**');
+
+                if (status === 'completed' && isInsufficientData) {
+                  StatusIcon = AlertCircle;
+                  iconClass = "text-amber-500";
+                } else if (status === 'completed') {
                   StatusIcon = CheckCircle2;
                   iconClass = "text-emerald-500";
                 } else if (status === 'running') {

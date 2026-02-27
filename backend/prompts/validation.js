@@ -1,12 +1,11 @@
+/**
+ * Runtime Validation Schemas using Zod
+ * Validates Claude outputs match expected TypeScript interfaces
+ */
 import { z } from 'zod';
-const coerceNumber = (value) => {
-    if (typeof value !== 'string') return value;
-    const cleaned = value.replace(/[^0-9.+-]/g, '').trim();
-    if (!cleaned) return value;
-    const num = Number(cleaned);
-    return Number.isFinite(num) ? num : value;
-};
-const nonNegativeNumberOrString = z.preprocess(coerceNumber, z.union([z.number().nonnegative(), z.string()]));
+// ============================================================================
+// SHARED SCHEMAS
+// ============================================================================
 export const confidenceLevelSchema = z.enum(['HIGH', 'MEDIUM', 'LOW']);
 export const confidenceSchema = z.object({
     level: confidenceLevelSchema,
@@ -46,14 +45,14 @@ export const sourceTypeSchema = z.enum([
     'industry_report'
 ]);
 export const sourceReferenceSchema = z.object({
-    id: z.string().regex(/^S\d+$/),
+    id: z.string().regex(/^S\d+$/), // Must be S1, S2, etc.
     citation: z.string().min(1),
-    url: z.string().optional(),
+    url: z.string().nullish(),
     type: sourceTypeSchema,
     date: z.string()
 });
 export const analystQuoteSchema = z.object({
-    quote: z.string().refine((quote) => quote.split(/\s+/).length <= 15, { message: 'Analyst quote must be 15 words or fewer' }),
+    quote: z.string(),
     analyst: z.string().min(1),
     firm: z.string().min(1),
     source: z.string().regex(/^S\d+$/)
@@ -65,28 +64,56 @@ export const facilityInfoSchema = z.object({
 });
 export const competitorSchema = z.object({
     name: z.string(),
-    market_share: z.string().optional(),
+    market_share: z.string().nullish(),
     geography: z.string()
 });
+// ============================================================================
+// FOUNDATION SCHEMA
+// ============================================================================
+const coerceNumber = (value) => {
+    if (typeof value !== 'string')
+        return value;
+    const cleaned = value.replace(/[^0-9.+-]/g, '').trim();
+    if (!cleaned)
+        return value;
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : value;
+};
+const positiveNumber = z.preprocess(coerceNumber, z.number().positive());
+const positiveNumberOrString = z.preprocess(coerceNumber, z.union([z.number().positive(), z.string()]));
+const nonNegativeNumberOrString = z.preprocess(coerceNumber, z.union([z.number().nonnegative(), z.string()]));
+const positiveInt = z.preprocess(coerceNumber, z.number().int().positive());
+const nonNegativeInt = z.preprocess(coerceNumber, z.number().int().nonnegative());
+const percentNumber = z.preprocess(coerceNumber, z.number().min(0).max(100));
+// Nullable variants — allow null to explicitly represent "unknown/unavailable".
+// z.null() must be checked before z.preprocess() since preprocess can interfere with null passthrough.
+const nullableNonNegativeNumberOrString = z.union([z.null(), z.preprocess(coerceNumber, z.union([z.number().nonnegative(), z.string()]))]);
+const nullableNonNegativeInt = z.union([z.null(), z.preprocess(coerceNumber, z.number().int().nonnegative())]);
+const nullablePercentNumber = z.union([z.null(), z.preprocess(coerceNumber, z.number().min(0).max(100))]);
+const nullablePositiveNumber = z.union([z.null(), z.preprocess(coerceNumber, z.number().positive())]);
+const nullableIntRange = (min, max) => z.union([z.null(), z.number().int().min(min).max(max)]);
+// Metric table value: number, display string (e.g. "-"), or null for unavailable.
+// No coercion — strings like "-" are intentional display values.
+export const metricValue = z.union([z.number(), z.string(), z.null()]);
 export const companyBasicsSchema = z.object({
     legal_name: z.string(),
-    ticker: z.string().optional(),
+    ticker: z.union([z.string(), z.null()]).optional(),
     ownership: z.enum(['Public', 'Private', 'Subsidiary']),
     headquarters: z.string(),
-    global_revenue_usd: nonNegativeNumberOrString,
-    global_employees: z.number().int().nonnegative(),
+    global_revenue_usd: nullableNonNegativeNumberOrString,
+    global_employees: nullableNonNegativeInt,
     fiscal_year_end: z.string()
 });
 export const geographySpecificsSchema = z.object({
-    regional_revenue_usd: nonNegativeNumberOrString,
-    regional_revenue_pct: z.number().min(0).max(100),
-    regional_employees: z.number().int().nonnegative(),
+    regional_revenue_usd: nullableNonNegativeNumberOrString,
+    regional_revenue_pct: nullablePercentNumber,
+    regional_employees: nullableNonNegativeInt,
     facilities: z.array(facilityInfoSchema),
     key_facts: z.array(z.string())
 });
 export const segmentStructureSchema = z.object({
     name: z.string(),
-    revenue_pct: z.number().min(0).max(100),
+    revenue_pct: nullablePercentNumber,
     description: z.string()
 });
 export const foundationOutputSchema = z.object({
@@ -95,7 +122,7 @@ export const foundationOutputSchema = z.object({
     source_catalog: z.array(sourceReferenceSchema),
     segment_structure: z.array(segmentStructureSchema),
     fx_rates: z.record(z.object({
-        rate: z.number().positive(),
+        rate: nullablePositiveNumber,
         source: fxSourceSchema
     })),
     industry_averages: z.object({
@@ -103,6 +130,9 @@ export const foundationOutputSchema = z.object({
         dataset: z.string()
     })
 });
+// ============================================================================
+// SECTION 1: EXECUTIVE SUMMARY
+// ============================================================================
 export const executiveBulletSchema = z.object({
     bullet: z.string().min(10),
     category: bulletCategorySchema,
@@ -111,16 +141,20 @@ export const executiveBulletSchema = z.object({
 });
 export const execSummaryOutputSchema = z.object({
     confidence: confidenceSchema,
-    bullet_points: z.array(executiveBulletSchema).min(5).max(10),
+    bullet_points: z.array(executiveBulletSchema).min(0).max(10),
     sources_used: z.array(z.string().regex(/^S\d+$/))
 });
+// ============================================================================
+// SECTION 2: FINANCIAL SNAPSHOT
+// ============================================================================
 export const financialMetricSchema = z.object({
     metric: z.string(),
-    company: z.union([z.number(), z.string()]),
-    industry_avg: z.union([z.number(), z.string()]),
+    company: metricValue,
+    industry_avg: metricValue,
     source: z.string(),
-    unit: z.string().optional(),
-    value_type: z.enum(['currency', 'percent', 'ratio', 'number']).optional()
+    unit: z.string().nullish(),
+    value_type: z.enum(['currency', 'percent', 'ratio', 'number']).nullish(),
+    currency: z.string().length(3).nullish()
 });
 export const derivedMetricSchema = z.object({
     metric: z.string(),
@@ -132,13 +166,16 @@ export const financialSnapshotOutputSchema = z.object({
     confidence: confidenceSchema,
     summary: z.string().min(50),
     kpi_table: z.object({
-        metrics: z.array(financialMetricSchema).min(10)
+        metrics: z.array(financialMetricSchema).min(0)
     }),
     fx_source: fxSourceSchema,
     industry_source: industrySourceSchema,
     derived_metrics: z.array(derivedMetricSchema),
     sources_used: z.array(z.string().regex(/^S\d+$/))
 });
+// ============================================================================
+// SECTION 3: COMPANY OVERVIEW
+// ============================================================================
 export const businessSegmentSchema = z.object({
     name: z.string(),
     description: z.string(),
@@ -149,22 +186,26 @@ export const strategicPrioritySchema = z.object({
     priority: z.string(),
     description: z.string(),
     geography_relevance: z.string(),
-    geography_relevance_rating: z.enum(['High', 'Medium', 'Low']).optional(),
+    geography_relevance_rating: z.enum(['High', 'Medium', 'Low']).nullish(),
     source: z.string()
 });
-export const executiveLeaderSchema = z.object({
+// Brief executive schema for company_overview (detailed profiles in key_execs_and_board)
+export const briefExecutiveSchema = z.object({
     name: z.string(),
     title: z.string(),
-    background: z.string(),
-    tenure: z.string().optional(),
-    geography_relevance: z.string().optional(),
-    geography_relevance_rating: z.enum(['High', 'Medium', 'Low']).optional()
+    tenure: z.string().nullish(),
+    source: z.string()
+});
+export const briefRegionalLeaderSchema = z.object({
+    name: z.string(),
+    title: z.string(),
+    source: z.string()
 });
 export const companyOverviewOutputSchema = z.object({
     confidence: confidenceSchema,
     business_description: z.object({
         overview: z.string().min(100),
-        segments: z.array(businessSegmentSchema).min(1),
+        segments: z.array(businessSegmentSchema).min(0),
         geography_positioning: z.string().min(50)
     }),
     geographic_footprint: z.object({
@@ -174,42 +215,49 @@ export const companyOverviewOutputSchema = z.object({
             location: z.string(),
             type: z.enum(['Manufacturing', 'R&D', 'Distribution', 'Office', 'Headquarters']),
             employees: z.number().nullable().optional(),
-            capabilities: z.string().optional()
+            capabilities: z.string().nullish()
         })),
         regional_stats: z.union([z.string(), z.record(z.any())])
     }),
     strategic_priorities: z.object({
         summary: z.string().min(50),
-        priorities: z.array(strategicPrioritySchema).min(3).max(5),
+        priorities: z.array(strategicPrioritySchema).min(0).max(5),
         geography_specific_initiatives: z.union([z.string(), z.array(z.string())])
     }),
     key_leadership: z.object({
-        executives: z.array(executiveLeaderSchema),
-        regional_leaders: z.array(executiveLeaderSchema)
+        summary: z.string().min(20),
+        executives: z.array(briefExecutiveSchema).min(0).max(3),
+        regional_leader: briefRegionalLeaderSchema.nullish()
     }),
     sources_used: z.array(z.string().regex(/^S\d+$/))
 });
+// ============================================================================
+// SECTION 4: SEGMENT ANALYSIS
+// ============================================================================
 export const segmentFinancialMetricSchema = z.object({
     metric: z.string(),
-    segment: z.union([z.number(), z.string()]),
-    company_avg: z.union([z.number(), z.string()]),
-    industry_avg: z.union([z.number(), z.string()]),
-    source: z.string()
+    segment: metricValue,
+    company_avg: metricValue,
+    industry_avg: metricValue,
+    source: z.string(),
+    currency: z.string().length(3).nullish(),
+    unit: z.string().nullish(),
+    value_type: z.enum(['currency', 'percent', 'ratio', 'number']).nullish()
 });
 export const segmentAnalysisSchema = z.object({
     name: z.string(),
     financial_snapshot: z.object({
-        table: z.array(segmentFinancialMetricSchema).min(5),
+        table: z.array(segmentFinancialMetricSchema).min(0),
         fx_source: z.string(),
         geography_notes: z.string().min(50)
     }),
     performance_analysis: z.object({
-        paragraphs: z.array(z.string()).min(3).max(5),
+        paragraphs: z.array(z.string()).min(0).max(5),
         analyst_quotes: z.array(analystQuoteSchema).max(1),
-        key_drivers: z.array(z.string()).min(3).max(5)
+        key_drivers: z.array(z.string()).min(0).max(5)
     }),
     competitive_landscape: z.object({
-        competitors: z.array(competitorSchema).min(3).max(5),
+        competitors: z.array(competitorSchema).min(0).max(5),
         positioning: z.string().min(50),
         recent_dynamics: z.string().min(50)
     })
@@ -217,42 +265,48 @@ export const segmentAnalysisSchema = z.object({
 export const segmentAnalysisOutputSchema = z.object({
     confidence: confidenceSchema,
     overview: z.string().min(100),
-    segments: z.array(segmentAnalysisSchema).min(1),
+    segments: z.array(segmentAnalysisSchema).min(0),
     sources_used: z.array(z.string().regex(/^S\d+$/))
 });
+// ============================================================================
+// SECTION 5: TRENDS
+// ============================================================================
 export const trendBaseSchema = z.object({
     trend: z.string(),
     description: z.string().min(50),
     direction: trendDirectionSchema,
-    impact_score: z.number().int().min(1).max(10),
+    impact_score: nullableIntRange(1, 10),
     geography_relevance: z.string().min(30),
     source: z.string()
 });
 export const macroTrendSchema = trendBaseSchema;
 export const microTrendSchema = trendBaseSchema.extend({
-    segment_relevance: z.string().optional()
+    segment_relevance: z.string().nullish()
 });
 export const companyTrendSchema = trendBaseSchema.extend({
-    management_commentary: z.string().optional(),
-    analyst_quote: analystQuoteSchema.optional()
+    management_commentary: z.string().nullish(),
+    analyst_quote: analystQuoteSchema.nullish()
 });
 export const trendsOutputSchema = z.object({
     confidence: confidenceSchema,
     aggregate_summary: z.string().min(100),
     macro_trends: z.object({
         summary: z.string().min(50),
-        trends: z.array(macroTrendSchema).min(4).max(6)
+        trends: z.array(macroTrendSchema).min(0).max(6)
     }),
     micro_trends: z.object({
         summary: z.string().min(50),
-        trends: z.array(microTrendSchema).min(3).max(5)
+        trends: z.array(microTrendSchema).min(0).max(5)
     }),
     company_trends: z.object({
         summary: z.string().min(50),
-        trends: z.array(companyTrendSchema).min(3).max(5)
+        trends: z.array(companyTrendSchema).min(0).max(5)
     }),
     sources_used: z.array(z.string().regex(/^S\d+$/))
 });
+// ============================================================================
+// SECTION 6: PEER BENCHMARKING
+// ============================================================================
 export const peerInfoSchema = z.object({
     name: z.string(),
     ticker: z.union([z.string(), z.null()]).optional(),
@@ -261,13 +315,16 @@ export const peerInfoSchema = z.object({
 });
 export const peerMetricSchema = z.object({
     metric: z.string(),
-    company: z.union([z.number(), z.string()]),
-    peer1: z.union([z.number(), z.string()]),
-    peer2: z.union([z.number(), z.string()]),
-    peer3: z.union([z.number(), z.string()]),
-    peer4: z.union([z.number(), z.string()]).optional(),
-    industry_avg: z.union([z.number(), z.string()]),
-    source: z.string()
+    company: metricValue,
+    peer1: metricValue,
+    peer2: metricValue,
+    peer3: metricValue,
+    peer4: metricValue.optional(),
+    industry_avg: metricValue,
+    source: z.string(),
+    currency: z.string().length(3).nullish(),
+    unit: z.string().nullish(),
+    value_type: z.enum(['currency', 'percent', 'ratio', 'number']).nullish()
 });
 export const keyStrengthSchema = z.object({
     strength: z.string(),
@@ -284,24 +341,27 @@ export const peerBenchmarkingOutputSchema = z.object({
     confidence: confidenceSchema,
     peer_comparison_table: z.object({
         company_name: z.string(),
-        peers: z.array(peerInfoSchema).min(3).max(5),
-        metrics: z.array(peerMetricSchema).min(10)
+        peers: z.array(peerInfoSchema).min(0).max(5),
+        metrics: z.array(peerMetricSchema).min(0)
     }),
     benchmark_summary: z.object({
         overall_assessment: z.string().min(100),
-        key_strengths: z.array(keyStrengthSchema).min(2).max(4),
-        key_gaps: z.array(keyGapSchema).min(2).max(4),
+        key_strengths: z.array(keyStrengthSchema).min(0).max(4),
+        key_gaps: z.array(keyGapSchema).min(0).max(4),
         competitive_positioning: z.string().min(100)
     }),
     sources_used: z.array(z.string().regex(/^S\d+$/))
 });
+// ============================================================================
+// SECTION 7: SKU OPPORTUNITY MAPPING
+// ============================================================================
 export const opportunitySchema = z.object({
     issue_area: z.string(),
     public_problem: z.string().min(50),
     source: z.string().regex(/^S\d+$/),
     aligned_sku: z.string(),
     priority: prioritySchema,
-    severity: z.number().int().min(1).max(10),
+    severity: nullableIntRange(1, 10),
     severity_rationale: z.string().min(30),
     geography_relevance: z.string().min(30),
     potential_value_levers: z.array(z.string()).min(2).max(4)
@@ -311,10 +371,13 @@ export const skuOpportunitiesOutputSchema = z.object({
     opportunities: z.array(opportunitySchema).min(0).max(5),
     sources_used: z.array(z.string().regex(/^S\d+$/))
 });
+// ============================================================================
+// SECTION 8: RECENT NEWS & EVENTS
+// ============================================================================
 export const newsItemSchema = z.object({
     date: z.string(),
     headline: z.string(),
-    original_language: z.string().optional(),
+    original_language: z.string().nullish(),
     source: z.string().regex(/^S\d+$/),
     source_name: z.string(),
     implication: z.string().min(50),
@@ -323,30 +386,214 @@ export const newsItemSchema = z.object({
 });
 export const recentNewsOutputSchema = z.object({
     confidence: confidenceSchema,
-    news_items: z.array(newsItemSchema).min(3).max(5),
+    news_items: z.array(newsItemSchema).min(0).max(5),
     sources_used: z.array(z.string().regex(/^S\d+$/))
 });
+// ============================================================================
+// SECTION 9: EXECUTIVE CONVERSATION STARTERS
+// ============================================================================
 export const conversationStarterSchema = z.object({
-    title: z.string().min(10).max(100),
+    title: z.string().min(10),
     question: z.string().min(100),
     supporting_data: z.string().min(50),
     business_value: z.string().min(50),
-    ssa_capability: z.string().optional(),
+    ssa_capability: z.string().nullish(),
     supporting_sections: z.array(z.string()).min(1),
     sources: z.array(z.string().regex(/^S\d+$/)).min(1),
     geography_relevance: z.string().min(30)
 });
 export const conversationStartersOutputSchema = z.object({
     confidence: confidenceSchema,
-    conversation_starters: z.array(conversationStarterSchema).min(3).max(5),
+    conversation_starters: z.array(conversationStarterSchema).min(0).max(5),
     sources_used: z.array(z.string().regex(/^S\d+$/))
 });
+// ============================================================================
+// REPORT-SPECIFIC SECTIONS
+// ============================================================================
+export const investmentStrategyOutputSchema = z.object({
+    confidence: confidenceSchema,
+    strategy_summary: z.string().min(80),
+    focus_areas: z.array(z.string()).min(0).max(6),
+    sector_focus: z.array(z.string()).min(0).max(6),
+    platform_vs_addon_patterns: z.array(z.string()).min(0).max(5),
+    sources_used: z.array(z.string().regex(/^S\d+$/))
+});
+export const portfolioSnapshotOutputSchema = z.object({
+    confidence: confidenceSchema,
+    summary: z.string().min(80),
+    portfolio_companies: z.array(z.object({
+        name: z.string(),
+        sector: z.string(),
+        platform_or_addon: z.string(),
+        geography: z.string().nullish(),
+        notes: z.string().nullish(),
+        source: z.string().regex(/^S\d+$/)
+    })).min(0),
+    sources_used: z.array(z.string().regex(/^S\d+$/))
+});
+export const dealActivityOutputSchema = z.object({
+    confidence: confidenceSchema,
+    summary: z.string().min(80),
+    deals: z.array(z.object({
+        company: z.string(),
+        date: z.string(),
+        deal_type: z.string(),
+        rationale: z.string().min(30),
+        source: z.string().regex(/^S\d+$/)
+    })).min(0),
+    sources_used: z.array(z.string().regex(/^S\d+$/))
+});
+export const dealTeamOutputSchema = z.object({
+    confidence: confidenceSchema,
+    stakeholders: z.array(z.object({
+        name: z.string(),
+        title: z.string(),
+        role: z.string(),
+        focus_area: z.string().nullish(),
+        source: z.string().regex(/^S\d+$/)
+    })).min(0),
+    notes: z.string().min(50).nullish(),
+    sources_used: z.array(z.string().regex(/^S\d+$/))
+});
+export const portfolioMaturityOutputSchema = z.object({
+    confidence: confidenceSchema,
+    summary: z.string().min(80),
+    holdings: z.array(z.object({
+        company: z.string(),
+        acquisition_period: z.string().nullish(),
+        holding_period_years: z.number().nullable().optional(),
+        exit_signal: z.string().min(30),
+        source: z.string().regex(/^S\d+$/)
+    })).min(0),
+    sources_used: z.array(z.string().regex(/^S\d+$/))
+});
+export const leadershipAndGovernanceOutputSchema = z.object({
+    confidence: confidenceSchema,
+    leadership: z.array(z.object({
+        name: z.string(),
+        title: z.string(),
+        focus_area: z.string().nullish(),
+        source: z.string().regex(/^S\d+$/)
+    })).min(0),
+    governance_notes: z.string().min(50),
+    sources_used: z.array(z.string().regex(/^S\d+$/))
+});
+export const strategicPrioritiesOutputSchema = z.object({
+    confidence: confidenceSchema,
+    priorities: z.array(z.object({
+        priority: z.string(),
+        description: z.string().min(40),
+        source: z.string().regex(/^S\d+$/)
+    })).min(0).max(6),
+    transformation_themes: z.array(z.string()).min(0).max(5),
+    sources_used: z.array(z.string().regex(/^S\d+$/))
+});
+export const operatingCapabilitiesOutputSchema = z.object({
+    confidence: confidenceSchema,
+    capabilities: z.array(z.object({
+        capability: z.string(),
+        description: z.string().min(40),
+        maturity: z.enum(['Early', 'Developing', 'Advanced']).nullish(),
+        source: z.string().regex(/^S\d+$/)
+    })).min(0).max(8),
+    gaps: z.array(z.string()).nullish(),
+    sources_used: z.array(z.string().regex(/^S\d+$/))
+});
+// ============================================================================
+// SECTION: DISTRIBUTION ANALYSIS (Insurance)
+// ============================================================================
+export const distributionAnalysisOutputSchema = z.object({
+    confidence: confidenceSchema,
+    summary: z.string().min(50),
+    channels: z.array(z.object({
+        channel_type: z.enum(['Captive Agents', 'Independent Brokers', 'Direct', 'Bancassurance', 'Affinity/Worksite', 'Other']),
+        description: z.string().min(20),
+        premium_share_pct: z.number().min(0).max(100).nullable().optional(),
+        key_partners: z.array(z.string()).optional(),
+        trend: z.enum(['Growing', 'Stable', 'Declining']),
+        source: z.string().regex(/^S\d+$/)
+    })).min(0).max(6),
+    distribution_costs: z.object({
+        acquisition_cost_ratio: z.number().min(0).max(100).nullable().optional(),
+        commission_rates: z.record(z.string(), z.number()).optional(),
+        notes: z.string(),
+        source: z.string().regex(/^S\d+$/)
+    }),
+    digital_capabilities: z.object({
+        online_quoting: z.boolean(),
+        self_service_portal: z.boolean(),
+        mobile_app: z.boolean(),
+        notes: z.string(),
+        source: z.string().regex(/^S\d+$/)
+    }),
+    competitive_positioning: z.string().min(50),
+    sources_used: z.array(z.string().regex(/^S\d+$/))
+});
+// ============================================================================
+// SECTION: KEY EXECS AND BOARD MEMBERS (Core)
+// ============================================================================
+export const boardMemberSchema = z.object({
+    name: z.string().min(1),
+    role: z.string().min(1),
+    committees: z.array(z.string()),
+    background: z.string().min(20),
+    tenure: z.string().nullish(),
+    other_boards: z.array(z.string()),
+    source: z.string().regex(/^S\d+$/)
+});
+export const cSuiteExecutiveSchema = z.object({
+    name: z.string().min(1),
+    title: z.string().min(1),
+    role_description: z.string().min(10),
+    background: z.string().min(20),
+    tenure: z.string().nullish(),
+    performance_actions: z.array(z.string()),
+    geography_relevance: z.enum(['High', 'Medium', 'Low']).nullish(),
+    source: z.string().regex(/^S\d+$/)
+});
+export const businessUnitLeaderSchema = z.object({
+    name: z.string().min(1),
+    title: z.string().min(1),
+    business_unit: z.string().min(1),
+    role_description: z.string().min(10),
+    background: z.string().min(10),
+    performance_actions: z.array(z.string()),
+    geography_relevance: z.enum(['High', 'Medium', 'Low']).nullish(),
+    source: z.string().regex(/^S\d+$/)
+});
+export const leadershipChangeSchema = z.object({
+    date: z.string(),
+    change_type: z.enum(['New Hire', 'Departure', 'Promotion', 'Reorganization']),
+    description: z.string().min(20),
+    implications: z.string().min(20),
+    source: z.string().regex(/^S\d+$/)
+});
+export const keyExecsAndBoardOutputSchema = z.object({
+    confidence: confidenceSchema,
+    board_of_directors: z.object({
+        summary: z.string().min(30),
+        members: z.array(boardMemberSchema)
+    }),
+    c_suite: z.object({
+        summary: z.string().min(30),
+        executives: z.array(cSuiteExecutiveSchema).min(0)
+    }),
+    business_unit_leaders: z.object({
+        summary: z.string().min(10),
+        leaders: z.array(businessUnitLeaderSchema)
+    }),
+    recent_leadership_changes: z.array(leadershipChangeSchema),
+    sources_used: z.array(z.string().regex(/^S\d+$/))
+});
+// ============================================================================
+// SECTION 10: APPENDIX
+// ============================================================================
 export const sourceReferenceDetailedSchema = sourceReferenceSchema.extend({
     sections_used_in: z.array(z.string()).min(1)
 });
 export const fxRateDetailedSchema = z.object({
     currency_pair: z.string(),
-    rate: z.number().positive(),
+    rate: nullablePositiveNumber,
     source: fxSourceSchema,
     source_description: z.string()
 });
@@ -365,8 +612,42 @@ export const appendixOutputSchema = z.object({
         })
     }),
     derived_metrics: z.array(derivedMetricDetailedSchema),
-    renumbering_notes: z.string().optional()
+    renumbering_notes: z.string().nullish()
 });
+const BASE_SECTION_SCHEMAS = {
+    foundation: foundationOutputSchema,
+    exec_summary: execSummaryOutputSchema,
+    financial_snapshot: financialSnapshotOutputSchema,
+    company_overview: companyOverviewOutputSchema,
+    key_execs_and_board: keyExecsAndBoardOutputSchema,
+    investment_strategy: investmentStrategyOutputSchema,
+    portfolio_snapshot: portfolioSnapshotOutputSchema,
+    deal_activity: dealActivityOutputSchema,
+    deal_team: dealTeamOutputSchema,
+    portfolio_maturity: portfolioMaturityOutputSchema,
+    leadership_and_governance: leadershipAndGovernanceOutputSchema,
+    strategic_priorities: strategicPrioritiesOutputSchema,
+    operating_capabilities: operatingCapabilitiesOutputSchema,
+    distribution_analysis: distributionAnalysisOutputSchema,
+    segment_analysis: segmentAnalysisOutputSchema,
+    trends: trendsOutputSchema,
+    peer_benchmarking: peerBenchmarkingOutputSchema,
+    sku_opportunities: skuOpportunitiesOutputSchema,
+    recent_news: recentNewsOutputSchema,
+    conversation_starters: conversationStartersOutputSchema,
+    appendix: appendixOutputSchema
+};
+export const getValidationSchema = (stageId, reportType) => {
+    // Placeholder for preset-specific overrides (Generic/PE/FS). Defaults to base schema.
+    void reportType;
+    return BASE_SECTION_SCHEMAS[stageId];
+};
+// ============================================================================
+// VALIDATION HELPER FUNCTIONS
+// ============================================================================
+/**
+ * Validates and parses Claude output for any section
+ */
 export function validateSectionOutput(schema, output) {
     const result = schema.safeParse(output);
     if (result.success) {
@@ -376,6 +657,9 @@ export function validateSectionOutput(schema, output) {
         return { success: false, error: result.error };
     }
 }
+/**
+ * Type-safe validation with helpful error messages
+ */
 export function validateWithFeedback(schema, output, sectionName) {
     try {
         return schema.parse(output);
@@ -388,11 +672,15 @@ export function validateWithFeedback(schema, output, sectionName) {
         throw error;
     }
 }
+/**
+ * Validates all sections in complete research output
+ */
 export function validateCompleteResearch(output) {
     if (typeof output !== 'object' || output === null)
         return false;
     const research = output;
     try {
+        // Validate each section if present
         if (research.foundation)
             foundationOutputSchema.parse(research.foundation);
         if (research.section1)

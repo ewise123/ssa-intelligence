@@ -1,43 +1,15 @@
-export interface FoundationOutput {
-    company_basics: {
-        legal_name: string;
-        ticker?: string;
-        ownership: 'Public' | 'Private' | 'Subsidiary';
-        headquarters: string;
-        global_revenue_usd: number;
-        global_employees: number;
-        fiscal_year_end: string;
-    };
-    geography_specifics: {
-        regional_revenue_usd: number;
-        regional_revenue_pct: number;
-        regional_employees: number;
-        facilities: Array<{
-            name: string;
-            location: string;
-            type: string;
-        }>;
-        key_facts: string[];
-    };
-    source_catalog: Array<{
-        id: string;
-        citation: string;
-        url?: string;
-        type: string;
-        date: string;
-    }>;
-    segment_structure: Array<{
-        name: string;
-        revenue_pct: number;
-        description: string;
-    }>;
-}
+/**
+ * Section 4: Segment Analysis - TypeScript Implementation
+ * Comprehensive implementation with fallback strategy for large responses
+ */
+import { type ReportTypeId } from './report-type-addendums.js';
+import type { FoundationOutput } from './types.js';
 export interface Section2Context {
     kpi_table: {
         metrics: Array<{
             metric: string;
-            company: number | string;
-            industry_avg: number | string;
+            company: number | string | null;
+            industry_avg: number | string | null;
             source: string;
         }>;
     };
@@ -47,13 +19,14 @@ export interface Section4Input {
     foundation: FoundationOutput;
     companyName: string;
     geography: string;
-    section2Context?: Section2Context;
+    section2?: Section2Context;
+    reportType?: ReportTypeId;
 }
 export interface SegmentFinancialMetric {
     metric: string;
-    segment: number | string;
-    company_avg: number | string;
-    industry_avg: number | string;
+    segment: number | string | null;
+    company_avg: number | string | null;
+    industry_avg: number | string | null;
     source: string;
 }
 export interface AnalystQuote {
@@ -94,19 +67,34 @@ export interface Section4Output {
     segments: SegmentAnalysis[];
     sources_used: string[];
 }
+/**
+ * Builds comprehensive prompt attempting all segments in one call
+ */
 export declare function buildSegmentAnalysisPrompt(input: Section4Input): string;
+/**
+ * Builds fallback prompt for individual segment
+ * Used when comprehensive prompt truncates
+ */
 export declare function buildSection4SegmentPrompt(input: Section4Input, segmentName: string): string;
 export declare function validateSection4Output(output: any): output is Section4Output;
 export declare function validateSegmentOutput(output: any): output is SegmentAnalysis;
 export declare function formatSection4ForDocument(output: Section4Output): string;
+/**
+ * Combines multiple segment outputs into complete Section 4
+ */
 export declare function combineSegmentOutputs(overview: string, segments: SegmentAnalysis[], confidence: {
     level: 'HIGH' | 'MEDIUM' | 'LOW';
     reason: string;
 }): Section4Output;
+/**
+ * Gets segment by name
+ */
 export declare function getSegmentByName(output: Section4Output, segmentName: string): SegmentAnalysis | undefined;
+/**
+ * Compares segment performance vs company average
+ */
 export declare function compareSegmentToCompany(segment: SegmentAnalysis, metricName: string): {
-    segment: number | string;
-    company: number | string;
+    segment: number | string | null;
+    company: number | string | null;
     delta: number | string;
 } | null;
-//# sourceMappingURL=segment-analysis.d.ts.map

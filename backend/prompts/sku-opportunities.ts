@@ -38,8 +38,8 @@ export interface Section7Input {
   foundation: FoundationOutput;
   companyName: string;
   geography: string;
-  section5Context?: Section5Context;
-  section6Context?: Section6Context;
+  section5?: Section5Context;
+  section6?: Section6Context;
   reportType?: ReportTypeId;
 }
 
@@ -55,7 +55,7 @@ export interface Opportunity {
   source: string;
   aligned_sku: string;
   priority: Priority;
-  severity: number;
+  severity: number | null;  // 1-10, null if cannot be assessed
   severity_rationale: string;
   geography_relevance: string;
   potential_value_levers: string[];
@@ -110,11 +110,11 @@ export const SKU_SUB_OFFERINGS = {
 // ============================================================================
 
 export function buildSkuOpportunitiesPrompt(input: Section7Input): string {
-  const { foundation, companyName, geography, section5Context, section6Context } = input;
+  const { foundation, companyName, geography, section5, section6 } = input;
   
   const foundationJson = JSON.stringify(foundation, null, 2);
-  const section5Json = section5Context ? JSON.stringify(section5Context, null, 2) : 'Not provided';
-  const section6Json = section6Context ? JSON.stringify(section6Context, null, 2) : 'Not provided';
+  const section5Json = section5 ? JSON.stringify(section5, null, 2) : 'Not provided';
+  const section6Json = section6 ? JSON.stringify(section6, null, 2) : 'Not provided';
   
   const basePrompt = `# Section 7: SKU-Relevant Opportunity Mapping - Research Prompt
 
@@ -256,12 +256,12 @@ interface Section7Output {
     source: string;
     aligned_sku: string;
     priority: 'High' | 'Medium' | 'Low';
-    severity: number;
+    severity: number | null;  // 1-10, null if cannot be assessed
     severity_rationale: string;
     geography_relevance: string;
     potential_value_levers: string[];
   }>;
-  
+
   sources_used: string[];
 }
 \`\`\`
@@ -326,6 +326,14 @@ interface Section7Output {
 
 ---
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate opportunities.** Never invent problems, SKU alignments, or value levers that cannot be confirmed from public sources.
+- **Return an empty \`opportunities\` array** if no genuine alignments can be identified — this is explicitly acceptable.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+
+---
+
 ## CRITICAL REMINDERS
 
 1. **Only genuine alignments** - do not force fit
@@ -371,18 +379,18 @@ export function validateSection7Output(output: any): output is Section7Output {
   // Validate each opportunity
   for (const opp of output.opportunities) {
     if (!opp.issue_area || !opp.public_problem || !opp.source ||
-        !opp.aligned_sku || !opp.priority || 
-        typeof opp.severity !== 'number' ||
+        !opp.aligned_sku || !opp.priority ||
+        (opp.severity !== null && typeof opp.severity !== 'number') ||
         !opp.severity_rationale || !opp.geography_relevance ||
         !Array.isArray(opp.potential_value_levers)) {
       return false;
     }
-    
+
     if (!['High', 'Medium', 'Low'].includes(opp.priority)) {
       return false;
     }
-    
-    if (opp.severity < 1 || opp.severity > 10) {
+
+    if (opp.severity !== null && (opp.severity < 1 || opp.severity > 10)) {
       return false;
     }
     
@@ -413,7 +421,7 @@ export function formatSection7ForDocument(output: Section7Output): string {
   for (const opp of output.opportunities) {
     const valueLeversList = opp.potential_value_levers.map(vl => `• ${vl}`).join('<br>');
     
-    markdown += `| ${opp.issue_area} | ${opp.public_problem} (${opp.source}) | ${opp.aligned_sku} | ${opp.priority} | ${opp.severity}/10 | ${valueLeversList} |\n`;
+    markdown += `| ${opp.issue_area} | ${opp.public_problem} (${opp.source}) | ${opp.aligned_sku} | ${opp.priority} | ${opp.severity !== null ? `${opp.severity}/10` : 'N/A'} | ${valueLeversList} |\n`;
   }
   
   markdown += `\n`;
@@ -424,7 +432,7 @@ export function formatSection7ForDocument(output: Section7Output): string {
   for (let i = 0; i < output.opportunities.length; i++) {
     const opp = output.opportunities[i];
     markdown += `### ${i + 1}. ${opp.issue_area}\n\n`;
-    markdown += `**Priority:** ${opp.priority} | **Severity:** ${opp.severity}/10\n\n`;
+    markdown += `**Priority:** ${opp.priority} | **Severity:** ${opp.severity !== null ? `${opp.severity}/10` : 'N/A'}\n\n`;
     markdown += `**Problem:** ${opp.public_problem}\n\n`;
     markdown += `**Severity Rationale:** ${opp.severity_rationale}\n\n`;
     markdown += `**Geography Relevance:** ${opp.geography_relevance}\n\n`;
@@ -457,8 +465,8 @@ export function getHighSeverityOpportunities(
   minSeverity: number = 7
 ): Opportunity[] {
   return output.opportunities
-    .filter(o => o.severity >= minSeverity)
-    .sort((a, b) => b.severity - a.severity);
+    .filter(o => o.severity !== null && o.severity >= minSeverity)
+    .sort((a, b) => (b.severity ?? 0) - (a.severity ?? 0));
 }
 
 /**
@@ -482,7 +490,8 @@ export function groupBySKU(output: Section7Output): Record<string, Opportunity[]
  * Calculates average severity score
  */
 export function calculateAverageSeverity(output: Section7Output): number {
-  if (output.opportunities.length === 0) return 0;
-  const sum = output.opportunities.reduce((acc, o) => acc + o.severity, 0);
-  return Math.round((sum / output.opportunities.length) * 10) / 10;
+  const scored = output.opportunities.filter(o => o.severity !== null);
+  if (scored.length === 0) return 0;
+  const sum = scored.reduce((acc, o) => acc + (o.severity as number), 0);
+  return Math.round((sum / scored.length) * 10) / 10;
 }

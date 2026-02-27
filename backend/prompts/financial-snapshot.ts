@@ -32,8 +32,8 @@ export interface Section2Output {
   kpi_table: {
     metrics: Array<{
       metric: string;
-      company: number | string;
-      industry_avg: number | string;
+      company: number | string | null;
+      industry_avg: number | string | null;
       source: string;
       unit?: string; // e.g., "USD millions", "%", "bps", "days"
       value_type?: 'currency' | 'percent' | 'ratio' | 'number';
@@ -291,8 +291,8 @@ interface Section2Output {
   kpi_table: {
     metrics: Array<{
       metric: string;           // Exact name from style guide Section 8
-      company: number | string; // Number value or "-" if unavailable
-      industry_avg: number | string;
+      company: number | string | null; // Number value or null if unavailable
+      industry_avg: number | string | null;
       source: string;           // "S1, S3" format
     }>;
   };
@@ -323,13 +323,13 @@ interface Section2Output {
 ## NUMBER FORMATTING (STRICT)
 
 - **Units belong in the metric name** (e.g., \`Revenue ($M)\`, \`EBITDA Margin (%)\`, \`Net Leverage (x)\`).
-- **Table values must be numeric only** (or \`-\`), with no \`$\`, \`%\`, \`M/B\`, or \`x\` suffixes.
+- **Table values must be numeric only** (or null), with no \`$\`, \`%\`, \`M/B\`, or \`x\` suffixes.
 - **Renderer will apply formatting** based on units in the metric name.
 - **Output must start with \`{\` and end with \`}\`.** No leading headings or commentary.
 
 ## REQUIRED METRICS FOR KPI TABLE
 
-**The table MUST include these metrics (use "-" if unavailable):**
+**The table MUST include these metrics (use null if unavailable):**
 
 ${requiredKpiList}
 
@@ -366,11 +366,7 @@ ${reportTypeFocus}
 6. **FX impacts:** If material (>5% revenue impact)
    - Example: "EUR/USD headwind of ~3% masked underlying operational performance in European segment (S1)."
 
-**MUST end with:**
-\`\`\`
-FX rate source: {A/B/C}
-Industry average source: {A/B/C}
-\`\`\`
+**Do NOT include FX rate source or industry average source codes in the summary text.** These are captured in the dedicated \`fx_source\` and \`industry_source\` fields and rendered separately.
 
 ---
 
@@ -413,17 +409,17 @@ WRONG patterns:
 ## DATA QUALITY RULES (Style Guide Section 10)
 
 ### Unavailable Data
-**Use "-" for missing metrics:**
+**Use null for missing metrics:**
 \`\`\`json
 {
   "metric": "Gross Margin",
-  "company": "-",
+  "company": null,
   "industry_avg": 42.5,
   "source": "S7"
 }
 \`\`\`
 
-**Never return a missing-input or data-availability error.** Always return the full schema with "-" placeholders.
+**Never return a missing-input or data-availability error.** Always return the full schema with null placeholders.
 
 ### Derived Metrics
 **Flag with asterisk and document:**
@@ -543,18 +539,26 @@ WRONG patterns:
 - [ ] Confidence assigned with reason
 - [ ] Summary is 4-6 sentences
 - [ ] Summary emphasizes ${geography} (75-80%)
-- [ ] Summary ends with FX and industry source notes
-- [ ] All ${requiredKpis.length} required metrics in table (use "-" if unavailable)
+- [ ] Summary does NOT contain FX/industry source codes (those go in fx_source and industry_source fields)
+- [ ] All ${requiredKpis.length} required metrics in table (use null if unavailable)
 - [ ] Table uses exact metric names from style guide
 - [ ] ALL metrics cite sources (S# format)
 - [ ] Derived metrics flagged with * in table
 - [ ] Derived metrics documented in array
 - [ ] All currencies in USD
 - [ ] Geography focus maintained throughout
-- [ ] No speculation (use "-" for unavailable)
+- [ ] No speculation (use null for unavailable)
 - [ ] Sources_used array populated
 
 ---
+
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate financial data.** Never invent revenue figures, margins, or other metrics that cannot be confirmed from public sources.
+- **Use \`null\`** for unavailable numeric metric values (not 0, not -1, not "–"). The formatter will handle display.
+- **Use the \`summary\` field** to explain data limitations (e.g., "Financial data is not publicly available for this private company.").
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- For KPI table rows where neither the company value nor industry average can be sourced, still include the metric row with \`null\` values — the formatter will filter empty rows.
 
 ---
 
@@ -664,8 +668,9 @@ export function formatSection2ForDocument(output: Section2Output): string {
 
   const formatTableValue = (
     metricName: string,
-    value: number | string
+    value: number | string | null
   ) => {
+    if (value === null || value === undefined) return '–';
     if (typeof value !== 'number') return value;
 
     const unit = resolveMetricUnit(metricName);

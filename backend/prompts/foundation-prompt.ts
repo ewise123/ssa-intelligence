@@ -49,7 +49,7 @@ export function buildFoundationPrompt(inputs: FoundationPromptInputs): string {
 - Never stop midway or ask for approval to continue
 - Gather data from ALL 10 source categories
 - Output structured JSON matching the exact schema below
-- Use "–" for unavailable data (no speculation)
+- Use null for unavailable numeric data; use "–" for unavailable text fields (no speculation)
 - Continue research even if it takes time
 
 ---
@@ -288,7 +288,8 @@ For EACH business segment the company operates:
 **Note in output:** \`"industry_avg_source": "A"\` or \`"B"\`
 
 ### Data Validation Rules
-- **If data cannot be verified** → Output: \`"–"\`
+- **If a numeric value cannot be verified** → Output: \`null\` (not 0, not -1, not "–")
+- **If a text field cannot be verified** → Output: \`"–"\`
 - **If data is derived/calculated** → Flag with asterisk: \`"12.5*"\`
 - **If data conflicts across sources** → Use most recent, most authoritative source
 - **If geography-specific data unavailable** → Extrapolate carefully from global data and note methodology
@@ -337,15 +338,15 @@ interface FoundationOutput {
     ticker?: string;
     ownership: 'Public' | 'Private' | 'Subsidiary';
     headquarters: string;
-    global_revenue_usd: number;
-    global_employees: number;
+    global_revenue_usd: number | null;  // null if unknown — do NOT use 0 or -1 as placeholders
+    global_employees: number | null;    // null if unknown
     fiscal_year_end: string;
   };
-  
+
   geography_specifics: {
-    regional_revenue_usd: number;
-    regional_revenue_pct: number;
-    regional_employees: number;
+    regional_revenue_usd: number | null;  // null if unknown
+    regional_revenue_pct: number | null;  // 0-100, null if unknown
+    regional_employees: number | null;    // null if unknown
     facilities: Array<{
       name: string;
       location: string;
@@ -364,7 +365,7 @@ interface FoundationOutput {
   
   segment_structure: Array<{
     name: string;
-    revenue_pct: number;
+    revenue_pct: number | null;  // 0-100, null if unknown
     description: string;
   }>;
   
@@ -378,7 +379,7 @@ interface FoundationOutput {
   };
   
   fx_rates: Record<string, {
-    rate: number;
+    rate: number | null;  // null if rate unavailable
     source: 'A' | 'B' | 'C';
   }>;
   
@@ -394,7 +395,7 @@ interface FoundationOutput {
 ## OUTPUT VALIDATION REQUIREMENTS
 
 Before returning JSON, verify:
-- [ ] All fields populated or marked "–"
+- [ ] All fields populated (numeric fields use null if unknown; text fields use "–")
 - [ ] All currencies converted to USD
 - [ ] FX source noted (A/B/C)
 - [ ] Industry average source noted (A/B/C)
@@ -411,8 +412,8 @@ Before returning JSON, verify:
 ## ERROR HANDLING
 
 **If you encounter:**
-- **Low confidence data** → Use "–" but complete the section
-- **Missing data** → Use "–" but maintain structure
+- **Low confidence data** → Use null for numeric fields, "–" for text fields, but complete the section
+- **Missing data** → Use null for numeric fields, "–" for text fields, but maintain structure
 - **Slow research** → Continue anyway, do not stop
 - **Conflicting sources** → Use most authoritative, note discrepancy
 
@@ -443,7 +444,7 @@ Before returning JSON, verify:
 
 1. **Complete ALL research** before returning output (no stopping midway)
 2. **Output structured JSON** matching exact schema
-3. **Use "–" for unavailable data** (never speculate)
+3. **Use null for unavailable numeric data**, "–" for unavailable text (never speculate)
 4. **Convert ALL currencies to USD** with source noted
 5. **75-80% geography focus** in all sections
 6. **ONE quote per analyst source**, max 15 words

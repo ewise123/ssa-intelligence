@@ -1,37 +1,9 @@
-export interface FoundationOutput {
-    company_basics: {
-        legal_name: string;
-        ticker?: string;
-        ownership: 'Public' | 'Private' | 'Subsidiary';
-        headquarters: string;
-        global_revenue_usd: number;
-        global_employees: number;
-        fiscal_year_end: string;
-    };
-    geography_specifics: {
-        regional_revenue_usd: number;
-        regional_revenue_pct: number;
-        regional_employees: number;
-        facilities: Array<{
-            name: string;
-            location: string;
-            type: string;
-        }>;
-        key_facts: string[];
-    };
-    source_catalog: Array<{
-        id: string;
-        citation: string;
-        url?: string;
-        type: string;
-        date: string;
-    }>;
-    segment_structure: Array<{
-        name: string;
-        revenue_pct: number;
-        description: string;
-    }>;
-}
+/**
+ * Section 5: Trends - TypeScript Implementation
+ * Generates prompt and types for Trends section
+ */
+import { type ReportTypeId } from './report-type-addendums.js';
+import type { FoundationOutput } from './types.js';
 export interface Section3Context {
     business_description: {
         overview: string;
@@ -65,15 +37,16 @@ export interface Section5Input {
     foundation: FoundationOutput;
     companyName: string;
     geography: string;
-    section3Context?: Section3Context;
-    section4Context?: Section4Context;
+    section3?: Section3Context;
+    section4?: Section4Context;
+    reportType?: ReportTypeId;
 }
 export type TrendDirection = 'Positive' | 'Negative' | 'Neutral';
 export interface TrendBase {
     trend: string;
     description: string;
     direction: TrendDirection;
-    impact_score: number;
+    impact_score: number | null;
     geography_relevance: string;
     source: string;
 }
@@ -114,7 +87,15 @@ export interface Section5Output {
 export declare function buildTrendsPrompt(input: Section5Input): string;
 export declare function validateSection5Output(output: any): output is Section5Output;
 export declare function formatSection5ForDocument(output: Section5Output): string;
+/**
+ * Filters trends by direction
+ */
 export declare function filterTrendsByDirection(trends: TrendBase[], direction: TrendDirection): TrendBase[];
+/**
+ * Gets trends above a certain impact threshold
+ */
 export declare function getHighImpactTrends(trends: TrendBase[], minScore?: number): TrendBase[];
+/**
+ * Calculates average impact score
+ */
 export declare function calculateAverageImpact(trends: TrendBase[]): number;
-//# sourceMappingURL=trends.d.ts.map

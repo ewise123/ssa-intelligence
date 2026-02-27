@@ -88,6 +88,15 @@ interface OperatingCapabilitiesOutput {
 }
 \`\`\`
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent capabilities or gaps that cannot be confirmed from public sources.
+- **Return empty arrays** for \`capabilities\` and/or \`gaps\` if no real data can be identified.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- **This rule supersedes "Include 3-8 capabilities with sources"** when no verifiable data is available.
+
+---
+
 ## CRITICAL REMINDERS
 
 1. Follow style guide: All formatting rules apply

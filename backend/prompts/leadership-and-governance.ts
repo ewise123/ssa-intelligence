@@ -93,6 +93,18 @@ interface LeadershipAndGovernanceOutput {
 }
 \`\`\`
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+**For private companies or when leadership cannot be identified:**
+- **Do NOT fabricate placeholder entries.** Never return entries with names like "Information Not Available", "Not Disclosed", "Unknown", or similar placeholders.
+- **Return an empty \`leadership\` array** if no real individuals can be identified from public sources.
+- **Use \`governance_notes\`** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+
+**This rule supersedes "Include at least 3 leaders"** — it is better to return an empty array with a clear governance note than to invent placeholder people entries.
+
+---
+
 ## CRITICAL REMINDERS
 
 1. Follow style guide: All formatting rules apply

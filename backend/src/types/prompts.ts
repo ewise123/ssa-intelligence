@@ -30,15 +30,15 @@ export interface CompanyBasics {
   ticker?: string;
   ownership: 'Public' | 'Private' | 'Subsidiary';
   headquarters: string;
-  global_revenue_usd: number;
-  global_employees: number;
+  global_revenue_usd: number | string | null;
+  global_employees: number | null;
   fiscal_year_end: string;
 }
 
 export interface GeographySpecifics {
-  regional_revenue_usd: number;
-  regional_revenue_pct: number;
-  regional_employees: number;
+  regional_revenue_usd: number | string | null;
+  regional_revenue_pct: number | null;
+  regional_employees: number | null;
   facilities: Array<{
     name: string;
     location: string;
@@ -49,12 +49,12 @@ export interface GeographySpecifics {
 
 export interface SegmentStructure {
   name: string;
-  revenue_pct: number;
+  revenue_pct: number | null;
   description: string;
 }
 
 export interface FxRate {
-  rate: number;
+  rate: number | null;
   source: 'A' | 'B' | 'C';
 }
 
@@ -101,7 +101,7 @@ export interface CreateJobRequest {
   industry?: string;
   focusAreas?: string[];
   requestedBy?: string;
-  reportType?: 'GENERIC' | 'INDUSTRIALS' | 'PE' | 'FS';
+  reportType?: 'GENERIC' | 'INDUSTRIALS' | 'PE' | 'FS' | 'INSURANCE';
   selectedSections?: string[];
   userAddedPrompt?: string;
   visibilityScope?: 'PRIVATE' | 'GROUP';
@@ -123,7 +123,7 @@ export interface JobStatusResponse {
   currentStage?: string;
   companyName: string;
   geography: string;
-  reportType?: 'GENERIC' | 'INDUSTRIALS' | 'PE' | 'FS';
+  reportType?: 'GENERIC' | 'INDUSTRIALS' | 'PE' | 'FS' | 'INSURANCE';
   visibilityScope?: 'PRIVATE' | 'GROUP';
   selectedSections?: string[];
   userAddedPrompt?: string;
@@ -154,7 +154,7 @@ export interface ResearchDetailResponse {
     companyName: string;
     geography: string;
     industry?: string;
-    reportType?: 'GENERIC' | 'INDUSTRIALS' | 'PE' | 'FS';
+    reportType?: 'GENERIC' | 'INDUSTRIALS' | 'PE' | 'FS' | 'INSURANCE';
     visibilityScope?: 'PRIVATE' | 'GROUP';
     selectedSections?: string[];
     userAddedPrompt?: string;
@@ -191,7 +191,7 @@ export interface ListResearchResponse {
     companyName: string;
     geography: string;
     industry?: string;
-    reportType?: 'GENERIC' | 'INDUSTRIALS' | 'PE' | 'FS';
+    reportType?: 'GENERIC' | 'INDUSTRIALS' | 'PE' | 'FS' | 'INSURANCE';
     visibilityScope?: 'PRIVATE' | 'GROUP';
     selectedSections?: string[];
     userAddedPrompt?: string;

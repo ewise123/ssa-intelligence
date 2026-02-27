@@ -77,6 +77,15 @@ interface InvestmentStrategyOutput {
 }
 \`\`\`
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent focus areas, sector focuses, or patterns that cannot be confirmed from public sources.
+- **Return empty arrays** for any category where no real data can be identified.
+- **Use the \`strategy_summary\` field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+
+---
+
 ## CRITICAL REMINDERS
 
 1. Follow style guide: All formatting rules apply
