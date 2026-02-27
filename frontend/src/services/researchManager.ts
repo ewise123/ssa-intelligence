@@ -260,7 +260,7 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
                 const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
                 const rawCompany = typeof m.company === 'string' ? stripInlineSource(m.company) : m.company;
                 const rawIndustry = typeof m.industry_avg === 'string' ? stripInlineSource(m.industry_avg) : m.industry_avg;
-                const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
+                const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
                 const companyValue = formatMetricValue(metricName, rawCompany, opts);
                 const industryValue = formatMetricValue(metricName, rawIndustry, opts);
                 return [
@@ -641,7 +641,7 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
                 ['Metric', 'Segment', 'Company Avg', 'Industry Avg', 'Source'],
                 seg.financial_snapshot.table.map((m: any) => {
                   const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
-                  const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
+                  const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
                   const segmentValue = formatMetricValue(metricName, m.segment, opts);
                   const companyValue = formatMetricValue(metricName, m.company_avg, opts);
                   const industryValue = formatMetricValue(metricName, m.industry_avg, opts);
@@ -731,7 +731,7 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
           mdTable(
             ['Metric', 'Company', 'Peer1', 'Peer2', 'Peer3', 'Peer4', 'Industry Avg', 'Source'],
             populatedMetrics.map((m: any) => {
-              const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
+              const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
               const fmt = (v: any) => isEmptyValue(v) ? '' : formatMetricValue(m.metric, v, opts);
               return [
                 m.metric,

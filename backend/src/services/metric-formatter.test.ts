@@ -82,6 +82,11 @@ describe('formatCurrency', () => {
       expect(formatCurrency(2345, 'M')).toBe('$2.3B');
     });
 
+    it('promotes >= 1M to trillions', () => {
+      expect(formatCurrency(1_000_000, 'M')).toBe('$1T');
+      expect(formatCurrency(1_500_000, 'M')).toBe('$1.5T');
+    });
+
     it('handles negative values', () => {
       expect(formatCurrency(-1200, 'M')).toBe('-$1.2B');
       expect(formatCurrency(-500, 'M')).toBe('-$500M');
@@ -92,11 +97,17 @@ describe('formatCurrency', () => {
     });
   });
 
-  describe('$B scale', () => {
+  describe('$B scale with trillion promotion', () => {
     it('formats billion values', () => {
       expect(formatCurrency(0.5, 'B')).toBe('$0.5B');
       expect(formatCurrency(1.2, 'B')).toBe('$1.2B');
       expect(formatCurrency(15, 'B')).toBe('$15B');
+    });
+
+    it('promotes >= 1000 to trillions', () => {
+      expect(formatCurrency(1000, 'B')).toBe('$1T');
+      expect(formatCurrency(1500, 'B')).toBe('$1.5T');
+      expect(formatCurrency(2345, 'B')).toBe('$2.3T');
     });
   });
 
@@ -116,6 +127,11 @@ describe('formatCurrency', () => {
 
     it('promotes >= 1M to billions', () => {
       expect(formatCurrency(1500000, 'K')).toBe('$1.5B');
+    });
+
+    it('promotes >= 1B to trillions', () => {
+      expect(formatCurrency(1_000_000_000, 'K')).toBe('$1T');
+      expect(formatCurrency(1_500_000_000, 'K')).toBe('$1.5T');
     });
   });
 
@@ -251,6 +267,13 @@ describe('resolveMetricUnit', () => {
     expect(resolveMetricUnit('Revenue', 'EUR')).toEqual({ type: 'currency' });
     expect(resolveMetricUnit('Revenue', 'GBP')).toEqual({ type: 'currency' });
     expect(resolveMetricUnit('Revenue', 'JPY')).toEqual({ type: 'currency' });
+  });
+
+  it('handles trailing footnote markers (*, **)', () => {
+    expect(resolveMetricUnit('FRE Margin (%)*')).toEqual({ type: 'percent', suffix: '%' });
+    expect(resolveMetricUnit('Fee Rate (bps)**')).toEqual({ type: 'bps', suffix: ' bps' });
+    expect(resolveMetricUnit('Revenue ($M)*')).toEqual({ type: 'currency', scale: 'M' });
+    expect(resolveMetricUnit('Return on Equity (ROE) (%)*')).toEqual({ type: 'percent', suffix: '%' });
   });
 
   it('returns null for unrecognized metrics', () => {
@@ -416,42 +439,48 @@ describe('formatMetricValue', () => {
     });
   });
 
-  describe('tableMode (suppress scale suffix)', () => {
-    it('shows raw number with currency symbol when scale is M', () => {
-      expect(formatMetricValue('Revenue ($M)', 22300, { tableMode: true })).toBe('$22,300');
+  describe('trillion auto-promotion', () => {
+    it('promotes $M values >= 1,000,000 to trillions', () => {
+      expect(formatMetricValue('Revenue ($M)', 1_000_000)).toBe('$1T');
+      expect(formatMetricValue('Revenue ($M)', 1_500_000)).toBe('$1.5T');
     });
 
-    it('shows raw number with currency symbol when scale is B', () => {
-      expect(formatMetricValue('AUM ($B)', 1.2, { tableMode: true })).toBe('$1.2');
+    it('promotes $B values >= 1,000 to trillions', () => {
+      expect(formatMetricValue('AUM ($B)', 1005)).toBe('$1T');
+      expect(formatMetricValue('AUM ($B)', 1500)).toBe('$1.5T');
+      expect(formatMetricValue('AUM ($B)', 2345)).toBe('$2.3T');
     });
 
-    it('shows raw number with currency symbol when scale is K', () => {
-      expect(formatMetricValue('CapEx ($K)', 500, { tableMode: true })).toBe('$500');
+    it('promotes $K values >= 1B to trillions', () => {
+      expect(formatMetricValue('CapEx ($K)', 1_000_000_000)).toBe('$1T');
+      expect(formatMetricValue('CapEx ($K)', 1_500_000_000)).toBe('$1.5T');
     });
 
-    it('handles negative values in table mode', () => {
-      expect(formatMetricValue('Revenue ($M)', -500, { tableMode: true })).toBe('-$500');
+    it('does not promote below threshold', () => {
+      expect(formatMetricValue('AUM ($B)', 999)).toBe('$999B');
+      expect(formatMetricValue('Revenue ($M)', 500_000)).toBe('$500B');
+    });
+  });
+
+  describe('metric name with trailing footnote markers', () => {
+    it('parses percent with trailing *', () => {
+      expect(formatMetricValue('FRE Margin (%)*', 41)).toBe('41%');
     });
 
-    it('uses custom currency symbol in table mode', () => {
-      expect(formatMetricValue('Revenue ($M)', 22300, { tableMode: true, currency: 'EUR' })).toBe('€22,300');
+    it('parses bps with trailing *', () => {
+      expect(formatMetricValue('Management Fee Rate (bps)*', 81)).toBe('81 bps');
     });
 
-    it('does not affect currency without explicit scale', () => {
-      expect(formatMetricValue('Revenue ($)', 1234, { tableMode: true })).toBe('$1,234');
+    it('parses currency with trailing **', () => {
+      expect(formatMetricValue('Revenue ($M)**', 1200)).toBe('$1.2B');
     });
 
-    it('handles zero in table mode with scale', () => {
-      expect(formatMetricValue('Revenue ($M)', 0, { tableMode: true })).toBe('$0');
+    it('parses ratio with trailing *', () => {
+      expect(formatMetricValue('Net Leverage (x)*', 3.5)).toBe('3.5x');
     });
 
-    it('does not affect non-currency types', () => {
-      expect(formatMetricValue('EBITDA Margin (%)', 12.3, { tableMode: true })).toBe('12.3%');
-      expect(formatMetricValue('Net Leverage (x)', 3.5, { tableMode: true })).toBe('3.5x');
-    });
-
-    it('still auto-promotes when tableMode is false', () => {
-      expect(formatMetricValue('Revenue ($M)', 22300, { tableMode: false })).toBe('$22.3B');
+    it('handles metric name with multiple parentheticals and trailing *', () => {
+      expect(formatMetricValue('Return on Equity (ROE) (%)*', 18.5)).toBe('18.5%');
     });
   });
 

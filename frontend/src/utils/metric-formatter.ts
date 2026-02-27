@@ -27,8 +27,6 @@ export interface FormatMetricOptions {
   unitHint?: string | null;
   valueType?: string | null;
   currency?: string | null; // ISO 4217
-  /** When true, suppress scale suffix (K/M/B) — the column header already shows it. */
-  tableMode?: boolean;
 }
 
 // ── Currency Symbols ───────────────────────────────────────────────────────
@@ -103,15 +101,18 @@ export function formatCurrency(
 
   switch (scale) {
     case 'K': {
+      if (abs >= 1_000_000_000) return `${sign}${symbol}${trimDecimal(abs / 1_000_000_000)}T`;
       if (abs >= 1_000_000) return `${sign}${symbol}${trimDecimal(abs / 1_000_000)}B`;
       if (abs >= 1_000) return `${sign}${symbol}${trimDecimal(abs / 1_000)}M`;
       return `${sign}${symbol}${trimDecimal(abs, abs < 1 ? 1 : 0)}K`;
     }
     case 'M': {
+      if (abs >= 1_000_000) return `${sign}${symbol}${trimDecimal(abs / 1_000_000)}T`;
       if (abs >= 1_000) return `${sign}${symbol}${trimDecimal(abs / 1_000)}B`;
       return `${sign}${symbol}${trimDecimal(abs)}M`;
     }
     case 'B': {
+      if (abs >= 1_000) return `${sign}${symbol}${trimDecimal(abs / 1_000)}T`;
       return `${sign}${symbol}${trimDecimal(abs)}B`;
     }
   }
@@ -141,7 +142,8 @@ export function resolveMetricUnit(
   unitHint?: string | null,
   valueType?: string | null,
 ): MetricUnit | null {
-  const match = metricName.match(/\(([^)]+)\)\s*$/);
+  // Allow trailing footnote markers like * or ** after the closing paren
+  const match = metricName.match(/\(([^)]+)\)\s*\**\s*$/);
   const token = match?.[1]?.toLowerCase();
 
   if (token) {
@@ -253,11 +255,6 @@ export function formatMetricValue(
       return `${formatNumber(numeric)}${unit.suffix ?? ' years'}`;
     case 'currency': {
       const symbol = currencySymbol(options?.currency);
-      if (options?.tableMode && unit.scale) {
-        // In table mode the column header already shows the scale, so just
-        // format the raw number with currency symbol and comma grouping.
-        return `${numeric < 0 ? '-' : ''}${symbol}${formatNumber(Math.abs(numeric))}`;
-      }
       return formatCurrency(numeric, unit.scale, symbol);
     }
     case 'number':

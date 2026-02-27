@@ -288,7 +288,7 @@ export function renderFinancialSnapshot(data: any): DocxElement[] {
           const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
           const rawCompany = typeof m.company === 'string' ? stripInlineSource(m.company) : m.company;
           const rawIndustry = typeof m.industry_avg === 'string' ? stripInlineSource(m.industry_avg) : m.industry_avg;
-          const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
+          const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
           return [metricName, formatMetricValue(metricName, rawCompany, opts), formatMetricValue(metricName, rawIndustry, opts), m.source || ''];
         }),
       ),
@@ -706,7 +706,7 @@ export function renderSegmentAnalysis(data: any): DocxElement[] {
             ['Metric', 'Segment', 'Company Avg', 'Industry Avg', 'Source'],
             seg.financial_snapshot.table.map((m: any) => {
               const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
-              const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
+              const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
               return [
                 metricName,
                 formatMetricValue(metricName, m.segment, opts),
@@ -792,7 +792,7 @@ export function renderPeerBenchmarking(data: any): DocxElement[] {
       brandedTable(
         ['Metric', 'Company', 'Peer1', 'Peer2', 'Peer3', 'Peer4', 'Industry Avg', 'Source'],
         populatedMetrics.map((m: any) => {
-          const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency, tableMode: true };
+          const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
           const fmt = (v: any) => isEmptyValue(v) ? '' : formatMetricValue(m.metric, v, opts);
           return [
             m.metric,
