@@ -184,172 +184,40 @@ const stringifyContent = (value: unknown): string => {
   return '';
 };
 
-// Numeric formatting helpers
-const formatNumber = (value: number): string => {
-  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-};
+// Metric formatting — imported from shared module
+import { formatMetricValue, formatNumber } from '../utils/metric-formatter';
+import {
+  normalizeCell,
+  isEmptyValue,
+  stripInlineSource,
+  isPlaceholderName,
+  insufficientDataNotice,
+} from '../utils/rendering-helpers';
 
-const formatCurrency = (value: number, currency: string = 'USD'): string => {
-  // Default: USD with grouping, allow other currency codes if provided
-  return value.toLocaleString(undefined, {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: Math.abs(value) >= 1000 ? 0 : 2,
-  });
-};
-
-const formatPercent = (value: number): string => {
-  // Accept raw percent (e.g., 12.3) or ratio (e.g., 0.123); pick sensible format
-  const asRatio = Math.abs(value) <= 1 ? value * 100 : value;
-  return `${asRatio.toFixed(1)}%`;
-};
-
-const formatValue = (raw: any): string => {
-  if (raw === null || raw === undefined) return '';
-  // Already a string, try to detect currency/percent patterns; otherwise return as-is
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim();
-    // Handle suffixes like M/B for millions/billions with optional leading $
-    const suffixMatch = trimmed.match(/^\$?(-?\d[\d,]*\.?\d*)([MB])$/i);
-    if (suffixMatch) {
-      const num = Number.parseFloat(suffixMatch[1].replace(/,/g, ''));
-      const suffix = suffixMatch[2].toUpperCase();
-      if (!Number.isNaN(num)) {
-        const val = suffix === 'B' ? num * 1_000_000_000 : num * 1_000_000;
-        const formatted = formatNumber(val);
-        return trimmed.startsWith('$') ? `$${formatted}${suffix}` : `${formatted}${suffix}`;
-      }
-    }
-    if (/^\$?-?\d[\d,]*\.?\d*$/.test(trimmed.replace(/,/g, ''))) {
-      const num = Number.parseFloat(trimmed.replace(/[^0-9.-]/g, ''));
-      if (!Number.isNaN(num)) return formatCurrency(num);
-    }
-    if (/^-?\d+(\.\d+)?%$/.test(trimmed)) {
-      const num = Number.parseFloat(trimmed.replace('%', ''));
-      if (!Number.isNaN(num)) return formatPercent(num);
-    }
-    const numeric = Number(trimmed.replace(/,/g, ''));
-    if (!Number.isNaN(numeric)) return formatNumber(numeric);
-    return trimmed;
-  }
-  if (typeof raw === 'number') {
-    return formatNumber(raw);
-  }
-  return String(raw);
-};
-
-type MetricUnit = {
-  type: 'currency' | 'percent' | 'ratio' | 'days' | 'years' | 'number' | 'bps';
-  suffix?: string;
-  prefix?: string;
-};
-
-const resolveMetricUnit = (metricName: string, unitHint?: string, valueType?: string): MetricUnit | null => {
-  const match = metricName.match(/\(([^)]+)\)\s*$/);
-  const token = match?.[1]?.toLowerCase();
-
-  if (token) {
-    if (token.includes('$b')) return { type: 'currency', prefix: '$', suffix: 'B' };
-    if (token.includes('$m')) return { type: 'currency', prefix: '$', suffix: 'M' };
-    if (token.includes('$k')) return { type: 'currency', prefix: '$', suffix: 'K' };
-    if (token.includes('bps') || token.includes('bp')) return { type: 'bps', suffix: ' bps' };
-    if (token.includes('%') || token.includes('percent')) return { type: 'percent', suffix: '%' };
-    if (token.includes('x')) return { type: 'ratio', suffix: 'x' };
-    if (token.includes('day')) return { type: 'days', suffix: ' days' };
-    if (token.includes('year')) return { type: 'years', suffix: ' years' };
-    if (token.includes('count') || token.includes('score')) return { type: 'number' };
-    if (token.includes('$')) return { type: 'currency', prefix: '$' };
-  }
-
-  const normalizedUnit = unitHint?.toLowerCase();
-  if (normalizedUnit) {
-    if (normalizedUnit.includes('%') || normalizedUnit.includes('percent')) return { type: 'percent', suffix: '%' };
-    if (normalizedUnit.includes('bps') || normalizedUnit.includes('bp')) return { type: 'bps', suffix: ' bps' };
-    if (normalizedUnit.includes('day')) return { type: 'days', suffix: ' days' };
-    if (normalizedUnit.includes('year')) return { type: 'years', suffix: ' years' };
-    if (normalizedUnit.includes('count') || normalizedUnit.includes('score')) return { type: 'number' };
-    if (normalizedUnit.includes('usd') || normalizedUnit.includes('$')) return { type: 'currency', prefix: '$' };
-  }
-
-  const normalizedType = valueType?.toLowerCase();
-  if (normalizedType === 'percent') return { type: 'percent', suffix: '%' };
-  if (normalizedType === 'ratio') return { type: 'ratio', suffix: 'x' };
-  if (normalizedType === 'number') return { type: 'number' };
-  if (normalizedType === 'currency') return { type: 'currency', prefix: '$' };
-
-  return null;
-};
-
-const parseNumeric = (raw: string): number | null => {
-  const cleaned = raw.replace(/,/g, '');
-  const match = cleaned.match(/-?\d+(\.\d+)?/);
-  if (!match) return null;
-  const num = Number.parseFloat(match[0]);
-  return Number.isNaN(num) ? null : num;
-};
-
-const formatMetricValue = (
-  metricName: string,
-  raw: any,
-  unitHint?: string,
-  valueType?: string
-): string => {
-  if (raw === null || raw === undefined) return '';
-  const unit = resolveMetricUnit(metricName, unitHint, valueType);
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim();
-    if (trimmed === '-') return '-';
-    if (trimmed === '') return '';
-    const hasLetters = /[a-z]/i.test(trimmed);
-    if (hasLetters && !unit) return trimmed;
-  }
-
-  const numeric =
-    typeof raw === 'number'
-      ? raw
-      : typeof raw === 'string'
-        ? parseNumeric(raw)
-        : null;
-
-  if (numeric === null) {
-    return typeof raw === 'string' ? raw.trim() : String(raw);
-  }
-
-  if (!unit) return formatNumber(numeric);
-
-  switch (unit.type) {
-    case 'percent':
-      return formatPercent(numeric);
-    case 'bps':
-      return `${formatNumber(numeric)}${unit.suffix ?? ''}`;
-    case 'ratio':
-      return `${formatNumber(numeric)}${unit.suffix ?? 'x'}`;
-    case 'days':
-      return `${formatNumber(numeric)}${unit.suffix ?? ' days'}`;
-    case 'years':
-      return `${formatNumber(numeric)}${unit.suffix ?? ' years'}`;
-    case 'currency': {
-      const formatted = formatNumber(numeric);
-      const prefix = unit.prefix ?? '$';
-      const suffix = unit.suffix ?? '';
-      return `${prefix}${formatted}${suffix}`;
-    }
-    case 'number':
-    default:
-      return formatNumber(numeric);
-  }
-};
-
-// Simple Markdown table builder
 const mdTable = (headers: string[], rows: (string | number | null | undefined)[][]): string => {
   if (!rows.length) return '';
   const headerRow = `| ${headers.join(' | ')} |`;
   const sepRow = `| ${headers.map(() => '---').join(' | ')} |`;
   const body = rows
-    .map((r) => `| ${r.map((cell) => (cell === null || cell === undefined ? '' : String(cell))).join(' | ')} |`)
+    .map((r) => `| ${r.map(normalizeCell).join(' | ')} |`)
     .join('\n');
   return `${headerRow}\n${sepRow}\n${body}`;
 };
+
+const FX_SOURCE_LABELS: Record<string, string> = {
+  A: 'Company-disclosed rate',
+  B: 'Historical average (Bloomberg/Reuters)',
+  C: 'Current spot rate',
+};
+const INDUSTRY_SOURCE_LABELS: Record<string, string> = {
+  A: 'True industry average (S&P Capital IQ, Damodaran)',
+  B: 'Peer set average (comparable firms)',
+};
+const resolveSourceLabel = (code: string, labels: Record<string, string>): string =>
+  labels[code.toUpperCase()] || code;
+
+const stripSourceMetadata = (summary: string): string =>
+  summary.replace(/\s*FX rate source:[\s\S]*$/i, '').trim();
 
 // Section-specific content formatter to produce readable Markdown
 const formatSectionContent = (sectionId: SectionId, data: any): string => {
@@ -362,7 +230,15 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
         parts.push('\n**Key Takeaways**');
         parts.push(
           data.bullet_points
-            .map((b: any) => `- ${b.bullet || ''}${b.sources ? ` (${(b.sources || []).join(', ')})` : ''}`)
+            .map((b: any) => {
+              let text = stripInlineSource(b.bullet || '');
+              const endsWithPeriod = text.endsWith('.');
+              if (endsWithPeriod) text = text.slice(0, -1);
+              const sources = Array.isArray(b.sources) && b.sources.length
+                ? ` (${b.sources.join(', ')})`
+                : '';
+              return `- ${text}${sources}${endsWithPeriod ? '.' : ''}`;
+            })
             .join('\n')
         );
       }
@@ -370,25 +246,33 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
     }
     case 'financial_snapshot': {
       const parts: string[] = [];
-      if (data.summary) parts.push(data.summary);
+      if (data.summary) parts.push(stripSourceMetadata(data.summary));
       if (data.kpi_table?.metrics?.length) {
-        parts.push('\n**KPI Table**');
-        parts.push(
-          mdTable(
-            ['Metric', 'Company', 'Industry Avg', 'Source'],
-            data.kpi_table.metrics.map((m: any) => {
-              const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
-              const companyValue = formatMetricValue(metricName, m.company, m.unit, m.value_type);
-              const industryValue = formatMetricValue(metricName, m.industry_avg, m.unit, m.value_type);
-              return [
-                metricName,
-                companyValue,
-                industryValue,
-                m.source || '',
-              ];
-            })
-          )
+        const populatedMetrics = data.kpi_table.metrics.filter((m: any) =>
+          !isEmptyValue(m.company) || !isEmptyValue(m.industry_avg)
         );
+        if (populatedMetrics.length) {
+          parts.push('\n**KPI Table**');
+          parts.push(
+            mdTable(
+              ['Metric', 'Company', 'Industry Avg', 'Source'],
+              populatedMetrics.map((m: any) => {
+                const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
+                const rawCompany = typeof m.company === 'string' ? stripInlineSource(m.company) : m.company;
+                const rawIndustry = typeof m.industry_avg === 'string' ? stripInlineSource(m.industry_avg) : m.industry_avg;
+                const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
+                const companyValue = formatMetricValue(metricName, rawCompany, opts);
+                const industryValue = formatMetricValue(metricName, rawIndustry, opts);
+                return [
+                  metricName,
+                  companyValue,
+                  industryValue,
+                  m.source || '',
+                ];
+              })
+            )
+          );
+        }
       }
       if (data.derived_metrics?.length) {
         parts.push('\n**Derived Metrics**');
@@ -399,17 +283,36 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
           )
         );
       }
+      // Add FX and industry source notes if available
+      const sourceNotes: string[] = [];
+      if (data.fx_source) {
+        sourceNotes.push(`**FX Rate Source:** ${resolveSourceLabel(data.fx_source, FX_SOURCE_LABELS)}`);
+      }
+      if (data.industry_source) {
+        sourceNotes.push(`**Industry Average Source:** ${resolveSourceLabel(data.industry_source, INDUSTRY_SOURCE_LABELS)}`);
+      }
+      if (sourceNotes.length) parts.push(sourceNotes.join(' | '));
+      // If no tables rendered and confidence is LOW, show notice instead of just summary text
+      const hasTable = parts.some(p => p.startsWith('|') || p.startsWith('**KPI') || p.startsWith('**Derived'));
+      if (!hasTable && data.confidence?.level === 'LOW') {
+        return insufficientDataNotice(data.confidence?.reason);
+      }
       return parts.filter(Boolean).join('\n\n');
     }
     case 'company_overview': {
       const parts: string[] = [];
       if (data.business_description?.overview) parts.push(`**Overview**\n${data.business_description.overview}`);
-      if (Array.isArray(data.business_description?.segments)) {
+      if (data.business_description?.segments?.length) {
         parts.push('\n**Segments**');
         parts.push(
           mdTable(
             ['Name', 'Description', 'Revenue %', 'Geography Relevance'],
-            data.business_description.segments.map((s: any) => [s.name, s.description, s.revenue_pct, s.geography_relevance])
+            data.business_description.segments.map((s: any) => [
+              s.name,
+              s.description,
+              s.revenue_pct != null ? formatMetricValue('Revenue (%)', s.revenue_pct) : '',
+              s.geography_relevance,
+            ])
           )
         );
       }
@@ -418,20 +321,21 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
         parts.push(
           mdTable(
             ['Name', 'Location', 'Type', 'Employees', 'Capabilities'],
-            data.geographic_footprint.facilities.map((f: any) => [f.name, f.location, f.type, f.employees, f.capabilities])
+            data.geographic_footprint.facilities.map((f: any) => [
+              f.name,
+              f.location,
+              f.type,
+              f.employees != null ? formatNumber(f.employees) : '',
+              f.capabilities,
+            ])
           )
         );
       }
       if (data.strategic_priorities?.priorities?.length) {
         parts.push('\n**Strategic Priorities**');
-        parts.push(
-          data.strategic_priorities.priorities
-            .map(
-              (p: any) =>
-                `- ${p.priority} (${p.geography_relevance || ''})${p.source ? ` [${p.source}]` : ''}\n  ${p.description}`
-            )
-            .join('\n')
-        );
+        for (const p of data.strategic_priorities.priorities) {
+          parts.push(`**${p.priority}**\n${p.description}`);
+        }
       }
       if (data.key_leadership) {
         const execs = data.key_leadership.executives || [];
@@ -441,6 +345,9 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
           parts.push(
             execs.map((e: any) => `- ${e.name}, ${e.title}${e.tenure ? ` (${e.tenure})` : ''}${e.source ? ` [${e.source}]` : ''}`).join('\n')
           );
+        } else {
+          parts.push('**Key Leadership**');
+          parts.push(insufficientDataNotice(data.key_leadership?.summary || data.confidence?.reason));
         }
         if (regionals.length) {
           parts.push('\n**Regional Leaders**');
@@ -451,12 +358,22 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
     }
     case 'key_execs_and_board': {
       const parts: string[] = [];
+      // Filter out placeholder entries Claude fabricates when people can't be found
+      const realExecs = (data.c_suite?.executives || []).filter((e: any) => !isPlaceholderName(e.name));
+      const realBoard = (data.board_of_directors?.members || []).filter((m: any) => !isPlaceholderName(m.name));
+      const realLeaders = (data.business_unit_leaders?.leaders || []).filter((l: any) => !isPlaceholderName(l.name));
+      const hasAnyPeople = realExecs.length + realBoard.length + realLeaders.length > 0;
+
+      if (!hasAnyPeople) {
+        return insufficientDataNotice(data.confidence?.reason);
+      }
+
       if (data.board_of_directors?.summary) parts.push(`**Board of Directors**\n${data.board_of_directors.summary}`);
-      if (Array.isArray(data.board_of_directors?.members) && data.board_of_directors.members.length) {
+      if (realBoard.length) {
         parts.push(
           mdTable(
             ['Name', 'Role', 'Committees', 'Tenure', 'Background', 'Source'],
-            data.board_of_directors.members.map((m: any) => [
+            realBoard.map((m: any) => [
               m.name,
               m.role,
               Array.isArray(m.committees) ? m.committees.join(', ') : (m.committees || ''),
@@ -468,11 +385,11 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
         );
       }
       if (data.c_suite?.summary) parts.push(`\n**C-Suite Leadership**\n${data.c_suite.summary}`);
-      if (Array.isArray(data.c_suite?.executives) && data.c_suite.executives.length) {
+      if (realExecs.length) {
         parts.push(
           mdTable(
             ['Name', 'Title', 'Tenure', 'Background', 'Performance Actions', 'Source'],
-            data.c_suite.executives.map((e: any) => [
+            realExecs.map((e: any) => [
               e.name,
               e.title,
               e.tenure || '',
@@ -484,11 +401,11 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
         );
       }
       if (data.business_unit_leaders?.summary) parts.push(`\n**Business Unit Leaders**\n${data.business_unit_leaders.summary}`);
-      if (Array.isArray(data.business_unit_leaders?.leaders) && data.business_unit_leaders.leaders.length) {
+      if (realLeaders.length) {
         parts.push(
           mdTable(
             ['Name', 'Title', 'Business Unit', 'Background', 'Performance Actions', 'Source'],
-            data.business_unit_leaders.leaders.map((l: any) => [
+            realLeaders.map((l: any) => [
               l.name,
               l.title,
               l.business_unit || '',
@@ -578,6 +495,8 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
             data.stakeholders.map((s: any) => [s.name, s.title, s.role, s.focus_area || '', s.source || ''])
           )
         );
+      } else {
+        parts.push(insufficientDataNotice(data.confidence?.reason));
       }
       if (data.notes) parts.push(`\n**Notes**\n${data.notes}`);
       return parts.filter(Boolean).join('\n\n');
@@ -612,6 +531,8 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
             data.leadership.map((l: any) => [l.name, l.title, l.focus_area || '', l.source || ''])
           )
         );
+      } else {
+        parts.push(insufficientDataNotice(data.confidence?.reason));
       }
       if (data.governance_notes) parts.push(`\n**Governance Notes**\n${data.governance_notes}`);
       return parts.filter(Boolean).join('\n\n');
@@ -619,12 +540,9 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
     case 'strategic_priorities': {
       const parts: string[] = [];
       if (Array.isArray(data.priorities) && data.priorities.length) {
-        parts.push('\n**Priorities**');
-        parts.push(
-          data.priorities
-            .map((p: any) => `- ${p.priority}${p.source ? ` [${p.source}]` : ''}\n  ${p.description}`)
-            .join('\n')
-        );
+        for (const p of data.priorities) {
+          parts.push(`**${p.priority}**\n${p.description}`);
+        }
       }
       if (Array.isArray(data.transformation_themes) && data.transformation_themes.length) {
         parts.push('\n**Transformation Themes**');
@@ -705,7 +623,15 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
     }
     case 'segment_analysis': {
       const parts: string[] = [];
+      // If no segments and LOW confidence, show notice regardless of overview
+      // (overview is just Claude explaining why there's no data)
+      if (!data.segments?.length && data.confidence?.level === 'LOW') {
+        return insufficientDataNotice(data.confidence?.reason);
+      }
       if (data.overview) parts.push(data.overview);
+      if (!data.segments?.length && !data.overview) {
+        parts.push(insufficientDataNotice(data.confidence?.reason));
+      }
       if (Array.isArray(data.segments)) {
         data.segments.forEach((seg: any) => {
           parts.push(`\n### ${seg.name}`);
@@ -715,9 +641,10 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
                 ['Metric', 'Segment', 'Company Avg', 'Industry Avg', 'Source'],
                 seg.financial_snapshot.table.map((m: any) => {
                   const metricName = m.unit ? `${m.metric} (${m.unit})` : m.metric;
-                  const segmentValue = formatMetricValue(metricName, m.segment, m.unit, m.value_type);
-                  const companyValue = formatMetricValue(metricName, m.company_avg, m.unit, m.value_type);
-                  const industryValue = formatMetricValue(metricName, m.industry_avg, m.unit, m.value_type);
+                  const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
+                  const segmentValue = formatMetricValue(metricName, m.segment, opts);
+                  const companyValue = formatMetricValue(metricName, m.company_avg, opts);
+                  const industryValue = formatMetricValue(metricName, m.industry_avg, opts);
                   return [
                     metricName,
                     segmentValue,
@@ -765,62 +692,88 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
       if (data.macro_trends) parts.push(...buildTrendBlock('Macro Trends', data.macro_trends));
       if (data.micro_trends) parts.push(...buildTrendBlock('Micro Trends', data.micro_trends));
       if (data.company_trends) parts.push(...buildTrendBlock('Company Trends', data.company_trends));
+      if (!parts.length) {
+        return insufficientDataNotice(data.confidence?.reason);
+      }
       return parts.filter(Boolean).join('\n\n');
     }
     case 'peer_benchmarking': {
       const parts: string[] = [];
-      if (data.peer_comparison_table?.peers?.length) {
+
+      // Filter metrics to only rows with real values (not dashes/N-A)
+      const populatedMetrics = (data.peer_comparison_table?.metrics || []).filter((m: any) =>
+        !isEmptyValue(m.company) || !isEmptyValue(m.peer1) || !isEmptyValue(m.peer2) ||
+        !isEmptyValue(m.peer3) || !isEmptyValue(m.peer4) || !isEmptyValue(m.industry_avg)
+      );
+
+      const hasPeers = data.peer_comparison_table?.peers?.length > 0;
+      const hasMetrics = populatedMetrics.length > 0;
+      const hasStrengths = data.benchmark_summary?.key_strengths?.length > 0;
+      const hasGaps = data.benchmark_summary?.key_gaps?.length > 0;
+
+      // If no real data after filtering, show notice
+      if (!hasMetrics && data.confidence?.level === 'LOW') {
+        const reason = data.confidence?.reason || data.benchmark_summary?.overall_assessment;
+        return insufficientDataNotice(reason);
+      }
+      if (!hasPeers && !hasMetrics && !hasStrengths && !hasGaps) {
+        const reason = data.confidence?.reason || data.benchmark_summary?.overall_assessment;
+        return insufficientDataNotice(reason);
+      }
+
+      if (hasPeers) {
         parts.push('**Peers**');
         parts.push(mdTable(['Name', 'Ticker', 'Geography'], data.peer_comparison_table.peers.map((p: any) => [p.name, p.ticker || '', p.geography_presence])));
       }
-      if (data.peer_comparison_table?.metrics?.length) {
+      if (hasMetrics) {
         parts.push('\n**Metrics**');
         parts.push(
           mdTable(
             ['Metric', 'Company', 'Peer1', 'Peer2', 'Peer3', 'Peer4', 'Industry Avg', 'Source'],
-            data.peer_comparison_table.metrics.map((m: any) => [
-              m.metric,
-              m.company,
-              m.peer1,
-              m.peer2,
-              m.peer3,
-              m.peer4 || '',
-              m.industry_avg,
-              m.source,
-            ])
+            populatedMetrics.map((m: any) => {
+              const opts = { unitHint: m.unit, valueType: m.value_type, currency: m.currency };
+              const fmt = (v: any) => isEmptyValue(v) ? '' : formatMetricValue(m.metric, v, opts);
+              return [
+                m.metric,
+                fmt(m.company),
+                fmt(m.peer1),
+                fmt(m.peer2),
+                fmt(m.peer3),
+                fmt(m.peer4),
+                fmt(m.industry_avg),
+                m.source,
+              ];
+            })
           )
         );
       }
-      if (data.benchmark_summary?.key_strengths?.length) {
+      if (hasStrengths) {
         parts.push('\n**Key Strengths**');
         parts.push(data.benchmark_summary.key_strengths.map((s: any) => `- ${s.strength}: ${s.description}`).join('\n'));
       }
-      if (data.benchmark_summary?.key_gaps?.length) {
+      if (hasGaps) {
         parts.push('\n**Key Gaps**');
         parts.push(data.benchmark_summary.key_gaps.map((g: any) => `- ${g.gap} (${g.magnitude}): ${g.description}`).join('\n'));
       }
       return parts.filter(Boolean).join('\n\n');
     }
     case 'sku_opportunities': {
-      const parts: string[] = [];
       if (data.opportunities?.length) {
-        parts.push(
-          mdTable(
-            ['Issue Area', 'Problem', 'Source', 'Aligned SKU', 'Priority', 'Severity', 'Geography', 'Value Levers'],
-            data.opportunities.map((o: any) => [
-              o.issue_area,
-              o.public_problem,
-              o.source,
-              o.aligned_sku,
-              o.priority,
-              o.severity,
-              o.geography_relevance,
-              Array.isArray(o.potential_value_levers) ? o.potential_value_levers.join('; ') : ''
-            ])
-          )
+        return mdTable(
+          ['Issue Area', 'Problem', 'Source', 'Aligned SKU', 'Priority', 'Severity', 'Geography', 'Value Levers'],
+          data.opportunities.map((o: any) => [
+            o.issue_area,
+            o.public_problem,
+            o.source,
+            o.aligned_sku,
+            o.priority,
+            o.severity ?? '',
+            o.geography_relevance,
+            Array.isArray(o.potential_value_levers) ? o.potential_value_levers.join('; ') : ''
+          ])
         );
       }
-      return parts.filter(Boolean).join('\n\n');
+      return insufficientDataNotice(data.confidence?.reason);
     }
     case 'recent_news': {
       if (data.news_items?.length) {
@@ -829,7 +782,7 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
           data.news_items.map((n: any) => [n.date, n.headline, n.source, n.implication, n.geography_relevance, n.category])
         );
       }
-      return '';
+      return insufficientDataNotice(data.confidence?.reason);
     }
     case 'conversation_starters': {
       if (data.conversation_starters?.length) {
@@ -857,14 +810,19 @@ const formatSectionContent = (sectionId: SectionId, data: any): string => {
         parts.push(
           mdTable(
             ['Pair', 'Rate', 'Source', 'Description'],
-            data.fx_rates_and_industry.fx_rates.map((r: any) => [r.currency_pair, r.rate, r.source, r.source_description])
+            data.fx_rates_and_industry.fx_rates.map((r: any) => [
+              r.currency_pair,
+              r.rate != null ? formatNumber(r.rate) : '',
+              resolveSourceLabel(r.source, FX_SOURCE_LABELS),
+              r.source_description,
+            ])
           )
         );
       }
       if (data.fx_rates_and_industry?.industry_averages) {
         const ia = data.fx_rates_and_industry.industry_averages;
         parts.push('\n**Industry Averages**');
-        parts.push(`- Source: ${ia.source}\n- Dataset: ${ia.dataset}\n- Description: ${ia.description || ''}`);
+        parts.push(`- Source: ${resolveSourceLabel(ia.source, INDUSTRY_SOURCE_LABELS)}\n- Dataset: ${ia.dataset}\n- Description: ${ia.description || ''}`);
       }
       return parts.filter(Boolean).join('\n\n');
     }
@@ -1063,7 +1021,11 @@ const mapSections = (
     const sectionKey = SECTION_ID_TO_KEY[config.id];
     const rawSection = sectionKey && sectionData ? sectionData[sectionKey] : undefined;
     const existingSection = existing?.[config.id];
-    let formattedContent = rawSection !== undefined ? formatSectionContent(config.id, rawSection) : undefined;
+    // Only format content for completed sections — formatting pending/running sections
+    // produces false "insufficient data" notices because the data hasn't arrived yet.
+    const sectionStatus = rawStatus?.status || '';
+    const isSectionDone = sectionStatus === 'completed' || sectionStatus === 'completed_with_errors' || sectionStatus === 'failed';
+    let formattedContent = rawSection !== undefined && isSectionDone ? formatSectionContent(config.id, rawSection) : undefined;
     // Fallback: if formatter returned empty string, try raw JSON stringify to avoid blank sections
     if (formattedContent !== undefined && formattedContent.trim() === '' && rawSection !== undefined) {
       try {

@@ -1,14 +1,8 @@
-/**
- * Report-Specific Section: Recent Investments and Add-ons
- */
-
 import { appendReportTypeAddendum } from './report-type-addendums.js';
-
 export function buildDealActivityPrompt(input) {
-  const { foundation, companyName } = input;
-  const foundationJson = JSON.stringify(foundation, null, 2);
-
-  const basePrompt = `# Recent Investments and Add-ons - Research Prompt
+    const { foundation, companyName } = input;
+    const foundationJson = JSON.stringify(foundation, null, 2);
+    const basePrompt = `# Recent Investments and Add-ons - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -74,6 +68,16 @@ interface DealActivityOutput {
 }
 \`\`\`
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent deals, transactions, or activity that cannot be confirmed from public sources.
+- **Return an empty \`deals\` array** if no real deal activity can be identified.
+- **Use the \`summary\` field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- **This rule supersedes "Include at least 3 transactions with sources"** when no verifiable deals are available.
+
+---
+
 ## CRITICAL REMINDERS
 
 1. Follow style guide: All formatting rules apply
@@ -98,6 +102,6 @@ interface DealActivityOutput {
 - [ ] \`sources_used\` only contains S# values
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA.**`;
-
-  return appendReportTypeAddendum('deal_activity', input.reportType, basePrompt);
+    return appendReportTypeAddendum('deal_activity', input.reportType, basePrompt);
 }
+//# sourceMappingURL=deal-activity.js.map

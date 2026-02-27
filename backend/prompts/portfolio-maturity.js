@@ -1,14 +1,8 @@
-/**
- * Report-Specific Section: Portfolio Maturity and Exit Watchlist
- */
-
 import { appendReportTypeAddendum } from './report-type-addendums.js';
-
 export function buildPortfolioMaturityPrompt(input) {
-  const { foundation, companyName } = input;
-  const foundationJson = JSON.stringify(foundation, null, 2);
-
-  const basePrompt = `# Portfolio Maturity and Exit Watchlist - Research Prompt
+    const { foundation, companyName } = input;
+    const foundationJson = JSON.stringify(foundation, null, 2);
+    const basePrompt = `# Portfolio Maturity and Exit Watchlist - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -66,6 +60,15 @@ interface PortfolioMaturityOutput {
 }
 \`\`\`
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent portfolio holdings or exit signals that cannot be confirmed from public sources.
+- **Return an empty \`holdings\` array** if no real holdings data can be identified.
+- **Use the \`summary\` field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+
+---
+
 ## CRITICAL REMINDERS
 
 1. Follow style guide: All formatting rules apply
@@ -90,6 +93,6 @@ interface PortfolioMaturityOutput {
 - [ ] \`sources_used\` only contains S# values
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA.**`;
-
-  return appendReportTypeAddendum('portfolio_maturity', input.reportType, basePrompt);
+    return appendReportTypeAddendum('portfolio_maturity', input.reportType, basePrompt);
 }
+//# sourceMappingURL=portfolio-maturity.js.map

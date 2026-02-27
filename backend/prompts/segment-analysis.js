@@ -1,10 +1,23 @@
+/**
+ * Section 4: Segment Analysis - TypeScript Implementation
+ * Comprehensive implementation with fallback strategy for large responses
+ */
+// ============================================================================
+// INPUT TYPES
+// ============================================================================
 import { appendReportTypeAddendum } from './report-type-addendums.js';
+// ============================================================================
+// PROMPT BUILDERS
+// ============================================================================
+/**
+ * Builds comprehensive prompt attempting all segments in one call
+ */
 export function buildSegmentAnalysisPrompt(input) {
-    const { foundation, companyName, geography, section2Context } = input;
+    const { foundation, companyName, geography, section2 } = input;
     const segmentCount = foundation.segment_structure.length;
     const segmentNames = foundation.segment_structure.map(s => s.name).join(', ');
     const foundationJson = JSON.stringify(foundation, null, 2);
-    const section2Json = section2Context ? JSON.stringify(section2Context, null, 2) : 'Not provided';
+    const section2Json = section2 ? JSON.stringify(section2, null, 2) : 'Not provided';
     const basePrompt = `# Section 4: Segment Analysis - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
@@ -161,10 +174,17 @@ interface Section4Output {
 
 ---
 
+## OUTPUT FORMAT RULES
+
+**Valid JSON only:** No markdown, no headings, no prose outside the JSON object.
+
+---
+
 ## REQUIRED SECTIONS PER SEGMENT
 
 ### 4.X.1 Financial Snapshot
-- Table with metrics (use "–" if unavailable)
+- Table with metrics (use null if unavailable)
+- Units belong in metric names; table values must be numeric only (use null when unavailable)
 - Geography notes (2-3 sentences on ${geography} performance)
 
 ### 4.X.2 Performance Analysis
@@ -220,6 +240,26 @@ interface Section4Output {
 
 ---
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent business segments, competitors, financial data, or performance analysis that cannot be confirmed from public sources.
+- **Return an empty \`segments\` array** if no real segment data can be identified.
+- **Use the \`overview\` field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- **Use \`null\`** for unavailable numeric data (not 0, not -1, not "–").
+
+---
+
+## CRITICAL REMINDERS
+
+1. Follow style guide: All formatting rules apply
+2. Valid JSON only: No markdown, no headings, no prose outside JSON
+3. Source everything: No unsourced claims
+4. Geography focus: Emphasize the target geography throughout
+5. Exact schema match: Follow the TypeScript interface exactly
+
+---
+
 ## BEGIN RESEARCH
 
 **Company:** ${companyName}  
@@ -231,14 +271,18 @@ interface Section4Output {
 `;
     return appendReportTypeAddendum('segment_analysis', input.reportType, basePrompt);
 }
+/**
+ * Builds fallback prompt for individual segment
+ * Used when comprehensive prompt truncates
+ */
 export function buildSection4SegmentPrompt(input, segmentName) {
-    const { foundation, companyName, geography, section2Context } = input;
+    const { foundation, companyName, geography, section2 } = input;
     const segment = foundation.segment_structure.find(s => s.name === segmentName);
     if (!segment) {
         throw new Error(`Segment ${segmentName} not found in foundation data`);
     }
     const foundationJson = JSON.stringify(foundation, null, 2);
-    const section2Json = section2Context ? JSON.stringify(section2Context, null, 2) : 'Not provided';
+    const section2Json = section2 ? JSON.stringify(section2, null, 2) : 'Not provided';
     return `# Section 4: Segment Analysis - INDIVIDUAL SEGMENT Prompt
 
 ## CRITICAL INSTRUCTIONS
@@ -380,7 +424,7 @@ interface SegmentOutput {
 ## REQUIRED OUTPUT STRUCTURE
 
 ### Financial Snapshot (4.X.1)
-- Complete table with all metrics (use "–" if unavailable)
+- Complete table with all metrics (use null if unavailable)
 - FX source notation
 - Geography notes (2-3 sentences on ${geography})
 
@@ -414,18 +458,25 @@ interface SegmentOutput {
 **OUTPUT ONLY VALID JSON FOR THIS SEGMENT. START NOW.**
 `;
 }
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
 export function validateSection4Output(output) {
     if (!output || typeof output !== 'object')
         return false;
+    // Check confidence
     if (!output.confidence ||
         !['HIGH', 'MEDIUM', 'LOW'].includes(output.confidence.level)) {
         return false;
     }
+    // Check overview
     if (typeof output.overview !== 'string')
         return false;
+    // Check segments
     if (!Array.isArray(output.segments) || output.segments.length === 0) {
         return false;
     }
+    // Validate each segment
     for (const segment of output.segments) {
         if (!segment.name ||
             !segment.financial_snapshot ||
@@ -433,25 +484,30 @@ export function validateSection4Output(output) {
             !segment.competitive_landscape) {
             return false;
         }
+        // Validate financial_snapshot
         if (!Array.isArray(segment.financial_snapshot.table) ||
             typeof segment.financial_snapshot.fx_source !== 'string' ||
             typeof segment.financial_snapshot.geography_notes !== 'string') {
             return false;
         }
+        // Validate performance_analysis
         if (!Array.isArray(segment.performance_analysis.paragraphs) ||
             !Array.isArray(segment.performance_analysis.analyst_quotes) ||
             !Array.isArray(segment.performance_analysis.key_drivers)) {
             return false;
         }
+        // Validate competitive_landscape
         if (!Array.isArray(segment.competitive_landscape.competitors) ||
             typeof segment.competitive_landscape.positioning !== 'string' ||
             typeof segment.competitive_landscape.recent_dynamics !== 'string') {
             return false;
         }
+        // Validate competitors (at least 3)
         if (segment.competitive_landscape.competitors.length < 3) {
             return false;
         }
     }
+    // Check sources
     if (!Array.isArray(output.sources_used))
         return false;
     return true;
@@ -465,64 +521,184 @@ export function validateSegmentOutput(output) {
         !output.competitive_landscape) {
         return false;
     }
+    // Same validation as above for individual segment
     return true;
 }
 export function formatSection4ForDocument(output) {
-    let markdown = `# 4. Segment Analysis\n\n`;
-    markdown += `**Confidence: ${output.confidence.level}** – ${output.confidence.reason}\n\n`;
-    markdown += `## 4.1 Segment Overview\n\n`;
-    markdown += `${output.overview}\n\n`;
+    const formatNumber = (value) => value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const resolveMetricUnit = (metricName) => {
+        const match = metricName.match(/\(([^)]+)\)\s*$/);
+        const token = match?.[1].toLowerCase();
+        if (!token)
+            return null;
+        if (token.includes('$b'))
+            return { type: 'currency', suffix: 'B' };
+        if (token.includes('$m'))
+            return { type: 'currency', suffix: 'M' };
+        if (token.includes('$k'))
+            return { type: 'currency', suffix: 'K' };
+        if (token.includes('%'))
+            return { type: 'percent', suffix: '%' };
+        if (token.includes('x'))
+            return { type: 'ratio', suffix: 'x' };
+        if (token.includes('day'))
+            return { type: 'days', suffix: ' days' };
+        if (token.includes('year'))
+            return { type: 'years', suffix: ' years' };
+        if (token.includes('count') || token.includes('score'))
+            return { type: 'number', suffix: '' };
+        return null;
+    };
+    const inferValueType = (metricName) => {
+        const metric = metricName.toLowerCase();
+        if (metric.includes('margin') || metric.includes('growth') || metric.includes('irr') || metric.includes('roe') ||
+            metric.includes('roa') || metric.includes('rate') || metric.includes('pct') || metric.includes('percent')) {
+            return 'percent';
+        }
+        if (metric.includes('turn') || metric.includes('multiple') || metric.includes('leverage'))
+            return 'ratio';
+        if (metric.includes('day') || metric.includes('dso') || metric.includes('dio') || metric.includes('dpo')) {
+            return 'days';
+        }
+        return 'currency';
+    };
+    const formatTableValue = (metricName, value) => {
+        if (value === null || value === undefined)
+            return '–';
+        if (typeof value !== 'number')
+            return value;
+        const unit = resolveMetricUnit(metricName);
+        const formatted = formatNumber(value);
+        if (unit?.type === 'percent')
+            return `${formatted}%`;
+        if (unit?.type === 'currency')
+            return `$${formatted}${unit.suffix}`;
+        if (unit?.type === 'ratio')
+            return `${formatted}x`;
+        if (unit?.type === 'days')
+            return `${formatted} days`;
+        if (unit?.type === 'years')
+            return `${formatted} years`;
+        const fallbackType = inferValueType(metricName);
+        if (fallbackType === 'percent')
+            return `${formatted}%`;
+        if (fallbackType === 'ratio')
+            return `${formatted}x`;
+        if (fallbackType === 'days')
+            return `${formatted} days`;
+        return `$${formatted}M`;
+    };
+    let markdown = `# 4. Segment Analysis
+
+`;
+    markdown += `**Confidence: ${output.confidence.level}** ? ${output.confidence.reason}
+
+`;
+    // 4.1 Segment Overview
+    markdown += `## 4.1 Segment Overview
+
+`;
+    markdown += `${output.overview}
+
+`;
+    // 4.X for each segment
     for (let i = 0; i < output.segments.length; i++) {
         const segment = output.segments[i];
-        const num = i + 2;
-        markdown += `## 4.${num} ${segment.name}\n\n`;
-        markdown += `### 4.${num}.1 Financial Snapshot\n\n`;
-        markdown += `| Metric | Segment | Company Avg | Industry Avg | Source |\n`;
-        markdown += `|--------|---------|-------------|--------------|--------|\n`;
+        const num = i + 2; // Start at 4.2, 4.3, etc.
+        markdown += `## 4.${num} ${segment.name}
+
+`;
+        // 4.X.1 Financial Snapshot
+        markdown += `### 4.${num}.1 Financial Snapshot
+
+`;
+        markdown += `Note: Monetary values shown in USD millions unless stated.
+
+`;
+        // Table
+        markdown += `| Metric | Segment | Company Avg | Industry Avg | Source |
+`;
+        markdown += `|--------|---------|-------------|--------------|--------|
+`;
         for (const metric of segment.financial_snapshot.table) {
             const values = [
-                metric.segment,
-                metric.company_avg,
-                metric.industry_avg
-            ].map(v => typeof v === 'number' ? v.toLocaleString() : v);
-            markdown += `| ${metric.metric} | ${values.join(' | ')} | ${metric.source} |\n`;
+                formatTableValue(metric.metric, metric.segment),
+                formatTableValue(metric.metric, metric.company_avg),
+                formatTableValue(metric.metric, metric.industry_avg)
+            ];
+            markdown += `| ${metric.metric} | ${values.join(' | ')} | ${metric.source} |
+`;
         }
-        markdown += `\n${segment.financial_snapshot.geography_notes}\n\n`;
-        markdown += `*FX Source: ${segment.financial_snapshot.fx_source}*\n\n`;
-        markdown += `### 4.${num}.2 Performance Analysis\n\n`;
+        markdown += `
+${segment.financial_snapshot.geography_notes}
+
+`;
+        markdown += `*FX Source: ${segment.financial_snapshot.fx_source}*
+
+`;
+        // 4.X.2 Performance Analysis
+        markdown += `### 4.${num}.2 Performance Analysis
+
+`;
         for (const paragraph of segment.performance_analysis.paragraphs) {
-            markdown += `${paragraph}\n\n`;
+            markdown += `${paragraph}
+
+`;
         }
         if (segment.performance_analysis.key_drivers.length > 0) {
-            markdown += `**Key Drivers:**\n\n`;
+            markdown += `**Key Drivers:**
+
+`;
             for (const driver of segment.performance_analysis.key_drivers) {
-                markdown += `- ${driver}\n`;
+                markdown += `- ${driver}
+`;
             }
-            markdown += `\n`;
+            markdown += `
+`;
         }
         if (segment.performance_analysis.analyst_quotes.length > 0) {
-            markdown += `**Analyst Perspectives:**\n\n`;
+            markdown += `**Analyst Perspectives:**
+
+`;
             for (const quote of segment.performance_analysis.analyst_quotes) {
-                markdown += `*"${quote.quote}"* - ${quote.analyst}, ${quote.firm} (${quote.source})\n\n`;
+                markdown += `*"${quote.quote}"* - ${quote.analyst}, ${quote.firm} (${quote.source})
+
+`;
             }
         }
-        markdown += `### 4.${num}.3 Competitive Landscape\n\n`;
-        markdown += `**Key Competitors:**\n\n`;
+        // 4.X.3 Competitive Landscape
+        markdown += `### 4.${num}.3 Competitive Landscape
+
+`;
+        markdown += `**Key Competitors:**
+
+`;
         for (const comp of segment.competitive_landscape.competitors) {
             markdown += `- **${comp.name}**`;
             if (comp.market_share)
                 markdown += ` (${comp.market_share})`;
-            markdown += `: ${comp.geography}\n`;
+            markdown += `: ${comp.geography}
+`;
         }
-        markdown += `\n`;
-        markdown += `**Positioning:** ${segment.competitive_landscape.positioning}\n\n`;
-        markdown += `**Recent Dynamics:** ${segment.competitive_landscape.recent_dynamics}\n\n`;
+        markdown += `
+`;
+        markdown += `**Positioning:** ${segment.competitive_landscape.positioning}
+
+`;
+        markdown += `**Recent Dynamics:** ${segment.competitive_landscape.recent_dynamics}
+
+`;
     }
     return markdown;
 }
+/**
+ * Combines multiple segment outputs into complete Section 4
+ */
 export function combineSegmentOutputs(overview, segments, confidence) {
+    // Collect all unique sources
     const allSources = new Set();
     for (const segment of segments) {
+        // Extract sources from various places
         for (const metric of segment.financial_snapshot.table) {
             metric.source.split(',').forEach(s => allSources.add(s.trim()));
         }
@@ -537,9 +713,15 @@ export function combineSegmentOutputs(overview, segments, confidence) {
         sources_used: Array.from(allSources).sort()
     };
 }
+/**
+ * Gets segment by name
+ */
 export function getSegmentByName(output, segmentName) {
     return output.segments.find(s => s.name === segmentName);
 }
+/**
+ * Compares segment performance vs company average
+ */
 export function compareSegmentToCompany(segment, metricName) {
     const metric = segment.financial_snapshot.table.find(m => m.metric === metricName);
     if (!metric)

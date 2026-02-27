@@ -7,6 +7,16 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 ## [Unreleased]
 
 ### Fixed
+- Standardize metric formatting across all tables with shared `metric-formatter` module — consistent currency auto-promotion ($M→$B), percent, ratio, and bps formatting.
+- Fix double-counted source citations in executive summary bullets across all rendering pipelines.
+- Fix KPI table scale mismatch where column header shows ($M) but values show $22.3B — new `tableMode` suppresses scale suffixes in table cells.
+- Fix `resolveMetricUnit` false positives: ratio token `(x)` no longer matches `(max)`, unitHint substring matching uses word boundaries.
+- Fix `formatPercent` boundary: value 1.0 now formats as 1% instead of 100%.
+- Fix `formatCurrency` sub-1 K values: 0.5K now shows $0.5K instead of $1K.
+- Fix placeholder names (e.g. "Information Not Available") leaking into key_execs_and_board tables — filtered arrays now used for rendering.
+- Add DOCX renderer for `key_execs_and_board` section with placeholder name filtering.
+- Add "insufficient data" notices to DOCX sections (deal_team, leadership, news, sku, execs) for parity with markdown/frontend.
+- Show yellow warning icon (AlertCircle) instead of green checkmark for sections with only "Limited public information available" notice.
 - Sort news articles alphabetically by company/person name so grouped entities stay together instead of being split across pages.
 - Remove pagination from news dashboard; all articles load on a single scrollable page.
 - Fix news refresh LLM batch timeouts: deterministic pre-filtering, smaller parallel batches (10 articles, concurrency 5), and raised token limits yield 96% LLM success rate (up from 12%).
@@ -21,6 +31,10 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Fix `segmentAnalysisOutputSchema` to enforce S# regex on `sources_used` (was allowing any string).
 
 ### Added
+- Shared `metric-formatter.ts` module for consistent metric formatting across backend markdown, DOCX, and frontend pipelines.
+- Shared `rendering-helpers.ts` module extracting duplicated helpers (`isEmptyValue`, `isPlaceholderName`, `stripInlineSource`, `normalizeCell`, `insufficientDataNotice`).
+- `scripts/check-shared-drift.sh` CI drift check for backend/frontend shared module copies.
+- `currency`, `unit`, `value_type` fields to peer benchmarking and segment analysis schemas for richer metric formatting.
 - Article dismiss feature: new `isDismissed` field, bulk dismiss endpoint, and dismiss filter in news dashboard.
 - Deep dive search: background company/person search with inline progress, resolution modal, and result pinning.
 - Group selection checkboxes on company/person group headers (tri-state: all, some, none) for bulk article selection.
@@ -41,6 +55,8 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Remove `THUMBNAIL_S3_*` env vars from `.env.example`.
 
 ### Changed
+- Relaxed validation schemas (`.min(0)` on arrays) to accept sparse data from private/niche companies.
+- Renamed `section*Context` prompt fields to match orchestrator input names.
 - Move header bar action buttons to bottom-left on Research, News, and Activity pages.
 - Update News and Activity header titles to descriptive sentences.
 - Vertically and horizontally center SAMI mascots in all hero header bars.

@@ -1,9 +1,19 @@
+/**
+ * Section 5: Trends - TypeScript Implementation
+ * Generates prompt and types for Trends section
+ */
+// ============================================================================
+// INPUT TYPES
+// ============================================================================
 import { appendReportTypeAddendum } from './report-type-addendums.js';
+// ============================================================================
+// PROMPT BUILDER
+// ============================================================================
 export function buildTrendsPrompt(input) {
-    const { foundation, companyName, geography, section3Context, section4Context } = input;
+    const { foundation, companyName, geography, section3, section4 } = input;
     const foundationJson = JSON.stringify(foundation, null, 2);
-    const section3Json = section3Context ? JSON.stringify(section3Context, null, 2) : 'Not provided';
-    const section4Json = section4Context ? JSON.stringify(section4Context, null, 2) : 'Not provided';
+    const section3Json = section3 ? JSON.stringify(section3, null, 2) : 'Not provided';
+    const section4Json = section4 ? JSON.stringify(section4, null, 2) : 'Not provided';
     const basePrompt = `# Section 5: Trends - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
@@ -225,7 +235,7 @@ interface Section5Output {
       trend: string;           // Concise title (5-10 words)
       description: string;     // 2-3 sentences with quantitative data
       direction: 'Positive' | 'Negative' | 'Neutral';
-      impact_score: number;    // 1-10
+      impact_score: number | null;    // 1-10, null if cannot be assessed
       geography_relevance: string; // 1-2 sentences on ${geography} impact
       source: string;          // "S#, S#"
     }>;
@@ -237,7 +247,7 @@ interface Section5Output {
       trend: string;
       description: string;
       direction: 'Positive' | 'Negative' | 'Neutral';
-      impact_score: number;
+      impact_score: number | null;  // 1-10, null if cannot be assessed
       segment_relevance?: string; // Which segment(s) affected
       geography_relevance: string;
       source: string;
@@ -250,7 +260,7 @@ interface Section5Output {
       trend: string;
       description: string;
       direction: 'Positive' | 'Negative' | 'Neutral';
-      impact_score: number;
+      impact_score: number | null;  // 1-10, null if cannot be assessed
       geography_relevance: string;
       management_commentary?: string; // Brief quote or paraphrase
       analyst_quote?: {
@@ -319,6 +329,25 @@ interface Section5Output {
 
 ---
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent trends, market movements, or impact assessments that cannot be confirmed from public sources.
+- **Return empty \`trends\` arrays** for any category (macro, micro, company) where no real data can be identified.
+- **Use the relevant \`summary\` field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+
+---
+
+## CRITICAL REMINDERS
+
+1. Follow style guide: All formatting rules apply
+2. Valid JSON only: No markdown, no headings, no prose outside JSON
+3. Source everything: No unsourced claims
+4. Geography focus: Emphasize the target geography throughout
+5. Exact schema match: Follow the TypeScript interface exactly
+
+---
+
 ## BEGIN RESEARCH
 
 **Company:** ${companyName}  
@@ -331,30 +360,39 @@ interface Section5Output {
 `;
     return appendReportTypeAddendum('trends', input.reportType, basePrompt);
 }
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
 export function validateSection5Output(output) {
     if (!output || typeof output !== 'object')
         return false;
+    // Check confidence
     if (!output.confidence ||
         !['HIGH', 'MEDIUM', 'LOW'].includes(output.confidence.level)) {
         return false;
     }
+    // Check aggregate_summary
     if (typeof output.aggregate_summary !== 'string')
         return false;
+    // Check macro_trends
     if (!output.macro_trends ||
         typeof output.macro_trends.summary !== 'string' ||
         !Array.isArray(output.macro_trends.trends)) {
         return false;
     }
+    // Check micro_trends
     if (!output.micro_trends ||
         typeof output.micro_trends.summary !== 'string' ||
         !Array.isArray(output.micro_trends.trends)) {
         return false;
     }
+    // Check company_trends
     if (!output.company_trends ||
         typeof output.company_trends.summary !== 'string' ||
         !Array.isArray(output.company_trends.trends)) {
         return false;
     }
+    // Validate trend objects
     const allTrends = [
         ...output.macro_trends.trends,
         ...output.micro_trends.trends,
@@ -362,17 +400,18 @@ export function validateSection5Output(output) {
     ];
     for (const trend of allTrends) {
         if (!trend.trend || !trend.description || !trend.direction ||
-            typeof trend.impact_score !== 'number' ||
+            (trend.impact_score !== null && typeof trend.impact_score !== 'number') ||
             !trend.geography_relevance || !trend.source) {
             return false;
         }
         if (!['Positive', 'Negative', 'Neutral'].includes(trend.direction)) {
             return false;
         }
-        if (trend.impact_score < 1 || trend.impact_score > 10) {
+        if (trend.impact_score !== null && (trend.impact_score < 1 || trend.impact_score > 10)) {
             return false;
         }
     }
+    // Check sources
     if (!Array.isArray(output.sources_used))
         return false;
     return true;
@@ -380,18 +419,21 @@ export function validateSection5Output(output) {
 export function formatSection5ForDocument(output) {
     let markdown = `# 5. Trends\n\n`;
     markdown += `**Confidence: ${output.confidence.level}** – ${output.confidence.reason}\n\n`;
+    // 5.1 Aggregate Summary
     markdown += `## 5.1 Aggregate Trend Summary\n\n`;
     markdown += `${output.aggregate_summary}\n\n`;
+    // 5.2 Macro Trends
     markdown += `## 5.2 Macro Trends (Industry & Economy-Wide)\n\n`;
     markdown += `${output.macro_trends.summary}\n\n`;
     for (const trend of output.macro_trends.trends) {
         markdown += `- **${trend.trend}**\n`;
         markdown += `  - Direction: ${trend.direction}\n`;
-        markdown += `  - Impact Score: ${trend.impact_score}/10\n`;
+        markdown += `  - Impact Score: ${trend.impact_score !== null ? `${trend.impact_score}/10` : 'N/A'}\n`;
         markdown += `  - ${trend.description}\n`;
         markdown += `  - **Geography Relevance:** ${trend.geography_relevance}\n`;
         markdown += `  - Source: ${trend.source}\n\n`;
     }
+    // 5.3 Micro Trends
     markdown += `## 5.3 Micro/Industry Trends\n\n`;
     markdown += `${output.micro_trends.summary}\n\n`;
     for (const trend of output.micro_trends.trends) {
@@ -401,17 +443,18 @@ export function formatSection5ForDocument(output) {
         }
         markdown += `\n`;
         markdown += `  - Direction: ${trend.direction}\n`;
-        markdown += `  - Impact Score: ${trend.impact_score}/10\n`;
+        markdown += `  - Impact Score: ${trend.impact_score !== null ? `${trend.impact_score}/10` : 'N/A'}\n`;
         markdown += `  - ${trend.description}\n`;
         markdown += `  - **Geography Relevance:** ${trend.geography_relevance}\n`;
         markdown += `  - Source: ${trend.source}\n\n`;
     }
+    // 5.4 Company Trends
     markdown += `## 5.4 Company-Specific Trends & Issues\n\n`;
     markdown += `${output.company_trends.summary}\n\n`;
     for (const trend of output.company_trends.trends) {
         markdown += `- **${trend.trend}**\n`;
         markdown += `  - Direction: ${trend.direction}\n`;
-        markdown += `  - Impact Score: ${trend.impact_score}/10\n`;
+        markdown += `  - Impact Score: ${trend.impact_score !== null ? `${trend.impact_score}/10` : 'N/A'}\n`;
         markdown += `  - ${trend.description}\n`;
         markdown += `  - **Geography Relevance:** ${trend.geography_relevance}\n`;
         if (trend.management_commentary) {
@@ -424,16 +467,26 @@ export function formatSection5ForDocument(output) {
     }
     return markdown;
 }
+/**
+ * Filters trends by direction
+ */
 export function filterTrendsByDirection(trends, direction) {
     return trends.filter(t => t.direction === direction);
 }
+/**
+ * Gets trends above a certain impact threshold
+ */
 export function getHighImpactTrends(trends, minScore = 7) {
-    return trends.filter(t => t.impact_score >= minScore).sort((a, b) => b.impact_score - a.impact_score);
+    return trends.filter(t => t.impact_score !== null && t.impact_score >= minScore).sort((a, b) => (b.impact_score ?? 0) - (a.impact_score ?? 0));
 }
+/**
+ * Calculates average impact score
+ */
 export function calculateAverageImpact(trends) {
-    if (trends.length === 0)
+    const scored = trends.filter(t => t.impact_score !== null);
+    if (scored.length === 0)
         return 0;
-    const sum = trends.reduce((acc, t) => acc + t.impact_score, 0);
-    return Math.round((sum / trends.length) * 10) / 10;
+    const sum = scored.reduce((acc, t) => acc + t.impact_score, 0);
+    return Math.round((sum / scored.length) * 10) / 10;
 }
 //# sourceMappingURL=trends.js.map

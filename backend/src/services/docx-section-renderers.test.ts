@@ -22,6 +22,7 @@ import {
   renderConversationStarters,
   renderAppendix,
   renderSection,
+  renderKeyExecsAndBoard,
 } from './docx-section-renderers.js';
 
 const isParagraphOrTable = (el: unknown) =>
@@ -43,6 +44,21 @@ describe('docx-section-renderers', () => {
     it('returns empty array for null data', () => {
       expect(renderExecSummary(null)).toEqual([]);
       expect(renderExecSummary(undefined)).toEqual([]);
+    });
+
+    it('does not double source references when bullet text contains inline sources', () => {
+      const result = renderExecSummary({
+        bullet_points: [
+          { bullet: 'Revenue grew 15% driven by strong demand (S1, S2)', sources: ['S1', 'S2'] },
+        ],
+      });
+      // Extract text from the bullet paragraph (index 1, after the heading)
+      const bulletParagraph = result[1] as Paragraph;
+      const root = (bulletParagraph as any).root;
+      const allText = JSON.stringify(root);
+      // "(S1, S2)" should appear exactly once, not twice
+      const matches = allText.match(/S1, S2/g);
+      expect(matches).toHaveLength(1);
     });
   });
 
@@ -86,6 +102,73 @@ describe('docx-section-renderers', () => {
         },
       });
       expect(result.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('renderKeyExecsAndBoard', () => {
+    it('renders filtered executives and board members', () => {
+      const result = renderKeyExecsAndBoard({
+        c_suite: {
+          executives: [
+            { name: 'John CEO', title: 'CEO', tenure: '5 years', source: 'S1' },
+            { name: 'Information Not Available', title: 'CFO', source: 'S2' },
+          ],
+        },
+        board_of_directors: {
+          members: [
+            { name: 'Jane Chair', role: 'Chair', source: 'S1' },
+          ],
+        },
+      });
+      expect(result.length).toBeGreaterThan(0);
+      // Should have tables for both board and c-suite (filtering out the placeholder)
+      const tables = result.filter((el) => el instanceof Table);
+      expect(tables.length).toBe(2);
+    });
+
+    it('returns insufficient data notice when all names are placeholders', () => {
+      const result = renderKeyExecsAndBoard({
+        c_suite: {
+          executives: [{ name: 'Not Available', title: 'CEO' }],
+        },
+        board_of_directors: {
+          members: [{ name: 'Undisclosed', role: 'Chair' }],
+        },
+        confidence: { reason: 'Private company with limited disclosure' },
+      });
+      expect(result.length).toBe(1);
+      expect(result[0]).toBeInstanceOf(Paragraph);
+    });
+
+    it('returns empty for null data', () => {
+      expect(renderKeyExecsAndBoard(null)).toEqual([]);
+    });
+
+    it('dispatches via renderSection', () => {
+      const result = renderSection('key_execs_and_board', {
+        c_suite: { executives: [{ name: 'CEO Person', title: 'CEO' }] },
+      });
+      expect(result.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('renderDealTeam (insufficient data)', () => {
+    it('returns notice when no stakeholders', () => {
+      const result = renderDealTeam({
+        confidence: { reason: 'No deal team info available' },
+      });
+      expect(result.length).toBe(1);
+      expect(result[0]).toBeInstanceOf(Paragraph);
+    });
+  });
+
+  describe('renderLeadershipAndGovernance (insufficient data)', () => {
+    it('returns notice when no leadership data', () => {
+      const result = renderLeadershipAndGovernance({
+        confidence: { reason: 'No governance info' },
+      });
+      expect(result.length).toBe(1);
+      expect(result[0]).toBeInstanceOf(Paragraph);
     });
   });
 

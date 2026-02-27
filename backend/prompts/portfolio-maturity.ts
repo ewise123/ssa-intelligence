@@ -90,6 +90,15 @@ interface PortfolioMaturityOutput {
 }
 \`\`\`
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent portfolio holdings or exit signals that cannot be confirmed from public sources.
+- **Return an empty \`holdings\` array** if no real holdings data can be identified.
+- **Use the \`summary\` field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+
+---
+
 ## CRITICAL REMINDERS
 
 1. Follow style guide: All formatting rules apply

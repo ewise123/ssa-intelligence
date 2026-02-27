@@ -14,8 +14,8 @@ export interface Section2Context {
   kpi_table: {
     metrics: Array<{
       metric: string;
-      company: number | string;
-      industry_avg: number | string;
+      company: number | string | null;
+      industry_avg: number | string | null;
       source: string;
     }>;
   };
@@ -26,7 +26,7 @@ export interface Section4Input {
   foundation: FoundationOutput;
   companyName: string;
   geography: string;
-  section2Context?: Section2Context;
+  section2?: Section2Context;
   reportType?: ReportTypeId;
 }
 
@@ -36,10 +36,13 @@ export interface Section4Input {
 
 export interface SegmentFinancialMetric {
   metric: string;
-  segment: number | string;
-  company_avg: number | string;
-  industry_avg: number | string;
+  segment: number | string | null;
+  company_avg: number | string | null;
+  industry_avg: number | string | null;
   source: string;
+  currency?: string | null;
+  unit?: string;
+  value_type?: 'currency' | 'percent' | 'ratio' | 'number';
 }
 
 export interface AnalystQuote {
@@ -96,13 +99,13 @@ export interface Section4Output {
  * Builds comprehensive prompt attempting all segments in one call
  */
 export function buildSegmentAnalysisPrompt(input: Section4Input): string {
-  const { foundation, companyName, geography, section2Context } = input;
+  const { foundation, companyName, geography, section2 } = input;
   
   const segmentCount = foundation.segment_structure.length;
   const segmentNames = foundation.segment_structure.map(s => s.name).join(', ');
   
   const foundationJson = JSON.stringify(foundation, null, 2);
-  const section2Json = section2Context ? JSON.stringify(section2Context, null, 2) : 'Not provided';
+  const section2Json = section2 ? JSON.stringify(section2, null, 2) : 'Not provided';
   
   const basePrompt = `# Section 4: Segment Analysis - Research Prompt
 
@@ -269,8 +272,8 @@ interface Section4Output {
 ## REQUIRED SECTIONS PER SEGMENT
 
 ### 4.X.1 Financial Snapshot
-- Table with metrics (use "–" if unavailable)
-- Units belong in metric names; table values must be numeric only (or -)
+- Table with metrics (use null if unavailable)
+- Units belong in metric names; table values must be numeric only (use null when unavailable)
 - Geography notes (2-3 sentences on ${geography} performance)
 
 ### 4.X.2 Performance Analysis
@@ -326,6 +329,16 @@ interface Section4Output {
 
 ---
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent business segments, competitors, financial data, or performance analysis that cannot be confirmed from public sources.
+- **Return an empty \`segments\` array** if no real segment data can be identified.
+- **Use the \`overview\` field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- **Use \`null\`** for unavailable numeric data (not 0, not -1, not "–").
+
+---
+
 ## CRITICAL REMINDERS
 
 1. Follow style guide: All formatting rules apply
@@ -356,7 +369,7 @@ export function buildSection4SegmentPrompt(
   input: Section4Input,
   segmentName: string
 ): string {
-  const { foundation, companyName, geography, section2Context } = input;
+  const { foundation, companyName, geography, section2 } = input;
   
   const segment = foundation.segment_structure.find(s => s.name === segmentName);
   if (!segment) {
@@ -364,7 +377,7 @@ export function buildSection4SegmentPrompt(
   }
   
   const foundationJson = JSON.stringify(foundation, null, 2);
-  const section2Json = section2Context ? JSON.stringify(section2Context, null, 2) : 'Not provided';
+  const section2Json = section2 ? JSON.stringify(section2, null, 2) : 'Not provided';
   
   return `# Section 4: Segment Analysis - INDIVIDUAL SEGMENT Prompt
 
@@ -507,7 +520,7 @@ interface SegmentOutput {
 ## REQUIRED OUTPUT STRUCTURE
 
 ### Financial Snapshot (4.X.1)
-- Complete table with all metrics (use "–" if unavailable)
+- Complete table with all metrics (use null if unavailable)
 - FX source notation
 - Geography notes (2-3 sentences on ${geography})
 
@@ -652,7 +665,8 @@ export function formatSection4ForDocument(output: Section4Output): string {
     return 'currency';
   };
 
-  const formatTableValue = (metricName: string, value: number | string) => {
+  const formatTableValue = (metricName: string, value: number | string | null) => {
+    if (value === null || value === undefined) return '–';
     if (typeof value !== 'number') return value;
     const unit = resolveMetricUnit(metricName);
     const formatted = formatNumber(value);
@@ -834,8 +848,8 @@ export function compareSegmentToCompany(
   segment: SegmentAnalysis,
   metricName: string
 ): {
-  segment: number | string;
-  company: number | string;
+  segment: number | string | null;
+  company: number | string | null;
   delta: number | string;
 } | null {
   const metric = segment.financial_snapshot.table.find(m => m.metric === metricName);

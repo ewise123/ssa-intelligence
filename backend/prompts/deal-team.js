@@ -1,14 +1,8 @@
-/**
- * Report-Specific Section: Deal Team and Key Stakeholders
- */
-
 import { appendReportTypeAddendum } from './report-type-addendums.js';
-
 export function buildDealTeamPrompt(input) {
-  const { foundation, companyName } = input;
-  const foundationJson = JSON.stringify(foundation, null, 2);
-
-  const basePrompt = `# Deal Team and Key Stakeholders - Research Prompt
+    const { foundation, companyName } = input;
+    const foundationJson = JSON.stringify(foundation, null, 2);
+    const basePrompt = `# Deal Team and Key Stakeholders - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -73,6 +67,18 @@ interface DealTeamOutput {
 }
 \`\`\`
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+**For private companies or when stakeholders cannot be identified:**
+- **Do NOT fabricate placeholder entries.** Never return entries with names like "Information Not Available", "Not Disclosed", "Unknown", or similar placeholders.
+- **Return an empty \`stakeholders\` array** if no real individuals can be identified from public sources.
+- **Use the \`notes\` field** to explain what information is missing and why (e.g., "No deal team or key stakeholders could be identified from public sources for this private company.").
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+
+**This rule supersedes "Include at least 2 stakeholders"** — it is better to return an empty array with a clear note than to invent placeholder people entries.
+
+---
+
 ## CRITICAL REMINDERS
 
 1. Follow style guide: All formatting rules apply
@@ -97,6 +103,6 @@ interface DealTeamOutput {
 - [ ] \`sources_used\` only contains S# values
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA.**`;
-
-  return appendReportTypeAddendum('deal_team', input.reportType, basePrompt);
+    return appendReportTypeAddendum('deal_team', input.reportType, basePrompt);
 }
+//# sourceMappingURL=deal-team.js.map

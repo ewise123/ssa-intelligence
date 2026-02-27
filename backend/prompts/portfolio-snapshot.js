@@ -1,14 +1,8 @@
-/**
- * Report-Specific Section: Portfolio Snapshot
- */
-
 import { appendReportTypeAddendum } from './report-type-addendums.js';
-
 export function buildPortfolioSnapshotPrompt(input) {
-  const { foundation, companyName, geography } = input;
-  const foundationJson = JSON.stringify(foundation, null, 2);
-
-  const basePrompt = `# Portfolio Snapshot - Research Prompt
+    const { foundation, companyName, geography } = input;
+    const foundationJson = JSON.stringify(foundation, null, 2);
+    const basePrompt = `# Portfolio Snapshot - Research Prompt
 
 ## CRITICAL INSTRUCTIONS
 
@@ -80,6 +74,16 @@ interface PortfolioSnapshotOutput {
 }
 \`\`\`
 
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent portfolio companies, deals, or other entities that cannot be confirmed from public sources.
+- **Return empty arrays** for any category where no real data can be identified.
+- **Use the \`summary\` field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
+- **Use \`null\`** for unavailable numeric data (not 0, not -1, not "–").
+
+---
+
 ## CRITICAL REMINDERS
 
 1. Follow style guide: All formatting rules apply
@@ -104,6 +108,6 @@ interface PortfolioSnapshotOutput {
 - [ ] \`sources_used\` only contains S# values
 
 **OUTPUT ONLY VALID JSON MATCHING THE SCHEMA.**`;
-
-  return appendReportTypeAddendum('portfolio_snapshot', input.reportType, basePrompt);
+    return appendReportTypeAddendum('portfolio_snapshot', input.reportType, basePrompt);
 }
+//# sourceMappingURL=portfolio-snapshot.js.map

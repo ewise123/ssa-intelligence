@@ -1,4 +1,8 @@
-import { Confidence, SourceReference, AnalystQuote, Trend, Competitor, CompanyBasics, GeographySpecifics, SegmentStructure, FinancialMetric, SegmentFinancialMetric, DerivedMetric, FxRate, FxRateDetailed, IndustryAverages, IndustryAveragesDetailed, Opportunity, NewsItem, Magnitude, BulletCategory, FxSource, IndustrySource } from './shared-types';
+/**
+ * Complete TypeScript Type Definitions
+ * All interfaces for Company Intelligence Sheet generation system
+ */
+import { Confidence, SourceReference, AnalystQuote, Trend, Competitor, CompanyBasics, GeographySpecifics, SegmentStructure, FinancialMetric, SegmentFinancialMetric, DerivedMetric, FxRate, FxRateDetailed, IndustryAverages, IndustryAveragesDetailed, Opportunity, NewsItem, Magnitude, BulletCategory, FxSource, IndustrySource } from './shared-types.js';
 export interface FoundationOutput {
     confidence: Confidence;
     company_basics: CompanyBasics;
@@ -60,13 +64,16 @@ export interface StrategicPriority {
     geography_relevance_rating: 'High' | 'Medium' | 'Low';
     source: string;
 }
-export interface ExecutiveLeader {
+export interface BriefExecutive {
     name: string;
     title: string;
-    background: string;
-    tenure: string;
-    geography_relevance?: string;
-    geography_relevance_rating?: 'High' | 'Medium' | 'Low';
+    tenure?: string;
+    source: string;
+}
+export interface BriefRegionalLeader {
+    name: string;
+    title: string;
+    source: string;
 }
 export interface Section3Output {
     confidence: Confidence;
@@ -92,12 +99,71 @@ export interface Section3Output {
         geography_specific_initiatives: string;
     };
     key_leadership: {
-        executives: ExecutiveLeader[];
-        regional_leaders: ExecutiveLeader[];
+        summary: string;
+        executives: BriefExecutive[];
+        regional_leader?: BriefRegionalLeader | null;
     };
     sources_used: string[];
 }
 export interface Section3Input {
+    foundation: FoundationOutput;
+    companyName: string;
+    geography: string;
+}
+export interface BoardMember {
+    name: string;
+    role: string;
+    committees: string[];
+    background: string;
+    tenure: string;
+    other_boards: string[];
+    source: string;
+}
+export interface CSuiteExecutive {
+    name: string;
+    title: string;
+    role_description: string;
+    background: string;
+    tenure: string;
+    performance_actions: string[];
+    geography_relevance?: 'High' | 'Medium' | 'Low';
+    source: string;
+}
+export interface BusinessUnitLeader {
+    name: string;
+    title: string;
+    business_unit: string;
+    role_description: string;
+    background: string;
+    performance_actions: string[];
+    geography_relevance?: 'High' | 'Medium' | 'Low';
+    source: string;
+}
+export interface LeadershipChange {
+    date: string;
+    change_type: 'New Hire' | 'Departure' | 'Promotion' | 'Reorganization';
+    description: string;
+    implications: string;
+    source: string;
+}
+export interface KeyExecsAndBoardOutput {
+    confidence: Confidence;
+    board_of_directors: {
+        summary: string;
+        members: BoardMember[];
+    };
+    c_suite: {
+        summary: string;
+        executives: CSuiteExecutive[];
+    };
+    business_unit_leaders: {
+        summary: string;
+        leaders: BusinessUnitLeader[];
+    };
+    recent_leadership_changes: LeadershipChange[];
+    sources_used: string[];
+}
+export interface KeyExecsAndBoardInput {
     foundation: FoundationOutput;
     companyName: string;
     geography: string;
@@ -130,7 +196,7 @@ export interface Section4Input {
     foundation: FoundationOutput;
     companyName: string;
     geography: string;
-    section2Context?: Section2Output;
+    section2?: Section2Output;
 }
 export interface MacroTrend extends Trend {
 }
@@ -162,8 +228,8 @@ export interface Section5Input {
     foundation: FoundationOutput;
     companyName: string;
     geography: string;
-    section3Context?: Section3Output;
-    section4Context?: Section4Output;
+    section3?: Section3Output;
+    section4?: Section4Output;
 }
 export interface PeerInfo {
     name: string;
@@ -211,7 +277,7 @@ export interface Section6Input {
     foundation: FoundationOutput;
     companyName: string;
     geography: string;
-    section2Context: Section2Output;
+    section2: Section2Output;
 }
 export interface Section7Output {
     confidence: Confidence;
@@ -222,8 +288,8 @@ export interface Section7Input {
     foundation: FoundationOutput;
     companyName: string;
     geography: string;
-    section5Context?: Section5Output;
-    section6Context?: Section6Output;
+    section5?: Section5Output;
+    section6?: Section6Output;
 }
 export interface Section8Output {
     confidence: Confidence;
@@ -310,4 +376,3 @@ export interface CompleteResearchOutput {
         all_sections_complete: boolean;
     };
 }
-//# sourceMappingURL=types.d.ts.map

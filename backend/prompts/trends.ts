@@ -45,8 +45,8 @@ export interface Section5Input {
   foundation: FoundationOutput;
   companyName: string;
   geography: string;
-  section3Context?: Section3Context;
-  section4Context?: Section4Context;
+  section3?: Section3Context;
+  section4?: Section4Context;
   reportType?: ReportTypeId;
 }
 
@@ -60,7 +60,7 @@ export interface TrendBase {
   trend: string;
   description: string;
   direction: TrendDirection;
-  impact_score: number;
+  impact_score: number | null;  // 1-10, null if unknown
   geography_relevance: string;
   source: string;
 }
@@ -112,11 +112,11 @@ export interface Section5Output {
 // ============================================================================
 
 export function buildTrendsPrompt(input: Section5Input): string {
-  const { foundation, companyName, geography, section3Context, section4Context } = input;
+  const { foundation, companyName, geography, section3, section4 } = input;
   
   const foundationJson = JSON.stringify(foundation, null, 2);
-  const section3Json = section3Context ? JSON.stringify(section3Context, null, 2) : 'Not provided';
-  const section4Json = section4Context ? JSON.stringify(section4Context, null, 2) : 'Not provided';
+  const section3Json = section3 ? JSON.stringify(section3, null, 2) : 'Not provided';
+  const section4Json = section4 ? JSON.stringify(section4, null, 2) : 'Not provided';
   
   const basePrompt = `# Section 5: Trends - Research Prompt
 
@@ -339,7 +339,7 @@ interface Section5Output {
       trend: string;           // Concise title (5-10 words)
       description: string;     // 2-3 sentences with quantitative data
       direction: 'Positive' | 'Negative' | 'Neutral';
-      impact_score: number;    // 1-10
+      impact_score: number | null;    // 1-10, null if cannot be assessed
       geography_relevance: string; // 1-2 sentences on ${geography} impact
       source: string;          // "S#, S#"
     }>;
@@ -351,7 +351,7 @@ interface Section5Output {
       trend: string;
       description: string;
       direction: 'Positive' | 'Negative' | 'Neutral';
-      impact_score: number;
+      impact_score: number | null;  // 1-10, null if cannot be assessed
       segment_relevance?: string; // Which segment(s) affected
       geography_relevance: string;
       source: string;
@@ -364,7 +364,7 @@ interface Section5Output {
       trend: string;
       description: string;
       direction: 'Positive' | 'Negative' | 'Neutral';
-      impact_score: number;
+      impact_score: number | null;  // 1-10, null if cannot be assessed
       geography_relevance: string;
       management_commentary?: string; // Brief quote or paraphrase
       analyst_quote?: {
@@ -430,6 +430,15 @@ interface Section5Output {
 - [ ] Analyst quotes ≤15 words, one per source
 - [ ] 75-80% of content emphasizes ${geography}
 - [ ] Sources_used array complete
+
+---
+
+## HANDLING MISSING INFORMATION (CRITICAL)
+
+- **Do NOT fabricate entries.** Never invent trends, market movements, or impact assessments that cannot be confirmed from public sources.
+- **Return empty \`trends\` arrays** for any category (macro, micro, company) where no real data can be identified.
+- **Use the relevant \`summary\` field** to explain what information is missing and why.
+- **Set confidence.level to "LOW"** with a clear reason explaining the data limitation.
 
 ---
 
@@ -502,16 +511,16 @@ export function validateSection5Output(output: any): output is Section5Output {
   
   for (const trend of allTrends) {
     if (!trend.trend || !trend.description || !trend.direction ||
-        typeof trend.impact_score !== 'number' ||
+        (trend.impact_score !== null && typeof trend.impact_score !== 'number') ||
         !trend.geography_relevance || !trend.source) {
       return false;
     }
-    
+
     if (!['Positive', 'Negative', 'Neutral'].includes(trend.direction)) {
       return false;
     }
-    
-    if (trend.impact_score < 1 || trend.impact_score > 10) {
+
+    if (trend.impact_score !== null && (trend.impact_score < 1 || trend.impact_score > 10)) {
       return false;
     }
   }
@@ -537,7 +546,7 @@ export function formatSection5ForDocument(output: Section5Output): string {
   for (const trend of output.macro_trends.trends) {
     markdown += `- **${trend.trend}**\n`;
     markdown += `  - Direction: ${trend.direction}\n`;
-    markdown += `  - Impact Score: ${trend.impact_score}/10\n`;
+    markdown += `  - Impact Score: ${trend.impact_score !== null ? `${trend.impact_score}/10` : 'N/A'}\n`;
     markdown += `  - ${trend.description}\n`;
     markdown += `  - **Geography Relevance:** ${trend.geography_relevance}\n`;
     markdown += `  - Source: ${trend.source}\n\n`;
@@ -554,7 +563,7 @@ export function formatSection5ForDocument(output: Section5Output): string {
     }
     markdown += `\n`;
     markdown += `  - Direction: ${trend.direction}\n`;
-    markdown += `  - Impact Score: ${trend.impact_score}/10\n`;
+    markdown += `  - Impact Score: ${trend.impact_score !== null ? `${trend.impact_score}/10` : 'N/A'}\n`;
     markdown += `  - ${trend.description}\n`;
     markdown += `  - **Geography Relevance:** ${trend.geography_relevance}\n`;
     markdown += `  - Source: ${trend.source}\n\n`;
@@ -567,7 +576,7 @@ export function formatSection5ForDocument(output: Section5Output): string {
   for (const trend of output.company_trends.trends) {
     markdown += `- **${trend.trend}**\n`;
     markdown += `  - Direction: ${trend.direction}\n`;
-    markdown += `  - Impact Score: ${trend.impact_score}/10\n`;
+    markdown += `  - Impact Score: ${trend.impact_score !== null ? `${trend.impact_score}/10` : 'N/A'}\n`;
     markdown += `  - ${trend.description}\n`;
     markdown += `  - **Geography Relevance:** ${trend.geography_relevance}\n`;
     if (trend.management_commentary) {
@@ -599,14 +608,15 @@ export function getHighImpactTrends(
   trends: TrendBase[],
   minScore: number = 7
 ): TrendBase[] {
-  return trends.filter(t => t.impact_score >= minScore).sort((a, b) => b.impact_score - a.impact_score);
+  return trends.filter(t => t.impact_score !== null && t.impact_score >= minScore).sort((a, b) => (b.impact_score ?? 0) - (a.impact_score ?? 0));
 }
 
 /**
  * Calculates average impact score
  */
 export function calculateAverageImpact(trends: TrendBase[]): number {
-  if (trends.length === 0) return 0;
-  const sum = trends.reduce((acc, t) => acc + t.impact_score, 0);
-  return Math.round((sum / trends.length) * 10) / 10;
+  const scored = trends.filter(t => t.impact_score !== null);
+  if (scored.length === 0) return 0;
+  const sum = scored.reduce((acc, t) => acc + (t.impact_score as number), 0);
+  return Math.round((sum / scored.length) * 10) / 10;
 }
