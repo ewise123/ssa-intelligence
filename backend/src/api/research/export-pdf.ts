@@ -23,6 +23,7 @@ const assetsDir = fs.existsSync(path.resolve(__dirname, '../../../assets'))
 const BRAND_BLUE = '#003399';
 const BRAND_DK2 = '#336179';
 const BODY_COLOR = '#111827';
+const BORDER_GRAY = '#e5e7eb';
 const FONT_STACK = '"Avenir Next LT Pro", "Helvetica Neue", Arial, sans-serif';
 
 // ── Load assets as base64 data URIs (once at module init) ─────────────
@@ -83,8 +84,8 @@ const htmlTemplate = (params: { title: string; meta: string[]; body: string }) =
     .meta { color: #4b5563; font-size: 11px; line-height: 1.4; margin: 0 0 4px 0; }
     .section { margin-bottom: 18px; }
     table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
-    th, td { border: 1px solid #e5e7eb; padding: 6px; text-align: left; vertical-align: top; }
-    td { box-shadow: inset 0 -2px 0 #e5e7eb; }
+    th, td { border: 1px solid ${BORDER_GRAY}; padding: 6px; text-align: left; vertical-align: top; }
+    td { box-shadow: inset 0 -2px 0 ${BORDER_GRAY}; }
     th { background: ${BRAND_BLUE}; color: #ffffff; font-weight: 600; -webkit-print-color-adjust: exact; }
     thead { display: table-header-group; }
     code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 11px; }
