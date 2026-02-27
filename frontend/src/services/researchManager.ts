@@ -1021,7 +1021,11 @@ const mapSections = (
     const sectionKey = SECTION_ID_TO_KEY[config.id];
     const rawSection = sectionKey && sectionData ? sectionData[sectionKey] : undefined;
     const existingSection = existing?.[config.id];
-    let formattedContent = rawSection !== undefined ? formatSectionContent(config.id, rawSection) : undefined;
+    // Only format content for completed sections — formatting pending/running sections
+    // produces false "insufficient data" notices because the data hasn't arrived yet.
+    const sectionStatus = rawStatus?.status || '';
+    const isSectionDone = sectionStatus === 'completed' || sectionStatus === 'completed_with_errors' || sectionStatus === 'failed';
+    let formattedContent = rawSection !== undefined && isSectionDone ? formatSectionContent(config.id, rawSection) : undefined;
     // Fallback: if formatter returned empty string, try raw JSON stringify to avoid blank sections
     if (formattedContent !== undefined && formattedContent.trim() === '' && rawSection !== undefined) {
       try {
