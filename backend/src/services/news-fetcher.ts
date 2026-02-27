@@ -947,10 +947,11 @@ People: ${[...batchPeople].join(', ') || 'none'}
     }
 
     const excludedIds = new Set(result.excludedIds ?? []);
-    console.log(`[process] LLM OK: ${result.articles?.length ?? 0} kept, ${excludedIds.size} excluded`);
+    const rawArticles = result.articles ?? [];
+    console.log(`[process] LLM OK: ${rawArticles.length} kept, ${excludedIds.size} excluded`);
 
     // Drop any article whose ID appears in excludedIds (safety net)
-    const keptArticles = result.articles.filter((a: LLMArticleResponse) => {
+    const keptArticles = rawArticles.filter((a: LLMArticleResponse) => {
       if (typeof a.id === 'number' && excludedIds.has(a.id)) {
         console.log(`[process] Dropping article id=${a.id} found in excludedIds`);
         return false;
