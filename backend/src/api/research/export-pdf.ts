@@ -55,6 +55,7 @@ const footerTextHtml = `
 
 const pdfFooterTemplate = footerWaveDataUri
   ? `<div style="position:relative;width:100%;height:100%;overflow:hidden;-webkit-print-color-adjust:exact;margin-bottom:-20px;">
+       <div style="position:absolute;top:0;left:-32px;width:calc(100% + 64px);height:18px;background:#ffffff;z-index:3;-webkit-print-color-adjust:exact;"></div>
        <img src="${footerWaveDataUri}" style="position:absolute;bottom:0;left:-32px;width:calc(100% + 64px);height:auto;z-index:0;" />
        ${footerTextHtml}
      </div>`
@@ -83,7 +84,9 @@ const htmlTemplate = (params: { title: string; meta: string[]; body: string }) =
     .section { margin-bottom: 18px; }
     table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
     th, td { border: 1px solid #e5e7eb; padding: 6px; text-align: left; vertical-align: top; }
+    td { box-shadow: inset 0 -2px 0 #e5e7eb; }
     th { background: ${BRAND_BLUE}; color: #ffffff; font-weight: 600; -webkit-print-color-adjust: exact; }
+    thead { display: table-header-group; }
     code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 11px; }
     ul { padding-left: 18px; }
     ol { padding-left: 20px; }
@@ -195,7 +198,7 @@ export async function exportResearchPdf(req: Request, res: Response) {
         format: 'Letter' as const,
         displayHeaderFooter: true,
         footerTemplate: pdfFooterTemplate,
-        margin: { top: '80px', bottom: '0.75in', left: '32px', right: '32px' },
+        margin: { top: '80px', bottom: '0.95in', left: '32px', right: '32px' },
         printBackground: true,
         timeout: 30000,
       };

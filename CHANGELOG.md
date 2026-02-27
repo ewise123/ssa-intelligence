@@ -7,6 +7,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 ## [Unreleased]
 
 ### Fixed
+- Improve research PDF table continuity at page breaks by adding fragment-safe cell edge rendering (`td` inset shadow) so split rows keep a visible bottom line.
 - Standardize metric formatting across all tables with shared `metric-formatter` module — consistent currency auto-promotion ($M→$B), percent, ratio, and bps formatting.
 - Fix double-counted source citations in executive summary bullets across all rendering pipelines.
 - Fix KPI table scale mismatch where column header shows ($M) but values show $22.3B — new `tableMode` suppresses scale suffixes in table cells.
