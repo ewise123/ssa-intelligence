@@ -817,6 +817,10 @@ People: ${[...batchPeople].join(', ') || 'none'}
 - Market share changes, competitive threats
 - Technology implementations, workforce restructuring
 
+## For each article, decide KEEP or EXCLUDE.
+- List excluded article IDs in the "excludedIds" array (just the numeric IDs)
+- Only include KEPT articles as full objects in the "articles" array
+
 ## For each KEPT article:
 - Assign category: M&A / Deal Activity, Leadership Changes, Earnings & Operational Performance, Strategy, Value Creation / Cost Initiatives, Digital & Technology Modernization, Fundraising / New Funds, Operating Partner Activity, Supply Chain & Logistics, Plant & Footprint Changes
 - Generate shortSummary (1-2 sentences for card preview)
@@ -827,6 +831,7 @@ People: ${[...batchPeople].join(', ') || 'none'}
 
 ## Output — ONLY valid JSON:
 {
+  "excludedIds": [3, 5, 7],
   "articles": [
     {
       "id": 0,
@@ -853,7 +858,7 @@ People: ${[...batchPeople].join(', ') || 'none'}
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 8000,
+      max_tokens: 12000,
       temperature: 0,
       messages: [
         {
@@ -901,7 +906,7 @@ People: ${[...batchPeople].join(', ') || 'none'}
       cleaned = jsonMatch[0];
     }
 
-    let result: { articles: LLMArticleResponse[] };
+    let result: { excludedIds?: number[]; articles: LLMArticleResponse[] };
     try {
       result = JSON.parse(cleaned);
     } catch (parseError) {
@@ -941,10 +946,21 @@ People: ${[...batchPeople].join(', ') || 'none'}
       }
     }
 
-    console.log(`[process] LLM OK: ${result.articles?.length ?? 0} articles returned`);
+    const excludedIds = new Set(result.excludedIds ?? []);
+    const rawArticles = result.articles ?? [];
+    console.log(`[process] LLM OK: ${rawArticles.length} kept, ${excludedIds.size} excluded`);
+
+    // Drop any article whose ID appears in excludedIds (safety net)
+    const keptArticles = rawArticles.filter((a: LLMArticleResponse) => {
+      if (typeof a.id === 'number' && excludedIds.has(a.id)) {
+        console.log(`[process] Dropping article id=${a.id} found in excludedIds`);
+        return false;
+      }
+      return true;
+    });
 
     // Enrich with original data and resolve userNames deterministically
-    const processedArticles: ProcessedArticle[] = result.articles.map((a: LLMArticleResponse) => {
+    const processedArticles: ProcessedArticle[] = keptArticles.map((a: LLMArticleResponse) => {
       const original = typeof a.id === 'number' ? allPreTagged[a.id] : null;
       const company = a.company || original?.taggedCompany || null;
       const person = a.person || original?.taggedPerson || null;
@@ -1344,6 +1360,8 @@ ${company ? `- News about ${company} being an underwriter or bookrunner for IPOs
 4. Explain why it matters for client engagement
 
 ## Output Format
+Only include articles that pass ALL filter rules above. Do NOT include excluded articles.
+
 Return ONLY valid JSON (no markdown, no backticks):
 {
   "articles": [
@@ -1412,7 +1430,9 @@ Return only HIGH-QUALITY, RELEVANT articles where ${entityName} is the PRIMARY s
       cleaned = jsonMatch[0];
     }
 
-    return JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned);
+    console.log(`[search] ${parsed.articles?.length ?? 0} articles returned`);
+    return parsed;
   } catch (error) {
     console.error('[search] Error:', error);
     return { articles: [], coverageGaps: [] };
