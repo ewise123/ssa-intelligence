@@ -64,8 +64,9 @@ const resolveAuthContext = async (req: Request): Promise<AuthContext> => {
 
   // Try Azure Easy Auth first — if X-MS-CLIENT-PRINCIPAL is present and valid,
   // use its email/name. Otherwise fall through to the oauth2-proxy header chain.
-  const azurePrincipalHeader = normalizeHeaderValue(req.headers['x-ms-client-principal']);
-  const azurePrincipal = decodeAzureClientPrincipal(azurePrincipalHeader || undefined);
+  const rawPrincipal = req.headers['x-ms-client-principal'];
+  const azurePrincipalHeader = Array.isArray(rawPrincipal) ? rawPrincipal[0] : rawPrincipal;
+  const azurePrincipal = decodeAzureClientPrincipal(azurePrincipalHeader);
 
   const emailHeader = azurePrincipal?.email
     || getHeader(req, HEADER_CANDIDATES.email).toLowerCase();

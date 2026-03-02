@@ -52,6 +52,8 @@ The auth middleware auto-detects the provider — no configuration flag needed:
 
 Azure Easy Auth always injects its headers when enabled; oauth2-proxy never injects `X-MS-CLIENT-PRINCIPAL`. There is no ambiguity.
 
+> **Trust boundary:** Azure Easy Auth strips and overwrites any client-supplied `X-MS-*` headers before they reach the application. On Render, these headers are never injected, so the decoder returns `null` and the fallback path runs. If the backend were exposed directly to the internet without Easy Auth or a trusted reverse proxy, a malicious client could forge `X-MS-CLIENT-PRINCIPAL` to impersonate any user. Always ensure the backend is only reachable through a trusted upstream (Azure Easy Auth, oauth2-proxy, or equivalent).
+
 ### Azure principal header format
 
 The `X-MS-CLIENT-PRINCIPAL` header is a base64-encoded JSON object:
