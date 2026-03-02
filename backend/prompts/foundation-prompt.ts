@@ -19,6 +19,7 @@ interface FoundationPromptInputs {
   focusAreas?: string[];
   userFiles?: Array<{name: string; type: string}>;
   reportType?: ReportTypeId;
+  currentYear?: number;
 }
 
 export function buildFoundationPrompt(inputs: FoundationPromptInputs): string {
@@ -39,6 +40,8 @@ export function buildFoundationPrompt(inputs: FoundationPromptInputs): string {
     ? userFiles.map(f => `${f.name} (${f.type})`).join(", ")
     : "None provided";
   
+  const currentYear = inputs.currentYear ?? new Date().getFullYear();
+
   // Build the complete prompt
   const basePrompt = `# Phase 0: Foundation Research - Company Intelligence System
 
@@ -74,7 +77,7 @@ Follow this priority order for data gathering:
 **Search for:**
 - "**${companyName}** 10-K" OR "**${companyName}** 20-F" OR "**${companyName}** annual report"
 - "**${companyName}** 10-Q" OR "**${companyName}** 6-K" (most recent quarters within the time horizon)
-- "**${companyName}** investor presentation" + current year
+- "**${companyName}** investor presentation ${currentYear}"
 - "**${companyName}** proxy statement DEF 14A"
 
 **Extract:**
@@ -144,7 +147,7 @@ Follow this priority order for data gathering:
 
 #### 4. Tier-1 Media & News (Priority: HIGH)
 **Search for:**
-- "**${companyName}** ${geography} news" + current year
+- "**${companyName}** ${geography} news ${currentYear}"
 - "**${companyName}** investment ${geography}"
 - "**${companyName}** expansion ${geography}"
 - "**${companyName}** facility ${geography}"
@@ -166,10 +169,10 @@ Follow this priority order for data gathering:
 
 #### 5. Industry/Analyst Reports (Priority: MEDIUM)
 **Search for:**
-- "Sector report" + current year
+- "Sector report ${currentYear}"
 - "**${companyName}** industry Gartner OR Forrester OR IDC"
 - "Sector trends ${geography}"
-- "Business activity PMI ${geography}" + current year
+- "Business activity PMI ${geography} ${currentYear}"
 
 **Extract:**
 - Industry growth rates and forecasts

@@ -5,7 +5,11 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonrepair } from 'jsonrepair';
-import type { MessageStreamEvent } from '@anthropic-ai/sdk/resources/messages';
+import type {
+  MessageStreamEvent,
+  MessageCreateParamsNonStreaming,
+  TextBlock,
+} from '@anthropic-ai/sdk/resources/messages';
 
 // ============================================================================
 // TYPES
@@ -16,6 +20,11 @@ export interface ClaudeConfig {
   model?: string;
   maxTokens?: number;
   cacheEnabled?: boolean;
+}
+
+export interface ExecuteOptions {
+  system?: string;
+  tools?: Array<{ type: string; name: string; max_uses?: number }>;
 }
 
 export interface StreamingOptions {
@@ -56,18 +65,22 @@ export class ClaudeClient {
   /**
    * Execute a prompt and get complete response
    */
-  async execute(prompt: string): Promise<ClaudeResponse> {
+  async execute(prompt: string, options?: ExecuteOptions): Promise<ClaudeResponse> {
     try {
-      const response = await this.client.messages.create({
+      const createParams: MessageCreateParamsNonStreaming = {
         model: this.model,
         max_tokens: this.maxTokens,
-        messages: this.buildMessages(prompt)
-      });
+        messages: this.buildMessages(prompt) as MessageCreateParamsNonStreaming['messages'],
+        ...(options?.system ? { system: options.system } : {}),
+        ...(options?.tools ? { tools: options.tools as MessageCreateParamsNonStreaming['tools'] } : {}),
+      };
 
-      // Extract text content
+      const response = await this.client.messages.create(createParams);
+
+      // Extract text content (works with interleaved web_search_tool_result blocks)
       const content = response.content
-        .filter(block => block.type === 'text')
-        .map(block => block.type === 'text' ? block.text : '')
+        .filter((block): block is TextBlock => block.type === 'text')
+        .map(block => block.text)
         .join('\n');
 
       return {
@@ -88,7 +101,7 @@ export class ClaudeClient {
    */
   async executeStreaming(
     prompt: string,
-    options: StreamingOptions = {}
+    options: StreamingOptions & Pick<ExecuteOptions, 'system'> = {}
   ): Promise<ClaudeResponse> {
     try {
       let fullContent = '';
@@ -98,11 +111,14 @@ export class ClaudeClient {
 
       options.onStart?.();
 
-      const stream = await this.client.messages.stream({
+      const streamParams: MessageCreateParamsNonStreaming = {
         model: this.model,
         max_tokens: this.maxTokens,
-        messages: this.buildMessages(prompt)
-      });
+        messages: this.buildMessages(prompt) as MessageCreateParamsNonStreaming['messages'],
+        ...(options.system ? { system: options.system } : {}),
+      };
+
+      const stream = await this.client.messages.stream(streamParams);
 
       for await (const event of stream) {
         this.handleStreamEvent(event, {
