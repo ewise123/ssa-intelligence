@@ -17,7 +17,8 @@ const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, () => {
   const env = process.env.NODE_ENV || 'development';
-  const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.CORS_ORIGIN || `http://localhost:${PORT}`;
+  const websiteHostname = process.env.WEBSITE_HOSTNAME ? `https://${process.env.WEBSITE_HOSTNAME}` : '';
+  const baseUrl = process.env.RENDER_EXTERNAL_URL || websiteHostname || process.env.CORS_ORIGIN || `http://localhost:${PORT}`;
   console.log(`
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║

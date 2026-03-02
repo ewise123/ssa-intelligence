@@ -43,6 +43,5 @@ COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 EXPOSE 3000
 
 # Note: assumes backend handles serving the API (and optionally static frontend if configured in code)
-# One-time db push to force-sync schema (creates missing tables without data loss).
-# After this deploy succeeds, revert to: prisma migrate deploy && node ...
-CMD ["sh", "-c", "cd /app/backend && /app/backend/node_modules/.bin/prisma db push --skip-generate --accept-data-loss --schema=/app/backend/prisma/schema.prisma && node /app/backend/dist/src/index.js"]
+# Apply committed migrations then start the server.
+CMD ["sh", "-c", "cd /app/backend && /app/backend/node_modules/.bin/prisma migrate deploy --schema=/app/backend/prisma/schema.prisma && node /app/backend/dist/src/index.js"]

@@ -4,8 +4,8 @@
 
 SSA Intelligence uses a layered auth model:
 
-1. **oauth2-proxy** handles authentication (login, sessions, identity headers)
-2. **Auth middleware** reads proxy headers, upserts the user, and attaches `req.auth`
+1. **Identity provider** handles authentication — either oauth2-proxy (Render) or Azure Easy Auth / Entra ID (Azure App Service)
+2. **Auth middleware** reads identity headers, upserts the user, and attaches `req.auth`
 3. **User status** (ACTIVE / PENDING) gates access to protected routes
 4. **Role guards** (member / admin) restrict admin functionality
 5. **Group-based visibility** scopes research jobs by team membership
@@ -26,11 +26,69 @@ From `backend/src/middleware/auth.ts`:
 
 | Purpose | Headers (checked in order) |
 |---------|---------------------------|
-| Email | `x-auth-request-email`, `x-email`, `x-user-email`, `x-auth-email`, `x-forwarded-email` |
+| Email | `x-ms-client-principal-name`, `x-auth-request-email`, `x-email`, `x-user-email`, `x-auth-email`, `x-forwarded-email` |
 | User/name | `x-auth-request-user`, `x-user`, `x-user-id`, `x-auth-user` |
 | Groups | `x-auth-request-groups`, `x-groups` |
 
 oauth2-proxy must be configured to pass these headers (e.g., `set_xauthrequest=true`).
+
+## Authentication (Azure Easy Auth / Entra ID)
+
+### Request flow
+
+1. User visits the Azure App Service URL.
+2. Azure Easy Auth redirects to Microsoft Entra ID for OAuth2/OIDC login.
+3. After login, Easy Auth sets a session cookie and proxies the request to the app.
+4. Easy Auth injects `X-MS-CLIENT-PRINCIPAL` (base64-encoded JSON with identity claims) and other `X-MS-*` headers.
+5. The backend decodes the principal, extracts email/name/groups, upserts a user, and attaches `req.auth`.
+
+### How detection works
+
+The auth middleware auto-detects the provider — no configuration flag needed:
+
+1. **Try Azure**: decode `X-MS-CLIENT-PRINCIPAL` header. If valid and contains an email claim, use it.
+2. **Fallback**: read oauth2-proxy header chain (`x-auth-request-email`, etc.).
+3. **Dev fallback**: if no email from either source and dev mode is active, use `DEV_ADMIN_EMAIL`.
+
+Azure Easy Auth always injects its headers when enabled; oauth2-proxy never injects `X-MS-CLIENT-PRINCIPAL`. There is no ambiguity.
+
+### Azure principal header format
+
+The `X-MS-CLIENT-PRINCIPAL` header is a base64-encoded JSON object:
+
+```json
+{
+  "auth_typ": "aad",
+  "claims": [
+    { "typ": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress", "val": "alice@ssaandco.com" },
+    { "typ": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name", "val": "Alice Smith" },
+    { "typ": "http://schemas.microsoft.com/identity/claims/objectidentifier", "val": "abc-123-def" },
+    { "typ": "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups", "val": "group-id-1" },
+    { "typ": "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups", "val": "group-id-2" }
+  ]
+}
+```
+
+The decoder (`backend/src/middleware/azure-auth.ts`) handles both long-form and short-form claim type URIs.
+
+### Azure deployment notes
+
+Required App Service App Settings:
+
+| Setting | Value |
+|---------|-------|
+| `DATABASE_URL` | PostgreSQL connection string (Azure Database for PostgreSQL) |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `ADMIN_EMAILS` | Comma-separated admin emails |
+| `NODE_ENV` | `production` |
+| `CORS_ORIGIN` | App Service URL (e.g., `https://ssa-intelligence.azurewebsites.net`) |
+
+Auto-set by Azure (do not configure manually):
+
+| Variable | Purpose |
+|----------|---------|
+| `WEBSITE_HOSTNAME` | App Service hostname — used in startup banner URL |
+| `PORT` | Listening port (set by Azure runtime) |
 
 ## User Lifecycle
 
@@ -167,6 +225,7 @@ Dev fallbacks only activate when `NODE_ENV=development` or `DEV_MODE=true`:
 | File | Purpose |
 |------|---------|
 | `backend/src/middleware/auth.ts` | Auth middleware, role guards, visibility filter |
+| `backend/src/middleware/azure-auth.ts` | Azure Easy Auth / Entra ID principal decoder |
 | `backend/src/api/admin/invites.ts` | Invite CRUD + acceptance |
 | `backend/src/api/me.ts` | Current user endpoint |
 | `backend/src/lib/domain-validation.ts` | Shared email domain validation |

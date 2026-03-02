@@ -1,10 +1,12 @@
 import type { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { parseAllowedDomains, isAllowedDomain } from '../lib/domain-validation.js';
+import { decodeAzureClientPrincipal } from './azure-auth.js';
 import type { AuthContext } from '../types/auth.js';
 
 const HEADER_CANDIDATES = {
   email: [
+    'x-ms-client-principal-name',
     'x-auth-request-email',
     'x-email',
     'x-user-email',
@@ -60,8 +62,15 @@ const resolveAuthContext = async (req: Request): Promise<AuthContext> => {
   const superAdminEmail = parseSuperAdminEmail();
   const allowedDomains = parseAllowedDomains();
 
-  const emailHeader = getHeader(req, HEADER_CANDIDATES.email).toLowerCase();
-  const userHeader = getHeader(req, HEADER_CANDIDATES.user);
+  // Try Azure Easy Auth first — if X-MS-CLIENT-PRINCIPAL is present and valid,
+  // use its email/name. Otherwise fall through to the oauth2-proxy header chain.
+  const azurePrincipalHeader = normalizeHeaderValue(req.headers['x-ms-client-principal']);
+  const azurePrincipal = decodeAzureClientPrincipal(azurePrincipalHeader || undefined);
+
+  const emailHeader = azurePrincipal?.email
+    || getHeader(req, HEADER_CANDIDATES.email).toLowerCase();
+  const userHeader = azurePrincipal?.name
+    || getHeader(req, HEADER_CANDIDATES.user);
   const groupHeader = getHeader(req, HEADER_CANDIDATES.groups);
   const fallbackEmail = process.env.DEV_ADMIN_EMAIL || adminEmails[0] || 'dev-admin@ssaandco.com';
 

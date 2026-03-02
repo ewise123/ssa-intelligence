@@ -30,6 +30,7 @@ import { exportResearchPdf } from './api/research/export-pdf.js';
 import { exportResearchMarkdown } from './api/research/export-markdown.js';
 import { exportResearchDocx } from './api/research/export-docx.js';
 import { authMiddleware, requireAdmin, requireActiveUser } from './middleware/auth.js';
+import { decodeAzureClientPrincipal } from './middleware/azure-auth.js';
 import { getMe } from './api/me.js';
 import { listGroups } from './api/groups/list.js';
 import { listUsers, getUser, updateUser, deleteUser, createUser } from './api/admin/users.js';
@@ -303,16 +304,28 @@ app.get('/api/debug/auth', authMiddleware, (req, res) => {
     'x-email',
     'x-user',
     'x-user-id',
-    'x-groups'
+    'x-groups',
+    'x-ms-client-principal',
+    'x-ms-client-principal-name',
+    'x-ms-client-principal-id',
+    'x-ms-client-principal-idp'
   ];
   const forwardedHeaders = Object.fromEntries(
     headerAllowlist
       .map((key) => [key, req.headers[key]])
       .filter(([, value]) => value !== undefined)
   );
+
+  // Decode Azure principal if present for easier debugging
+  const azureRaw = req.headers['x-ms-client-principal'];
+  const azurePrincipal = typeof azureRaw === 'string'
+    ? decodeAzureClientPrincipal(azureRaw)
+    : null;
+
   return res.json({
     auth: req.auth || null,
-    headers: forwardedHeaders
+    headers: forwardedHeaders,
+    ...(azurePrincipal && { azurePrincipal })
   });
 });
 
