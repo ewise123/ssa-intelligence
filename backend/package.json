@@ -37,7 +37,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.74.0",
+    "@anthropic-ai/sdk": "^0.78.0",
     "@prisma/client": "^6.19.2",
     "@types/pdfkit": "^0.17.5",
     "cors": "^2.8.6",
