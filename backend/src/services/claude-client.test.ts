@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ClaudeClient } from '../services/claude-client.js';
 
+type ClaudeClientTestHarness = ClaudeClient & {
+  client: {
+    messages: {
+      create: ReturnType<typeof vi.fn>;
+      stream: ReturnType<typeof vi.fn>;
+    };
+  };
+};
+
 describe('ClaudeClient', () => {
   const client = new ClaudeClient({ apiKey: 'test-key' });
 
@@ -29,8 +38,9 @@ describe('ClaudeClient', () => {
         usage: { input_tokens: 100, output_tokens: 50 }
       });
 
-      // Access private client to mock
-      (client as any).client = { messages: { create: mockCreate, stream: vi.fn() } };
+      (client as unknown as ClaudeClientTestHarness).client = {
+        messages: { create: mockCreate, stream: vi.fn() }
+      };
     });
 
     it('passes system parameter to Anthropic API when provided', async () => {

@@ -5,7 +5,11 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonrepair } from 'jsonrepair';
-import type { MessageStreamEvent } from '@anthropic-ai/sdk/resources/messages';
+import type {
+  MessageStreamEvent,
+  MessageCreateParamsNonStreaming,
+  TextBlock,
+} from '@anthropic-ai/sdk/resources/messages';
 
 // ============================================================================
 // TYPES
@@ -63,24 +67,19 @@ export class ClaudeClient {
    */
   async execute(prompt: string, options?: ExecuteOptions): Promise<ClaudeResponse> {
     try {
-      const createParams: Record<string, unknown> = {
+      const createParams: MessageCreateParamsNonStreaming = {
         model: this.model,
         max_tokens: this.maxTokens,
-        messages: this.buildMessages(prompt)
+        messages: this.buildMessages(prompt) as MessageCreateParamsNonStreaming['messages'],
+        ...(options?.system ? { system: options.system } : {}),
+        ...(options?.tools ? { tools: options.tools as MessageCreateParamsNonStreaming['tools'] } : {}),
       };
 
-      if (options?.system) {
-        createParams.system = options.system;
-      }
-      if (options?.tools) {
-        createParams.tools = options.tools;
-      }
-
-      const response = await this.client.messages.create(createParams as any);
+      const response = await this.client.messages.create(createParams);
 
       // Extract text content (works with interleaved web_search_tool_result blocks)
       const content = response.content
-        .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+        .filter((block): block is TextBlock => block.type === 'text')
         .map(block => block.text)
         .join('\n');
 
@@ -112,17 +111,14 @@ export class ClaudeClient {
 
       options.onStart?.();
 
-      const streamParams: Record<string, unknown> = {
+      const streamParams: MessageCreateParamsNonStreaming = {
         model: this.model,
         max_tokens: this.maxTokens,
-        messages: this.buildMessages(prompt)
+        messages: this.buildMessages(prompt) as MessageCreateParamsNonStreaming['messages'],
+        ...(options.system ? { system: options.system } : {}),
       };
 
-      if (options.system) {
-        streamParams.system = options.system;
-      }
-
-      const stream = await this.client.messages.stream(streamParams as any);
+      const stream = await this.client.messages.stream(streamParams);
 
       for await (const event of stream) {
         this.handleStreamEvent(event, {

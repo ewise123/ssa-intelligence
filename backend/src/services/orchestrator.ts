@@ -940,7 +940,7 @@ export class ResearchOrchestrator {
       geography: job.geography,
       foundation: job.foundation,
       reportType: (job.reportType as ReportTypeId) || 'GENERIC',
-      currentYear: executionTime.getFullYear()
+      currentYear: executionTime.getUTCFullYear()
     };
 
     // Add optional context based on dependencies
@@ -975,7 +975,7 @@ export class ResearchOrchestrator {
       const { start, end } = this.computeDateRange(timeHorizon, executionTime);
       const MONTHS = ['January','February','March','April','May','June',
         'July','August','September','October','November','December'];
-      const formatDate = (d: Date) => `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+      const formatDate = (d: Date) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
       promptSections.push(
         [
           '---',
@@ -1134,10 +1134,10 @@ export class ResearchOrchestrator {
     const months = ResearchOrchestrator.HORIZON_MONTHS[timeHorizon] ?? 12;
     const end = new Date(now);
     const start = new Date(now);
-    start.setMonth(start.getMonth() - months);
+    start.setUTCMonth(start.getUTCMonth() - months);
     // Clamp day to avoid month overflow (e.g., Mar 31 - 1 month → Mar 3 instead of Feb 28)
-    if (start.getDate() !== now.getDate()) {
-      start.setDate(0); // last day of previous month
+    if (start.getUTCDate() !== now.getUTCDate()) {
+      start.setUTCDate(0); // last day of previous month
     }
     return { start, end };
   }
