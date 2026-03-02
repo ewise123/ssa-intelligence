@@ -371,6 +371,15 @@ export const STAGE_CONFIGS: Record<StageId, StageConfig> = {
 // ============================================================================
 
 export class ResearchOrchestrator {
+  private static readonly HORIZON_MONTHS: Record<string, number> = {
+    'Last 6 Months': 6,
+    'Last Year': 12,
+    'Last 2 Years': 24,
+    'Last 3 Years': 36,
+  };
+
+  private static readonly FOUNDATION_WEB_SEARCH_MAX_USES = 10;
+
   private prisma: PrismaClient;
   private claudeClient: ClaudeClient;
   private costTrackingService: CostTrackingService;
@@ -814,11 +823,23 @@ export class ResearchOrchestrator {
         return;
       }
 
+      // Single timestamp for temporal consistency across prompt and system message
+      const executionTime = new Date();
+
       // Build prompt with context
-      const prompt = await this.buildStagePrompt(jobId, stageId);
+      const prompt = await this.buildStagePrompt(jobId, stageId, executionTime);
+
+      // Construct system message with today's date for temporal grounding
+      const today = executionTime.toISOString().split('T')[0];
+      const systemMessage = `Today's date is ${today}. You are a senior research analyst. All references to 'current', 'recent', or 'latest' mean relative to today's date.`;
+
+      // Enable web search for foundation stage to get current data
+      const tools = stageId === 'foundation'
+        ? [{ type: 'web_search_20250305' as const, name: 'web_search' as const, max_uses: ResearchOrchestrator.FOUNDATION_WEB_SEARCH_MAX_USES }]
+        : undefined;
 
       // Execute with Claude
-      const initialResponse = await this.claudeClient.execute(prompt);
+      const initialResponse = await this.claudeClient.execute(prompt, { system: systemMessage, tools });
       response = initialResponse;
 
       // Parse and validate
@@ -833,7 +854,7 @@ export class ResearchOrchestrator {
 
         console.warn(`[format-only] ${stageId} attempting JSON reformat`);
         const formatPrompt = this.buildFormatOnlyPrompt(prompt, initialResponse.content);
-        const formatResponse = await this.claudeClient.execute(formatPrompt);
+        const formatResponse = await this.claudeClient.execute(formatPrompt, { system: systemMessage });
         response = formatResponse;
 
         try {
@@ -845,7 +866,7 @@ export class ResearchOrchestrator {
 
           console.warn(`[schema-only] ${stageId} attempting minimal schema regeneration`);
           const schemaPrompt = await this.buildFinancialSnapshotSchemaOnlyPrompt(jobId, reportType);
-          const schemaResponse = await this.claudeClient.execute(schemaPrompt);
+          const schemaResponse = await this.claudeClient.execute(schemaPrompt, { system: systemMessage });
           response = schemaResponse;
           output = this.parseStageOutput(stageId, schemaResponse, validationSchema);
         }
@@ -904,7 +925,7 @@ export class ResearchOrchestrator {
   /**
    * Build prompt with all required context
    */
-  private async buildStagePrompt(jobId: string, stageId: StageId): Promise<string> {
+  private async buildStagePrompt(jobId: string, stageId: StageId, executionTime: Date = new Date()): Promise<string> {
     const job = await this.prisma.researchJob.findUnique({
       where: { id: jobId }
     });
@@ -918,7 +939,8 @@ export class ResearchOrchestrator {
       companyName: job.companyName,
       geography: job.geography,
       foundation: job.foundation,
-      reportType: (job.reportType as ReportTypeId) || 'GENERIC'
+      reportType: (job.reportType as ReportTypeId) || 'GENERIC',
+      currentYear: executionTime.getFullYear()
     };
 
     // Add optional context based on dependencies
@@ -950,13 +972,19 @@ export class ResearchOrchestrator {
     const timeHorizon = this.getReportInputValue(job, 'timeHorizon');
     const promptSections = [basePrompt];
     if (timeHorizon) {
+      const { start, end } = this.computeDateRange(timeHorizon, executionTime);
+      const MONTHS = ['January','February','March','April','May','June',
+        'July','August','September','October','November','December'];
+      const formatDate = (d: Date) => `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
       promptSections.push(
         [
           '---',
           '',
           '## TIME HORIZON (MANDATORY)',
           '',
-          `Time horizon: ${timeHorizon}`,
+          `Time horizon: ${timeHorizon} (${formatDate(start)} through ${formatDate(end)})`,
+          `Today's date: ${formatDate(end)}`,
+          '',
           'Use this time horizon as a strict rolling window ending today.',
           'Treat any "latest" or "most recent" references as the most recent within the time horizon.',
           'Do not anchor to fixed calendar years or date ranges outside the specified horizon.',
@@ -1096,6 +1124,22 @@ export class ResearchOrchestrator {
       return json && json !== '{}' && json !== '[]' ? json : null;
     }
     return String(value);
+  }
+
+  /**
+   * Compute concrete start/end dates from a time horizon label.
+   * Maps human-readable labels like "Last 6 Months" to date ranges anchored to the given time.
+   */
+  private computeDateRange(timeHorizon: string, now: Date): { start: Date; end: Date } {
+    const months = ResearchOrchestrator.HORIZON_MONTHS[timeHorizon] ?? 12;
+    const end = new Date(now);
+    const start = new Date(now);
+    start.setMonth(start.getMonth() - months);
+    // Clamp day to avoid month overflow (e.g., Mar 31 - 1 month → Mar 3 instead of Feb 28)
+    if (start.getDate() !== now.getDate()) {
+      start.setDate(0); // last day of previous month
+    }
+    return { start, end };
   }
 
   /**

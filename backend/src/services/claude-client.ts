@@ -18,6 +18,11 @@ export interface ClaudeConfig {
   cacheEnabled?: boolean;
 }
 
+export interface ExecuteOptions {
+  system?: string;
+  tools?: Array<{ type: string; name: string; max_uses?: number }>;
+}
+
 export interface StreamingOptions {
   onStart?: () => void;
   onContent?: (delta: string) => void;
@@ -56,18 +61,27 @@ export class ClaudeClient {
   /**
    * Execute a prompt and get complete response
    */
-  async execute(prompt: string): Promise<ClaudeResponse> {
+  async execute(prompt: string, options?: ExecuteOptions): Promise<ClaudeResponse> {
     try {
-      const response = await this.client.messages.create({
+      const createParams: Record<string, unknown> = {
         model: this.model,
         max_tokens: this.maxTokens,
         messages: this.buildMessages(prompt)
-      });
+      };
 
-      // Extract text content
+      if (options?.system) {
+        createParams.system = options.system;
+      }
+      if (options?.tools) {
+        createParams.tools = options.tools;
+      }
+
+      const response = await this.client.messages.create(createParams as any);
+
+      // Extract text content (works with interleaved web_search_tool_result blocks)
       const content = response.content
-        .filter(block => block.type === 'text')
-        .map(block => block.type === 'text' ? block.text : '')
+        .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+        .map(block => block.text)
         .join('\n');
 
       return {
@@ -88,7 +102,7 @@ export class ClaudeClient {
    */
   async executeStreaming(
     prompt: string,
-    options: StreamingOptions = {}
+    options: StreamingOptions & Pick<ExecuteOptions, 'system'> = {}
   ): Promise<ClaudeResponse> {
     try {
       let fullContent = '';
@@ -98,11 +112,17 @@ export class ClaudeClient {
 
       options.onStart?.();
 
-      const stream = await this.client.messages.stream({
+      const streamParams: Record<string, unknown> = {
         model: this.model,
         max_tokens: this.maxTokens,
         messages: this.buildMessages(prompt)
-      });
+      };
+
+      if (options.system) {
+        streamParams.system = options.system;
+      }
+
+      const stream = await this.client.messages.stream(streamParams as any);
 
       for await (const event of stream) {
         this.handleStreamEvent(event, {
