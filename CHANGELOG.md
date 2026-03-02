@@ -6,6 +6,15 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 
 ## [Unreleased]
 
+### Added
+- Azure Easy Auth (Entra ID) support: auto-detect `X-MS-CLIENT-PRINCIPAL` header, decode base64 claims, and extract email/name/groups/objectId — falls back to existing oauth2-proxy headers when absent (`backend/src/middleware/azure-auth.ts`).
+- Azure headers in debug auth route (`/api/debug/auth`) with decoded principal JSON.
+- `WEBSITE_HOSTNAME` support in startup banner URL for Azure App Service.
+- Azure deployment documentation in `docs/authentication.md` and `backend/.env.example`.
+
+### Changed
+- Dockerfile CMD switched from `prisma db push --skip-generate --accept-data-loss` to `prisma migrate deploy` for safer production deployments.
+
 ### Fixed
 - Improve research PDF table continuity at page breaks by adding fragment-safe cell edge rendering (`td` inset shadow) so split rows keep a visible bottom line.
 - Fix promotional articles leaking through LLM filter by adding `excludedIds` array to LLM output schema and cross-referencing it programmatically; raise batch `max_tokens` from 8K to 12K, bringing batch success rate from 35% to 100%.
