@@ -1,2 +1,2 @@
 -- AlterEnum
-ALTER TYPE "ActivityType" ADD VALUE 'export_docx';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'export_docx';
