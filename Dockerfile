@@ -44,4 +44,4 @@ EXPOSE 3000
 
 # Note: assumes backend handles serving the API (and optionally static frontend if configured in code)
 # Resolve any previously-failed migration, then apply committed migrations and start the server.
-CMD ["sh", "-c", "cd /app/backend && (/app/backend/node_modules/.bin/prisma migrate resolve --applied 20260213_add_export_docx_activity --schema=/app/backend/prisma/schema.prisma 2>/dev/null || true) && /app/backend/node_modules/.bin/prisma migrate deploy --schema=/app/backend/prisma/schema.prisma && node /app/backend/dist/src/index.js"]
+CMD ["sh", "-c", "cd /app/backend && /app/backend/node_modules/.bin/prisma migrate deploy --schema=/app/backend/prisma/schema.prisma && node /app/backend/dist/src/index.js"]

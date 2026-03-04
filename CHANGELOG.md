@@ -7,14 +7,14 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 ## [Unreleased]
 
 ### Added
-- GitHub Actions CI/CD pipeline for Azure: build Docker image, push to GHCR, and deploy to Azure App Service — triggered after tests pass on `main`, gated behind `AZURE_WEBAPP_PUBLISH_PROFILE` secret (`.github/workflows/deploy-azure.yml`).
+- GitHub Actions CI/CD pipeline for Azure: build Docker image, push to GHCR, and deploy to Azure App Service via OIDC — triggered after tests pass on `main` (`.github/workflows/deploy-azure.yml`).
 - Azure Easy Auth (Entra ID) support: auto-detect `X-MS-CLIENT-PRINCIPAL` header, decode base64 claims, and extract email/name/groups/objectId — falls back to existing oauth2-proxy headers when absent (`backend/src/middleware/azure-auth.ts`).
 - Azure headers in debug auth route (`/api/debug/auth`) with decoded principal JSON.
 - `WEBSITE_HOSTNAME` support in startup banner URL for Azure App Service.
 - Azure deployment documentation in `docs/authentication.md` and `backend/.env.example`.
 
 ### Changed
-- Dockerfile CMD switched from `prisma db push --skip-generate --accept-data-loss` to `prisma migrate deploy` for safer production deployments.
+- Dockerfile CMD cleaned up: remove stale `prisma migrate resolve` workaround, use `prisma migrate deploy` for safer production deployments.
 
 ### Fixed
 - Fix stale research data: inject today's date via system message, anchor time horizons to concrete date ranges, enable web search for foundation stage, and interpolate current year in foundation prompt search suggestions.
