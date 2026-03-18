@@ -15,6 +15,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 
 ### Changed
 - Dockerfile CMD cleaned up: remove stale `prisma migrate resolve` workaround, use `prisma migrate deploy` for safer production deployments.
+- Update Azure deploy target from `ssami` to `SSAMI1` (East US region) for VNet compatibility.
 
 ### Fixed
 - Fix stale research data: inject today's date via system message, anchor time horizons to concrete date ranges, enable web search for foundation stage, and interpolate current year in foundation prompt search suggestions.
