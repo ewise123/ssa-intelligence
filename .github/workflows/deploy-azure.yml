@@ -9,7 +9,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  AZURE_WEBAPP_NAME: ssami
+  AZURE_WEBAPP_NAME: SSAMI1
 
 jobs:
   build-and-push:
