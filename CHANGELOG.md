@@ -18,6 +18,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Update Azure deploy target from `ssami` to `SSAMI1` (East US region) for VNet compatibility.
 
 ### Fixed
+- Fix rate limiter crash on Azure: strip port suffix from proxy-forwarded IP addresses so `express-rate-limit` receives valid IPs.
 - Fix stale research data: inject today's date via system message, anchor time horizons to concrete date ranges, enable web search for foundation stage, and interpolate current year in foundation prompt search suggestions.
 - Improve research PDF table continuity at page breaks by adding fragment-safe cell edge rendering (`td` inset shadow) so split rows keep a visible bottom line.
 - Fix promotional articles leaking through LLM filter by adding `excludedIds` array to LLM output schema and cross-referencing it programmatically; raise batch `max_tokens` from 8K to 12K, bringing batch success rate from 35% to 100%.
