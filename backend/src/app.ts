@@ -69,7 +69,7 @@ const __dirname = path.dirname(__filename);
 // MIDDLEWARE
 // ============================================================================
 
-// Trust Render/hosted proxy so req.ip reflects the client IP (required for rate limiting)
+// Trust Azure/hosted proxy so req.ip reflects the client IP (required for rate limiting)
 app.set('trust proxy', 1);
 
 // CORS
@@ -94,11 +94,17 @@ const parseEnvInt = (name: string, fallback: number) => {
 };
 const isProd = !['development', 'test'].includes(process.env.NODE_ENV ?? '');
 
+// Azure proxy may pass IP with port (e.g. "1.2.3.4:9396"); strip the port
+// so express-rate-limit gets a valid IP address.
+const stripPort = (ip: string) => ip.replace(/:\d+$/, '');
+const keyGenerator = (req: express.Request) => stripPort(req.ip ?? '127.0.0.1');
+
 const getLimiter: RequestHandler | undefined = isProd
   ? rateLimit({
       windowMs: parseEnvInt('RATE_LIMIT_GET_WINDOW_MS', 300000), // 5 minutes
       max: parseEnvInt('RATE_LIMIT_GET_MAX', 2000),
-      message: rateLimitMessage
+      message: rateLimitMessage,
+      keyGenerator
     })
   : undefined;
 
@@ -106,7 +112,8 @@ const generateLimiter: RequestHandler | undefined = isProd
   ? rateLimit({
       windowMs: parseEnvInt('RATE_LIMIT_GENERATE_WINDOW_MS', 900000), // 15 minutes
       max: parseEnvInt('RATE_LIMIT_GENERATE_MAX', 10),
-      message: rateLimitMessage
+      message: rateLimitMessage,
+      keyGenerator
     })
   : undefined;
 
@@ -114,7 +121,8 @@ const exportLimiter: RequestHandler | undefined = isProd
   ? rateLimit({
       windowMs: parseEnvInt('RATE_LIMIT_EXPORT_WINDOW_MS', 3600000), // 60 minutes
       max: parseEnvInt('RATE_LIMIT_EXPORT_MAX', 20),
-      message: rateLimitMessage
+      message: rateLimitMessage,
+      keyGenerator
     })
   : undefined;
 
@@ -122,7 +130,8 @@ const writeLimiter: RequestHandler | undefined = isProd
   ? rateLimit({
       windowMs: parseEnvInt('RATE_LIMIT_WRITE_WINDOW_MS', 900000), // 15 minutes
       max: parseEnvInt('RATE_LIMIT_WRITE_MAX', 60),
-      message: rateLimitMessage
+      message: rateLimitMessage,
+      keyGenerator
     })
   : undefined;
 
@@ -131,7 +140,8 @@ const feedbackLimiter: RequestHandler | undefined = isProd
   ? rateLimit({
       windowMs: 15 * 60 * 1000,
       max: 5,
-      message: rateLimitMessage
+      message: rateLimitMessage,
+      keyGenerator
     })
   : undefined;
 
