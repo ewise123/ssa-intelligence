@@ -18,7 +18,8 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Update Azure deploy target from `ssami` to `SSAMI1` (East US region) for VNet compatibility.
 
 ### Fixed
-- Fix fabricated source URLs in research reports: make `url` optional in foundation prompt so Claude omits URLs it hasn't verified instead of inventing them; bump web search limit from 10 to 100 so Claude can thoroughly research all sources.
+- Revert foundation prompt source URL from optional back to required — making it optional caused Claude to omit URLs entirely. Root cause of missing URLs on Azure is environmental (API key / config), not code.
+- Bump foundation web search `max_uses` from 10 to 100 for more thorough research.
 - Fix source title display showing truncated names (e.g., "Coca" instead of "Coca-Cola Consolidated") by requiring spaced dash separators in title extraction regex.
 - Fix source URLs without protocol prefix being treated as relative paths (404 on click) by adding `ensureProtocol()` to source resolver.
 - Fix deprecated SEC EDGAR fallback URL (`cgi-bin/browse-edgar`) replaced with Google search scoped to sec.gov.
