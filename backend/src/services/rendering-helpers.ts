@@ -10,7 +10,8 @@ export const normalizeCell = (cell: string | number | null | undefined): string 
   if (cell === null || cell === undefined) return '';
   const s = String(cell).trim();
   if (s === '–' || s === '-' || s === '—' || /^n\/?a$/i.test(s)) return '';
-  return s;
+  // Escape pipe characters so they don't break markdown table columns
+  return s.replace(/\|/g, '\\|');
 };
 
 /** Treat dashes, N/A, and similar placeholders as empty (no real data). */
