@@ -361,7 +361,7 @@ interface FoundationOutput {
   source_catalog: Array<{
     id: string; // "S1", "S2", "S3", etc.
     citation: string;
-    url?: string; // Only include a URL you actually visited and confirmed exists. Omit this field entirely if you do not have a verified, real URL. NEVER fabricate or guess URLs.
+    url: string; // REQUIRED: Full URL to the source (e.g., SEC filing URL, news article URL). Use actual URLs found during research.
     type: 'filing' | 'transcript' | 'analyst_report' | 'news' | 'user_provided' | 'government' | 'investor_presentation' | 'industry_report';
     date: string;
   }>;
@@ -403,7 +403,7 @@ Before returning JSON, verify:
 - [ ] FX source noted (A/B/C)
 - [ ] Industry average source noted (A/B/C)
 - [ ] Sources numbered S1, S2, S3... sequentially
-- [ ] **Only include URLs you actually found and verified** — omit the url field if you do not have a real link. NEVER fabricate URLs.
+- [ ] **EVERY source in source_catalog MUST have a valid URL** (SEC EDGAR links, news article URLs, etc.)
 - [ ] 75-80% of research emphasized ${geography}
 - [ ] No speculation or unsupported claims
 - [ ] JSON is valid and parseable
@@ -422,7 +422,7 @@ Before returning JSON, verify:
 
 **NEVER:**
 - Make up numbers or data
-- Fabricate or guess URLs — only include URLs you actually visited. If you don't have a real URL, omit the url field.
+- Fabricate or guess URLs — only use URLs returned by your web search tool.
 - Speculate about unavailable information
 - Stop research midway
 - Ask user for approval to continue
