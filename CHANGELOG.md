@@ -17,6 +17,10 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Dockerfile CMD switched from `prisma db push --skip-generate --accept-data-loss` to `prisma migrate deploy` for safer production deployments.
 
 ### Fixed
+- Fix fabricated source URLs in research reports: make `url` optional in foundation prompt so Claude omits URLs it hasn't verified instead of inventing them; bump web search limit from 10 to 100 so Claude can thoroughly research all sources.
+- Fix source title display showing truncated names (e.g., "Coca" instead of "Coca-Cola Consolidated") by requiring spaced dash separators in title extraction regex.
+- Fix source URLs without protocol prefix being treated as relative paths (404 on click) by adding `ensureProtocol()` to source resolver.
+- Fix deprecated SEC EDGAR fallback URL (`cgi-bin/browse-edgar`) replaced with Google search scoped to sec.gov.
 - Fix stale research data: inject today's date via system message, anchor time horizons to concrete date ranges, enable web search for foundation stage, and interpolate current year in foundation prompt search suggestions.
 - Improve research PDF table continuity at page breaks by adding fragment-safe cell edge rendering (`td` inset shadow) so split rows keep a visible bottom line.
 - Fix promotional articles leaking through LLM filter by adding `excludedIds` array to LLM output schema and cross-referencing it programmatically; raise batch `max_tokens` from 8K to 12K, bringing batch success rate from 35% to 100%.

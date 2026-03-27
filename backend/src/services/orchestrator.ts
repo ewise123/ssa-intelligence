@@ -378,7 +378,7 @@ export class ResearchOrchestrator {
     'Last 3 Years': 36,
   };
 
-  private static readonly FOUNDATION_WEB_SEARCH_MAX_USES = 10;
+  private static readonly FOUNDATION_WEB_SEARCH_MAX_USES = 100;
 
   private prisma: PrismaClient;
   private claudeClient: ClaudeClient;

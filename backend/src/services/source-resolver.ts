@@ -24,6 +24,16 @@ export interface ResolvedSource {
 // ============================================================================
 
 /**
+ * Ensure a URL has a protocol prefix (https:// by default)
+ * Prevents browser from treating URLs like "www.sec.gov/..." as relative paths
+ */
+function ensureProtocol(url: string): string {
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+/**
  * Generate a fallback search URL when no direct URL is available
  */
 function generateFallbackUrl(source: SourceReference): string {
@@ -37,7 +47,7 @@ function generateFallbackUrl(source: SourceReference): string {
     // Extract company name and filing type from citation
     const match = citation.match(/^([^,]+)/);
     const companyName = match ? match[1].trim() : citation;
-    return `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company=${encodeURIComponent(companyName)}&type=10-K&dateb=&owner=include&count=40`;
+    return `https://www.google.com/search?q=${encodeURIComponent(companyName + ' 10-K')}+site:sec.gov`;
   }
 
   // For transcripts, search Seeking Alpha or Google
@@ -108,7 +118,7 @@ export class SourceCatalogManager implements SourceCatalog {
 
     // Use actual URL if available, otherwise generate a fallback search URL
     const hasDirectUrl = !!(source.url && source.url !== '#' && source.url.trim() !== '');
-    const url = hasDirectUrl ? source.url! : generateFallbackUrl(source);
+    const url = hasDirectUrl ? ensureProtocol(source.url!) : generateFallbackUrl(source);
 
     return {
       id: source.id,
@@ -139,7 +149,7 @@ export class SourceCatalogManager implements SourceCatalog {
       return {
         id: source.id,
         title: this.extractTitle(source.citation),
-        url: hasDirectUrl ? source.url! : generateFallbackUrl(source),
+        url: hasDirectUrl ? ensureProtocol(source.url!) : generateFallbackUrl(source),
         citation: source.citation,
         type: source.type,
         date: source.date,
@@ -168,8 +178,9 @@ export class SourceCatalogManager implements SourceCatalog {
       return quotedMatch[1];
     }
 
-    // Pattern 2: Title before dash
-    const dashMatch = citation.match(/^([^-]+)\s*-/);
+    // Pattern 2: Title before spaced dash separator (e.g., "Title - Publisher")
+    // Uses " - " (space-dash-space) to avoid splitting on hyphens in names like "Coca-Cola"
+    const dashMatch = citation.match(/^(.+?)\s+-\s+/);
     if (dashMatch) {
       return dashMatch[1].trim();
     }
