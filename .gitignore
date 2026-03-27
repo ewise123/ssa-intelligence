@@ -50,5 +50,11 @@ docs/PLAN-REPORT-TYPE-ADDENDUMS.md
 docs/REPORT-TYPE-ADDENDUM-NOTES.md
 docs/report-blueprints/IMPLEMENTATION-PLAN.md
 docs/PLAN-QUEUE-FIX.md
+
 # Planning documents (not for version control)
 docs/plans/
+# Azure log downloads and database backups
+ssami.Logs
+ssami 1.Logs
+render_backup.dump
+render_backup.sql
