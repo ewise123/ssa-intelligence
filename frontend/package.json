@@ -12,18 +12,18 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "lucide-react": "^0.575.0",
+    "lucide-react": "^0.577.0",
     "ogl": "^1.0.11",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "recharts": "^3.7.0"
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
-    "@types/node": "^22.19.13",
-    "@vitejs/plugin-react": "^5.1.4",
-    "@vitest/coverage-v8": "^4.0.18",
+    "@types/node": "^22.19.15",
+    "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/coverage-v8": "^4.1.2",
     "autoprefixer": "^10.4.27",
-    "postcss": "^8.5.3",
+    "postcss": "^8.5.8",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.9.3",
     "vite": "^6.2.0",
