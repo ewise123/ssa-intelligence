@@ -33,7 +33,7 @@ import { generateAppendix } from '../../prompts/appendix.js';
 
 import { getReportBlueprint } from './report-blueprints.js';
 import { collectBlockedStages } from './dependency-utils.js';
-import { computeFinalStatus, computeOverallConfidence, computeTerminalProgress } from './orchestrator-utils.js';
+import { clampArrayOverages, computeFinalStatus, computeOverallConfidence, computeTerminalProgress } from './orchestrator-utils.js';
 import { getCostTrackingService, CostTrackingService } from './cost-tracking.js';
 import { createBugReport } from './bug-report.js';
 
@@ -1706,13 +1706,7 @@ export class ResearchOrchestrator {
     if (stageId === 'financial_snapshot') {
       const parsed = this.claudeClient.parseJSON<any>(response, { allowRepair: true });
       const normalized = this.normalizeFinancialSnapshotOutput(parsed);
-      const result = validationSchema.safeParse(normalized);
-
-      if (!result.success) {
-        throw new Error(`Schema validation failed: ${result.error.message}`);
-      }
-
-      return result.data;
+      return this.validateWithArrayClamp(stageId, validationSchema, normalized);
     }
 
     // Generic pre-processing: unwrap single-element arrays to avoid costly format-only retries
@@ -1727,11 +1721,34 @@ export class ResearchOrchestrator {
       candidate = this.sanitizeFoundationOutput(candidate);
     }
 
+    return this.validateWithArrayClamp(stageId, validationSchema, candidate);
+  }
+
+  /**
+   * Validate a candidate against its Zod schema. If validation fails *only*
+   * because LLM-generated arrays exceeded their `.max()` caps, clamp those
+   * arrays to the schema's own limit and re-validate once before giving up.
+   *
+   * Without this, a trivial overage (e.g. the model returns 6 strategic
+   * priorities when the schema caps at 5) hard-fails the entire section across
+   * all retries — and cascades to any dependent section (e.g. exec_summary).
+   */
+  private validateWithArrayClamp(stageId: StageId, validationSchema: any, candidate: any) {
     const result = validationSchema.safeParse(candidate);
-    if (!result.success) {
-      throw new Error(`Schema validation failed: ${result.error.message}`);
+    if (result.success) {
+      return result.data;
     }
-    return result.data;
+
+    const clamped = clampArrayOverages(candidate, result.error);
+    if (clamped !== null) {
+      const retry = validationSchema.safeParse(clamped);
+      if (retry.success) {
+        console.warn(`[array-clamp] ${stageId}: truncated over-long array(s) to schema max after too_big validation error`);
+        return retry.data;
+      }
+    }
+
+    throw new Error(`Schema validation failed: ${result.error.message}`);
   }
 
   /**
