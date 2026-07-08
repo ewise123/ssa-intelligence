@@ -19,6 +19,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 
 ### Fixed
 - Fix research sections failing when the model returns more list items than a schema `.max()` cap (e.g. 6+ strategic priorities for a large firm like Ares Management). Previously a trivial overage hard-failed the entire section across all retries and cascaded to dependent sections (`company_overview` failure blocked `exec_summary`). The orchestrator now clamps over-long arrays to the schema's own limit and re-validates before failing, covering the whole class of `too_big` array caps (`clampArrayOverages` in `orchestrator-utils.ts`).
+- Raise the Company/Firm Overview `strategic_priorities.priorities` cap from 5 to 8 (with matching prompt guidance), so complex firms can list all their strategic priorities instead of being truncated.
 - Revert foundation prompt source URL from optional back to required — making it optional caused Claude to omit URLs entirely. Root cause of missing URLs on Azure is environmental (API key / config), not code.
 - Bump foundation web search `max_uses` from 10 to 100 for more thorough research.
 - Fix source title display showing truncated names (e.g., "Coca" instead of "Coca-Cola Consolidated") by requiring spaced dash separators in title extraction regex.

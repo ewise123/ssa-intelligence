@@ -221,7 +221,7 @@ export const companyOverviewOutputSchema = z.object({
     }),
     strategic_priorities: z.object({
         summary: z.string().min(50),
-        priorities: z.array(strategicPrioritySchema).min(0).max(5),
+        priorities: z.array(strategicPrioritySchema).min(0).max(8),
         geography_specific_initiatives: z.union([z.string(), z.array(z.string())])
     }),
     key_leadership: z.object({

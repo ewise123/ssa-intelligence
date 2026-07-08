@@ -88,8 +88,8 @@ describe('clampArrayOverages', () => {
     sources_used: ['S1']
   });
 
-  it('reproduces the Ares failure: 6+ strategic priorities exceed the max(5) cap', () => {
-    const result = companyOverviewOutputSchema.safeParse(companyOverview(7));
+  it('reproduces the Ares-style failure when strategic priorities exceed the cap', () => {
+    const result = companyOverviewOutputSchema.safeParse(companyOverview(10));
     expect(result.success).toBe(false);
     if (!result.success) {
       const issue = result.error.issues[0];
@@ -98,14 +98,18 @@ describe('clampArrayOverages', () => {
     }
   });
 
-  it('clamps over-long strategic priorities so the section validates', () => {
-    const candidate = companyOverview(7);
+  it('accepts up to 8 strategic priorities (raised cap)', () => {
+    expect(companyOverviewOutputSchema.safeParse(companyOverview(8)).success).toBe(true);
+  });
+
+  it('clamps over-long strategic priorities to the cap so the section validates', () => {
+    const candidate = companyOverview(10);
     const first = companyOverviewOutputSchema.safeParse(candidate);
     expect(first.success).toBe(false);
 
     const clamped = clampArrayOverages(candidate, (first as any).error);
     expect(clamped).not.toBeNull();
-    expect(clamped!.strategic_priorities.priorities).toHaveLength(5);
+    expect(clamped!.strategic_priorities.priorities).toHaveLength(8);
 
     // Re-validation now succeeds.
     const second = companyOverviewOutputSchema.safeParse(clamped);
@@ -113,10 +117,10 @@ describe('clampArrayOverages', () => {
   });
 
   it('does not mutate the original candidate', () => {
-    const candidate = companyOverview(7);
+    const candidate = companyOverview(10);
     const first = companyOverviewOutputSchema.safeParse(candidate);
     clampArrayOverages(candidate, (first as any).error);
-    expect(candidate.strategic_priorities.priorities).toHaveLength(7);
+    expect(candidate.strategic_priorities.priorities).toHaveLength(10);
   });
 
   it('clamps a top-level array (empty path)', () => {

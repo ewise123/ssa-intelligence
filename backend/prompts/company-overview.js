@@ -78,7 +78,7 @@ ${foundationJson}
 - "${companyName} ${geography} investment" OR "${companyName} ${geography} strategy"
 
 **Extract:**
-- **Company-wide priorities:** 3-5 key strategic themes
+- **Company-wide priorities:** 3-8 key strategic themes
   - Examples: Digital transformation, sustainability, portfolio optimization, M&A
 - **Investment areas:** Where capital is being deployed
   - R&D, capacity expansion, technology, M&A
@@ -234,7 +234,7 @@ interface Section3Output {
 - Key themes from recent communications
 - Time horizon (e.g., "3-year transformation plan")
 
-**Priorities array (3-5 priorities):**
+**Priorities array (3-8 priorities):**
 - Each priority: title, description, geography relevance
 - **Geography relevance:**
   - **High:** Direct impact on ${geography} (investment, expansion, program)
