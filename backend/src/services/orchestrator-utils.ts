@@ -88,3 +88,76 @@ export const computeOverallConfidence = (
   const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
   return { score: avg, label: scoreToLabel(avg) };
 };
+
+// ============================================================================
+// SCHEMA VALIDATION RECOVERY
+// ============================================================================
+
+/** Minimal shape of a Zod validation error we care about (avoids a zod import here). */
+type ZodIssueLike = {
+  code?: string;
+  type?: string;
+  maximum?: number;
+  path?: Array<string | number>;
+};
+type ZodErrorLike = { issues?: ZodIssueLike[] };
+
+/**
+ * When Zod validation fails *only* because one or more LLM-generated arrays
+ * exceeded their `.max()` caps (`too_big`), return a copy of the candidate with
+ * those arrays truncated to their allowed maximum. Returns `null` when the
+ * failure involves anything other than array-length overages, so genuine schema
+ * problems still surface as errors.
+ *
+ * Rationale: without this, a trivial overage (e.g. the model returns 6 strategic
+ * priorities when the schema caps at 5) hard-fails an entire section across all
+ * retries — and cascades to any section that depends on it. Clamping enforces
+ * the schema's own intended limit gracefully instead of catastrophically.
+ */
+export const clampArrayOverages = <T>(candidate: T, error: ZodErrorLike): T | null => {
+  const issues = error?.issues ?? [];
+  if (issues.length === 0) {
+    return null;
+  }
+
+  const allArrayOverages = issues.every(
+    (issue) =>
+      issue.code === 'too_big' &&
+      issue.type === 'array' &&
+      typeof issue.maximum === 'number' &&
+      Array.isArray(issue.path)
+  );
+  if (!allArrayOverages) {
+    return null;
+  }
+
+  // Deep clone to preserve immutability of the caller's object.
+  const repaired = JSON.parse(JSON.stringify(candidate));
+
+  for (const issue of issues) {
+    const path = issue.path as Array<string | number>;
+    const max = issue.maximum as number;
+
+    // Top-level array (empty path): the candidate itself is the over-long array.
+    if (path.length === 0) {
+      if (Array.isArray(repaired)) {
+        return repaired.slice(0, max) as T;
+      }
+      return null;
+    }
+
+    const parent = path
+      .slice(0, -1)
+      .reduce<any>((acc, key) => (acc == null ? acc : acc[key]), repaired);
+    const lastKey = path[path.length - 1];
+
+    if (parent && Array.isArray(parent[lastKey])) {
+      parent[lastKey] = parent[lastKey].slice(0, max);
+    } else {
+      // Shape did not match the reported path — bail out rather than guess.
+      return null;
+    }
+  }
+
+  return repaired as T;
+};
