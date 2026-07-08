@@ -158,4 +158,38 @@ describe('clampArrayOverages', () => {
   it('returns null when there are no issues', () => {
     expect(clampArrayOverages({ x: 1 }, { issues: [] })).toBeNull();
   });
+
+  it('clamps a deeply nested path (a.b.c)', () => {
+    const schema = z.object({
+      a: z.object({ b: z.object({ c: z.array(z.number()).max(1) }) })
+    });
+    const candidate = { a: { b: { c: [1, 2, 3] } } };
+    const result = schema.safeParse(candidate);
+    expect(result.success).toBe(false);
+    expect(clampArrayOverages(candidate, (result as any).error)).toEqual({
+      a: { b: { c: [1] } }
+    });
+  });
+
+  it('clamps a path that contains an array index', () => {
+    const schema = z.object({
+      items: z.array(z.object({ subitems: z.array(z.number()).max(2) }))
+    });
+    const candidate = { items: [{ subitems: [1, 2, 3, 4] }] };
+    const result = schema.safeParse(candidate);
+    expect(result.success).toBe(false);
+    // Path is ['items', 0, 'subitems'] — exercises numeric-index traversal.
+    expect(clampArrayOverages(candidate, (result as any).error)).toEqual({
+      items: [{ subitems: [1, 2] }]
+    });
+  });
+
+  it('returns null when the candidate shape does not match the issue path', () => {
+    // Reported path points at a field that is not an array in the candidate.
+    const candidate = { foo: 'not-an-array' };
+    const error = {
+      issues: [{ code: 'too_big', type: 'array', maximum: 2, path: ['foo'] }]
+    };
+    expect(clampArrayOverages(candidate, error)).toBeNull();
+  });
 });
