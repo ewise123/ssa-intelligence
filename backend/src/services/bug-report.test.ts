@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   classifyErrorCategory,
   classifySeverity,
   computeFingerprint,
   sanitizeErrorContext,
+  createBugReport,
 } from './bug-report.js';
 
 describe('bug-report service', () => {
@@ -129,6 +130,23 @@ describe('bug-report service', () => {
     it('returns empty object when nothing to include', () => {
       const ctx = sanitizeErrorContext(undefined, { dependencies: [] }, {});
       expect(ctx).toEqual({});
+    });
+  });
+
+  describe('createBugReport', () => {
+    it('returns the created bug report record', async () => {
+      const created = { id: 'bug_created', errorFingerprint: 'fp' };
+      const prisma = { bugReport: { create: vi.fn().mockResolvedValue(created) } };
+      const result = await createBugReport(prisma as any, {
+        jobId: 'job_1',
+        subJobId: 'sub_1',
+        stage: 'financials',
+        error: new Error('Zod validation failed'),
+        subJob: { attempts: 3, maxAttempts: 3, dependencies: ['foundation'] },
+        job: { companyName: 'Acme', reportType: 'INDUSTRIALS' },
+      });
+      expect(result).toBe(created);
+      expect(prisma.bugReport.create).toHaveBeenCalledTimes(1);
     });
   });
 });

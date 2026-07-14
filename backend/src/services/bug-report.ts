@@ -5,7 +5,7 @@
  */
 
 import { createHash } from 'crypto';
-import type { PrismaClient, BugReportSeverity, BugReportCategory, Prisma } from '@prisma/client';
+import type { PrismaClient, BugReport, BugReportSeverity, BugReportCategory, Prisma } from '@prisma/client';
 
 interface CreateBugReportParams {
   jobId: string;
@@ -124,7 +124,7 @@ function extractErrorStack(error: unknown): string | undefined {
 export async function createBugReport(
   prisma: PrismaClient,
   params: CreateBugReportParams
-): Promise<void> {
+): Promise<BugReport> {
   const errorMessage = extractErrorMessage(params.error);
   const errorStack = extractErrorStack(params.error);
   const category = classifyErrorCategory(errorMessage);
@@ -139,7 +139,7 @@ export async function createBugReport(
     `Error: ${errorMessage.slice(0, 500)}`,
   ].join('\n');
 
-  await prisma.bugReport.create({
+  return await prisma.bugReport.create({
     data: {
       severity,
       category,
