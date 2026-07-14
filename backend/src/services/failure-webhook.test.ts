@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { buildFailureEvent, signPayload, type FailureEventSource } from './failure-webhook.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { buildFailureEvent, signPayload, notifyFailureWebhook, type FailureEventSource } from './failure-webhook.js';
 import type { BugReport } from '@prisma/client';
 
 const SOURCE: FailureEventSource = {
@@ -74,5 +74,48 @@ describe('failure-webhook', () => {
     it('changes when the secret changes', () => {
       expect(signPayload('{"a":1}', 'k1')).not.toBe(signPayload('{"a":1}', 'k2'));
     });
+  });
+});
+
+describe('notifyFailureWebhook', () => {
+  const OLD_ENV = process.env;
+
+  beforeEach(() => {
+    process.env = { ...OLD_ENV };
+    vi.restoreAllMocks();
+  });
+  afterEach(() => {
+    process.env = OLD_ENV;
+  });
+
+  it('is a no-op when env is not configured', async () => {
+    delete process.env.AUTOFIX_WEBHOOK_URL;
+    delete process.env.AUTOFIX_WEBHOOK_SECRET;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
+    await notifyFailureWebhook(fakeBug());
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('POSTs a signed event when configured', async () => {
+    process.env.AUTOFIX_WEBHOOK_URL = 'https://agent.example/hook';
+    process.env.AUTOFIX_WEBHOOK_SECRET = 'secret';
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 202 }));
+    await notifyFailureWebhook(fakeBug());
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe('https://agent.example/hook');
+    expect(init?.method).toBe('POST');
+    const headers = init?.headers as Record<string, string>;
+    expect(headers['content-type']).toBe('application/json');
+    expect(headers['x-autofix-signature']).toMatch(/^sha256=[0-9a-f]{64}$/);
+    expect(JSON.parse(init?.body as string).event).toBe('research.stage.failed');
+  });
+
+  it('swallows fetch errors (never throws)', async () => {
+    process.env.AUTOFIX_WEBHOOK_URL = 'https://agent.example/hook';
+    process.env.AUTOFIX_WEBHOOK_SECRET = 'secret';
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(notifyFailureWebhook(fakeBug())).resolves.toBeUndefined();
   });
 });

@@ -71,3 +71,43 @@ export function buildFailureEvent(
 export function signPayload(rawBody: string, secret: string): string {
   return `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`;
 }
+
+const WEBHOOK_TIMEOUT_MS = 5000;
+
+/**
+ * Deliver a failure event to the autofix agent. No-op unless both
+ * AUTOFIX_WEBHOOK_URL and AUTOFIX_WEBHOOK_SECRET are set. Fire-and-forget:
+ * catches and logs its own errors, never throws.
+ */
+export async function notifyFailureWebhook(bug: BugReport): Promise<void> {
+  const url = process.env.AUTOFIX_WEBHOOK_URL;
+  const secret = process.env.AUTOFIX_WEBHOOK_SECRET;
+  if (!url || !secret) return;
+
+  try {
+    const source: FailureEventSource = {
+      app: 'ssa-intelligence',
+      env: process.env.NODE_ENV ?? 'development',
+      repo: process.env.AUTOFIX_SOURCE_REPO ?? 'ewise123/ssa-intelligence',
+      commit: process.env.GIT_COMMIT_SHA ?? 'unknown',
+    };
+    const event = buildFailureEvent(bug, source, randomUUID());
+    const rawBody = JSON.stringify(event);
+    const signature = signPayload(rawBody, secret);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
+    try {
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-autofix-signature': signature },
+        body: rawBody,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err) {
+    console.error('[failure-webhook] Failed to deliver failure event:', err);
+  }
+}
