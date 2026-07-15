@@ -37,8 +37,11 @@ export interface FailureEvent {
 }
 
 /**
- * Build the event payload from a BugReport. Deliberately excludes client
- * identifiers (companyName, geography, industry) so no client identity leaks.
+ * Build the event payload from a BugReport. Omits the structured client
+ * identifier fields (companyName, geography, industry) — they aren't needed to
+ * diagnose a code failure. Note: error diagnostics and context may mention a
+ * company incidentally; report content is public, web-searchable research data,
+ * not confidential engagement information.
  */
 export function buildFailureEvent(
   bug: BugReport,
@@ -98,12 +101,17 @@ export async function notifyFailureWebhook(bug: BugReport): Promise<void> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
     try {
-      await fetch(url, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-autofix-signature': signature },
         body: rawBody,
         signal: controller.signal,
       });
+      // fetch does not reject on 4xx/5xx — surface them so a lost delivery is visible
+      // (the poll backup re-discovers the failure on its next sweep).
+      if (!res.ok) {
+        console.error(`[failure-webhook] Delivery returned non-2xx status ${res.status}`);
+      }
     } finally {
       clearTimeout(timer);
     }

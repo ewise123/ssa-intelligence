@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { PrismaClient } from '@prisma/client';
 import {
   classifyErrorCategory,
   classifySeverity,
@@ -137,7 +138,7 @@ describe('bug-report service', () => {
     it('returns the created bug report record', async () => {
       const created = { id: 'bug_created', errorFingerprint: 'fp' };
       const prisma = { bugReport: { create: vi.fn().mockResolvedValue(created) } };
-      const result = await createBugReport(prisma as any, {
+      const result = await createBugReport(prisma as unknown as PrismaClient, {
         jobId: 'job_1',
         subJobId: 'sub_1',
         stage: 'financials',

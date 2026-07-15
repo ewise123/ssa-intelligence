@@ -55,7 +55,7 @@ describe('failure-webhook', () => {
       expect(event.source).toEqual(SOURCE);
     });
 
-    it('omits client identifiers (companyName, geography, industry)', () => {
+    it('omits the structured client identifier fields (companyName, geography, industry)', () => {
       const serialized = JSON.stringify(buildFailureEvent(fakeBug(), SOURCE, 'd'));
       expect(serialized).not.toContain('Acme');
       expect(serialized).not.toContain('Steel');
