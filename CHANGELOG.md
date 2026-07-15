@@ -12,6 +12,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Azure headers in debug auth route (`/api/debug/auth`) with decoded principal JSON.
 - `WEBSITE_HOSTNAME` support in startup banner URL for Azure App Service.
 - Azure deployment documentation in `docs/authentication.md` and `backend/.env.example`.
+- Autofix agent failure webhook: on permanent research stage failure, optionally emit a signed `research.stage.failed` event for an external autofix agent to consume. Env-gated via `AUTOFIX_WEBHOOK_URL` + `AUTOFIX_WEBHOOK_SECRET` (a no-op when unset) and HMAC-SHA256 signed. The payload omits the structured client identifier fields (company/geography/industry) and carries the failure diagnostics (error, stack, structural context) the agent needs to work from (`backend/src/services/failure-webhook.ts`).
 
 ### Changed
 - Dockerfile CMD cleaned up: remove stale `prisma migrate resolve` workaround, use `prisma migrate deploy` for safer production deployments.

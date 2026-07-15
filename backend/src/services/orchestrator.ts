@@ -36,6 +36,7 @@ import { collectBlockedStages } from './dependency-utils.js';
 import { clampArrayOverages, computeFinalStatus, computeOverallConfidence, computeTerminalProgress } from './orchestrator-utils.js';
 import { getCostTrackingService, CostTrackingService } from './cost-tracking.js';
 import { createBugReport } from './bug-report.js';
+import { notifyFailureWebhook } from './failure-webhook.js';
 
 // Import validation schemas
 import {
@@ -1276,12 +1277,14 @@ export class ResearchOrchestrator {
           },
         });
         if (job) {
-          await createBugReport(this.prisma, {
+          const bugReport = await createBugReport(this.prisma, {
             jobId, subJobId: subJob.id, stage: stageId, error,
             rawContent,
             subJob: { attempts, maxAttempts: subJob.maxAttempts, dependencies: subJob.dependencies },
             job,
           });
+          // Fire-and-forget: notifyFailureWebhook swallows its own errors.
+          void notifyFailureWebhook(bugReport);
         }
       } catch (bugReportError) {
         console.error('[bug-report] Failed to create automatic bug report:', bugReportError);
